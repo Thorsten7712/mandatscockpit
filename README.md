@@ -52,6 +52,11 @@ vorbereitet – siehe [`CLAUDE.md`](./CLAUDE.md) für den aktuellen Stand und di
 
    ⚠️ Dieser Key umgeht Row-Level-Security komplett und darf **niemals** im Frontend/`VITE_`-Präfix oder
    in `.env.example`/`.env.local` landen – er wird ausschließlich als GitHub-Actions-Secret verwendet.
+6. Für den Deploy der Edge Function (siehe Abschnitt 8) zusätzlich zwei weitere Repository Secrets:
+   - `SUPABASE_ACCESS_TOKEN` – ein **Personal Access Token** deines Supabase-Accounts (nicht das
+     Projekt-API-Secret!), erzeugbar unter [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens).
+   - `SUPABASE_PROJECT_REF` – die Projekt-Referenz, der Teil vor `.supabase.co` in deiner Project URL
+     (z. B. `abcdefghijklmnop`).
 
 ## 4. Ersten Account anlegen
 
@@ -96,7 +101,24 @@ ICS-Feeds in die `sessions`-Tabelle:
   wiederholte Läufe erzeugen keine Duplikate, und ein manuell vom Ratsbüro gesetzter `status = 'aktiv'`
   wird beim Re-Import nicht überschrieben.
 
-## 8. Weiterentwicklung mit Claude Code
+## 8. Kalenderquelle einzeln neu laden (Edge Function)
+
+Neben jeder Kalenderquelle in den Settings gibt es einen „Aktualisieren"-Link, der **nur diese eine
+Quelle** sofort neu importiert (statt auf den nächsten täglichen Job zu warten):
+
+- Supabase Edge Function: `supabase/functions/import-ics-source/index.ts` (Deno), aufgerufen per
+  `supabase.functions.invoke('import-ics-source', { body: { source_id } })` aus `Settings.tsx`.
+- Läuft serverseitig mit `SUPABASE_SERVICE_ROLE_KEY`, den Supabase Edge Functions automatisch als
+  Umgebungsvariable bekommen (kein manuelles Secret nötig, anders als beim GitHub-Actions-Job).
+- Deploy erfolgt automatisch bei jedem Push, der `supabase/functions/**` ändert
+  (`.github/workflows/deploy-edge-functions.yml`), braucht dafür die beiden Secrets aus Abschnitt 3,
+  Schritt 6 (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`).
+- Teilt sich die ICS-Parsing-Logik konzeptionell mit `scripts/import-ics.mjs` (Node-Skript für den
+  Gesamt-Import aller Quellen); aus Deno/Node-Kompatibilitätsgründen bewusst als eigener Code dupliziert.
+
+Lokal testen (Deno muss installiert sein): `deno check --config supabase/functions/import-ics-source/deno.json supabase/functions/import-ics-source/index.ts`.
+
+## 9. Weiterentwicklung mit Claude Code
 
 Im Projektordner einfach `claude` starten – die Datei `CLAUDE.md` gibt Claude Code den vollen
 Projektkontext (Architektur, aktueller Stand, nächste Schritte, offene Design-Fragen). Guter

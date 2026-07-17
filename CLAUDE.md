@@ -28,11 +28,12 @@ Vorhanden:
 - Login (Supabase Auth, E-Mail/Passwort) mit Redirect-Schutz (`ProtectedRoute`)
 - Dashboard-Seite mit einfacher Kalenderansicht (`CalendarView`) und ToDo-Board (`TodoBoard`)
 - Settings-Seite zum An-/Abmelden von Kalenderquellen sowie zum Anlegen/Löschen eigener Quellen
-  (`Settings`) – nutzt die bereits bestehenden `calendar_sources_insert_own`/`_delete_own`-Policies. Hat
-  einen „Aktualisieren"-Button neben der Überschrift, der Quellen + Gremien-Liste neu lädt und dabei
-  prüft, ob angehakte `user_gremien`-Einträge noch in den aktuell importierten Sessions vorkommen –
-  falls nicht, Warnhinweis (Häkchen bleibt trotzdem bestehen, für den Fall dass das Gremium später
-  wieder importiert wird).
+  (`Settings`) – nutzt die bereits bestehenden `calendar_sources_insert_own`/`_delete_own`-Policies.
+  Jede Quellenzeile hat einen eigenen „Aktualisieren"-Link, der per Supabase Edge Function
+  (`supabase/functions/import-ics-source`) **nur diese eine Quelle** live neu importiert (siehe unten),
+  und danach die Gremien-Liste neu lädt sowie prüft, ob angehakte `user_gremien`-Einträge noch in den
+  aktuell importierten Sessions vorkommen – falls nicht, Warnhinweis (Häkchen bleibt trotzdem bestehen,
+  für den Fall dass das Gremium später wieder importiert wird).
 - Vollständiges DB-Schema inkl. RLS-Policies (`supabase/migrations/0001_init.sql`,
   `0002_sessions_ics_uid.sql`, `0003_sessions_ics_uid_constraint.sql`,
   `0004_sessions_source_cascade.sql`, `0005_user_gremien.sql`, `0006_calendar_sources_admin.sql`,
@@ -66,6 +67,18 @@ Vorhanden:
   Gremiumsnamen, keine „X – Sitzung"-Heuristik nötig. node-ical liefert Properties mit ICS-Parametern
   (z. B. `SUMMARY;LANGUAGE=de:...`) als `{params, val}`-Objekt statt String – wird über `toText()`
   normalisiert.
+- **Supabase Edge Function** (`supabase/functions/import-ics-source/index.ts`, Deno) für den
+  Einzel-Quellen-Reimport aus den Settings (siehe oben). Dupliziert die ICS-Parsing-Logik aus
+  `scripts/import-ics.mjs` bewusst (Deno/Node-Kompatibilität, kein gemeinsames Build-Tooling). Braucht
+  KEIN manuelles Service-Role-Key-Secret – Supabase injiziert `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`
+  automatisch in jede Edge Function. Deploy läuft über einen eigenen Workflow
+  (`.github/workflows/deploy-edge-functions.yml`, nur bei Änderungen unter `supabase/functions/**`) via
+  `supabase/setup-cli`, braucht dafür `SUPABASE_ACCESS_TOKEN` (Personal Access Token, nicht der
+  Projekt-API-Key!) und `SUPABASE_PROJECT_REF` als Repository Secrets (siehe README.md Abschnitt 3,
+  Schritt 6). Lokal mit `deno check --config supabase/functions/import-ics-source/deno.json
+  supabase/functions/import-ics-source/index.ts` typprüfbar (Deno separat installieren, ist nicht Teil
+  von `npm install`) – das eigene `deno.json` im Funktionsordner ist nötig, weil der Node-`package.json`
+  im Repo-Root sonst Deno's Modul-Resolution durcheinanderbringt (`nodeModulesDir: "none"`).
 
 Noch NICHT vorhanden (nächste Schritte, grob nach Konzept-Phasen sortiert):
 

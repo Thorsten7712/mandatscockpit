@@ -1,0 +1,26 @@
+name: Supabase Edge Functions deployen
+
+# Deployt supabase/functions/* bei jedem Push nach main, der Dateien dort
+# ändert (oder manuell auslösbar). Braucht einen Supabase Personal Access
+# Token (nicht den anon/service_role key!) + die Projekt-Referenz als
+# Repository Secrets, siehe README.md Abschnitt 9.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase functions deploy import-ics-source --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}

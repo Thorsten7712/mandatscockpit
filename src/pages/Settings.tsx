@@ -32,7 +32,14 @@ export default function Settings() {
   const [meineGremien, setMeineGremien] = useState<string[]>([])
   const [staleGremien, setStaleGremien] = useState<string[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
+
+  const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(null)
+  const [sourceRefreshError, setSourceRefreshError] = useState<{ sourceId: string; message: string } | null>(
+    null,
+  )
+  const [sourceRefreshResult, setSourceRefreshResult] = useState<{ sourceId: string; imported: number } | null>(
+    null,
+  )
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
@@ -70,17 +77,41 @@ export default function Settings() {
     })
   }, [])
 
-  async function handleRefresh() {
-    setRefreshing(true)
+  async function handleRefreshSource(sourceId: string) {
+    setRefreshingSourceId(sourceId)
+    setSourceRefreshError(null)
+    setSourceRefreshResult(null)
     setStaleGremien([])
-    await loadSources()
+
+    const { data, error } = await supabase.functions.invoke<{ imported?: number }>('import-ics-source', {
+      body: { source_id: sourceId },
+    })
+
+    if (error) {
+      let message = error.message
+      const context = (error as { context?: unknown }).context
+      if (context instanceof Response) {
+        try {
+          const body = await context.json()
+          if (body?.error) message = body.error
+        } catch {
+          // Antwort war kein JSON - Standardmeldung von supabase-js behalten
+        }
+      }
+      setSourceRefreshError({ sourceId, message })
+      setRefreshingSourceId(null)
+      return
+    }
+
+    setSourceRefreshResult({ sourceId, imported: data?.imported ?? 0 })
+
     const freshGremien = await loadDistinctGremien()
     setGremien(freshGremien)
     if (userId) {
       const currentSelection = await loadUserData(userId)
       setStaleGremien(currentSelection.filter((g) => !freshGremien.includes(g)))
     }
-    setRefreshing(false)
+    setRefreshingSourceId(null)
   }
 
   function startEdit(s: CalendarSource) {
@@ -174,19 +205,9 @@ export default function Settings() {
     <div className="min-h-screen bg-slate-50 p-6">
       <header className="flex justify-between items-center mb-4">
         <h1 className="text-xl font-bold">Kalenderquellen abonnieren</h1>
-        <div className="space-x-4">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="text-sm text-slate-600 underline disabled:opacity-50"
-          >
-            {refreshing ? 'Aktualisiert...' : 'Aktualisieren'}
-          </button>
-          <Link to="/" className="text-sm text-slate-600 underline">
-            Zurück zum Dashboard
-          </Link>
-        </div>
+        <Link to="/" className="text-sm text-slate-600 underline">
+          Zurück zum Dashboard
+        </Link>
       </header>
       {deleteError && <p className="text-red-600 text-sm mb-2 max-w-md">{deleteError}</p>}
       {staleGremien.length > 0 && (
@@ -248,32 +269,51 @@ export default function Settings() {
               </li>
             )
           }
+          const isRefreshing = refreshingSourceId === s.id
           return (
-            <li key={s.id} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
-              <span>
-                {s.name} <span className="text-xs text-slate-400">({s.ebene})</span>
-              </span>
-              <div className="flex items-center gap-3">
-                <input type="checkbox" checked={subscribed.includes(s.id)} onChange={() => toggle(s.id)} />
-                {canManage && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => startEdit(s)}
-                      className="text-xs text-slate-600 underline"
-                    >
-                      Bearbeiten
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(s.id)}
-                      className="text-xs text-red-500 underline"
-                    >
-                      Löschen
-                    </button>
-                  </>
-                )}
+            <li key={s.id} className="border rounded px-3 py-2 bg-white">
+              <div className="flex items-center justify-between">
+                <span>
+                  {s.name} <span className="text-xs text-slate-400">({s.ebene})</span>
+                </span>
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" checked={subscribed.includes(s.id)} onChange={() => toggle(s.id)} />
+                  <button
+                    type="button"
+                    onClick={() => handleRefreshSource(s.id)}
+                    disabled={isRefreshing}
+                    className="text-xs text-slate-600 underline disabled:opacity-50"
+                  >
+                    {isRefreshing ? 'Aktualisiert...' : 'Aktualisieren'}
+                  </button>
+                  {canManage && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(s)}
+                        className="text-xs text-slate-600 underline"
+                      >
+                        Bearbeiten
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(s.id)}
+                        className="text-xs text-red-500 underline"
+                      >
+                        Löschen
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
+              {sourceRefreshResult?.sourceId === s.id && (
+                <p className="text-xs text-green-600 mt-1">
+                  {sourceRefreshResult.imported} Termine importiert/aktualisiert.
+                </p>
+              )}
+              {sourceRefreshError?.sourceId === s.id && (
+                <p className="text-xs text-red-600 mt-1">{sourceRefreshError.message}</p>
+              )}
             </li>
           )
         })}
