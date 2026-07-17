@@ -88,12 +88,13 @@ ICS-Feeds in die `sessions`-Tabelle:
 
 - Skript: `scripts/import-ics.mjs`, lokal ausführbar mit `npm run import-ics` (braucht `SUPABASE_URL`
   und `SUPABASE_SERVICE_ROLE_KEY` als Umgebungsvariablen, siehe Abschnitt 3, Schritt 5).
-- Parst jeden Feed mit `node-ical`, versucht das Gremium heuristisch aus dem `SUMMARY`-Feld
-  herauszulesen (z. B. „Bauausschuss – Sitzung" → „Bauausschuss"; die Heuristik ist noch nicht an einem
-  echten ALLRIS-Auszug verifiziert, siehe KONZEPT.md Abschnitt 11).
+- Parst jeden Feed mit `node-ical`. Am echten ALLRIS-Feed von Iserlohn verifiziert (siehe KONZEPT.md
+  Abschnitt 11): `SUMMARY` enthält direkt den Gremiumsnamen (z. B. „Finanzausschuss"), keine
+  „Gremium – Sitzung"-Heuristik nötig.
 - Schreibt per Upsert (Konfliktschlüssel `source_id` + `ics_uid`, siehe
-  `supabase/migrations/0002_sessions_ics_uid.sql`) – wiederholte Läufe erzeugen keine Duplikate, und ein
-  manuell vom Ratsbüro gesetzter `status = 'aktiv'` wird beim Re-Import nicht überschrieben.
+  `supabase/migrations/0002_sessions_ics_uid.sql` + `0003_sessions_ics_uid_constraint.sql`) –
+  wiederholte Läufe erzeugen keine Duplikate, und ein manuell vom Ratsbüro gesetzter `status = 'aktiv'`
+  wird beim Re-Import nicht überschrieben.
 
 ## 8. Weiterentwicklung mit Claude Code
 

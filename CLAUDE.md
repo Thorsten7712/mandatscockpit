@@ -30,7 +30,7 @@ Vorhanden:
 - Settings-Seite zum An-/Abmelden von Kalenderquellen sowie zum Anlegen/Löschen eigener Quellen
   (`Settings`) – nutzt die bereits bestehenden `calendar_sources_insert_own`/`_delete_own`-Policies
 - Vollständiges DB-Schema inkl. RLS-Policies (`supabase/migrations/0001_init.sql`,
-  `0002_sessions_ics_uid.sql`)
+  `0002_sessions_ics_uid.sql`, `0003_sessions_ics_uid_constraint.sql`)
 - GitHub-Actions-Workflows: Deploy nach GitHub Pages, Supabase-Keep-Alive gegen das Auto-Pausieren im
   Free-Tier, **ICS-Import-Job** (`import-ics.yml`, täglich 04:00 UTC + manuell auslösbar) – lädt alle
   `calendar_sources`-Feeds via `node-ical` und upsertet sie in `sessions`
