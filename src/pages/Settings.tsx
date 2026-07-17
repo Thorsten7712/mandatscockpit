@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import type { CalendarSource, Ebene } from '../lib/types'
+import type { CalendarSource, Ebene, TodoBoardSettings, TodoColumn } from '../lib/types'
 
 async function loadDistinctGremien(): Promise<string[]> {
   const { data } = await supabase.from('sessions').select('gremium').not('gremium', 'is', null)
@@ -48,6 +48,12 @@ export default function Settings() {
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
+  const [todoColumns, setTodoColumns] = useState<TodoColumn[]>([])
+  const [newColumnTitel, setNewColumnTitel] = useState('')
+  const [editingColumnId, setEditingColumnId] = useState<string | null>(null)
+  const [editColumnTitel, setEditColumnTitel] = useState('')
+  const [boardSettings, setBoardSettings] = useState<TodoBoardSettings | null>(null)
+
   async function loadSources() {
     const { data } = await supabase.from('calendar_sources').select('*').order('name')
     setSources(data ?? [])
@@ -67,13 +73,25 @@ export default function Settings() {
     return currentSelection
   }
 
+  async function loadTodoColumns() {
+    const { data } = await supabase.from('todo_columns').select('*').order('reihenfolge')
+    setTodoColumns(data ?? [])
+  }
+
+  async function loadBoardSettings(uid: string) {
+    const { data } = await supabase.from('todo_board_settings').select('*').eq('user_id', uid).single()
+    setBoardSettings(data)
+  }
+
   useEffect(() => {
     loadSources()
     loadDistinctGremien().then(setGremien)
+    loadTodoColumns()
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
       loadUserData(data.user.id)
+      loadBoardSettings(data.user.id)
     })
   }, [])
 
@@ -199,6 +217,66 @@ export default function Settings() {
     }
     await loadSources()
     setSubscribed((prev) => prev.filter((id) => id !== sourceId))
+  }
+
+  async function handleAddColumn(e: FormEvent) {
+    e.preventDefault()
+    if (!userId || !newColumnTitel.trim()) return
+    const maxReihenfolge = Math.max(-1, ...todoColumns.map((c) => c.reihenfolge))
+    const { data } = await supabase
+      .from('todo_columns')
+      .insert({ user_id: userId, titel: newColumnTitel.trim(), reihenfolge: maxReihenfolge + 1 })
+      .select()
+      .single()
+    if (data) setTodoColumns((prev) => [...prev, data])
+    setNewColumnTitel('')
+  }
+
+  function startEditColumn(col: TodoColumn) {
+    setEditingColumnId(col.id)
+    setEditColumnTitel(col.titel)
+  }
+
+  async function saveEditColumn() {
+    if (!editingColumnId) return
+    const titel = editColumnTitel.trim()
+    if (titel) {
+      await supabase.from('todo_columns').update({ titel }).eq('id', editingColumnId)
+      setTodoColumns((prev) => prev.map((c) => (c.id === editingColumnId ? { ...c, titel } : c)))
+    }
+    setEditingColumnId(null)
+  }
+
+  async function handleMoveColumn(col: TodoColumn, direction: 'left' | 'right') {
+    const sorted = [...todoColumns].sort((a, b) => a.reihenfolge - b.reihenfolge)
+    const index = sorted.findIndex((c) => c.id === col.id)
+    const swapIndex = direction === 'left' ? index - 1 : index + 1
+    if (swapIndex < 0 || swapIndex >= sorted.length) return
+    const other = sorted[swapIndex]
+    await supabase.from('todo_columns').update({ reihenfolge: other.reihenfolge }).eq('id', col.id)
+    await supabase.from('todo_columns').update({ reihenfolge: col.reihenfolge }).eq('id', other.id)
+    setTodoColumns((prev) =>
+      prev.map((c) => {
+        if (c.id === col.id) return { ...c, reihenfolge: other.reihenfolge }
+        if (c.id === other.id) return { ...c, reihenfolge: col.reihenfolge }
+        return c
+      }),
+    )
+  }
+
+  async function handleDeleteColumn(col: TodoColumn) {
+    const message = `Spalte „${col.titel}" löschen? Enthaltene Karten werden mitgelöscht.`
+    if (!window.confirm(message)) return
+    await supabase.from('todo_columns').delete().eq('id', col.id)
+    setTodoColumns((prev) => prev.filter((c) => c.id !== col.id))
+  }
+
+  async function toggleBoardSetting(field: 'zeige_termin' | 'zeige_zustaendig') {
+    if (!userId) return
+    const current = boardSettings ?? { user_id: userId, zeige_termin: true, zeige_zustaendig: true }
+    const updated = { ...current, [field]: !current[field] }
+    setBoardSettings(updated)
+    await supabase.from('todo_board_settings').upsert(updated)
   }
 
   return (
@@ -399,6 +477,98 @@ export default function Settings() {
           04:00 UTC, siehe README.md Abschnitt 7).
         </p>
       </form>
+
+      <h2 className="text-lg font-semibold mt-8 mb-2">ToDo-Board</h2>
+      <p className="text-xs text-slate-400 mb-2 max-w-md">Spalten verwalten und sortieren.</p>
+      <ul className="space-y-2 max-w-md">
+        {[...todoColumns]
+          .sort((a, b) => a.reihenfolge - b.reihenfolge)
+          .map((col, i, sorted) => {
+            if (editingColumnId === col.id) {
+              return (
+                <li key={col.id} className="border rounded px-3 py-2 bg-white">
+                  <input
+                    type="text"
+                    value={editColumnTitel}
+                    onChange={(e) => setEditColumnTitel(e.target.value)}
+                    onBlur={saveEditColumn}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveEditColumn()
+                      if (e.key === 'Escape') setEditingColumnId(null)
+                    }}
+                    autoFocus
+                    className="w-full border rounded px-2 py-1"
+                  />
+                </li>
+              )
+            }
+            return (
+              <li key={col.id} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
+                <span className="cursor-pointer" onClick={() => startEditColumn(col)}>
+                  {col.titel}
+                </span>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <button
+                    type="button"
+                    onClick={() => handleMoveColumn(col, 'left')}
+                    disabled={i === 0}
+                    className="disabled:opacity-30"
+                  >
+                    ◀
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMoveColumn(col, 'right')}
+                    disabled={i === sorted.length - 1}
+                    className="disabled:opacity-30"
+                  >
+                    ▶
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteColumn(col)}
+                    className="text-red-500"
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </li>
+            )
+          })}
+        {todoColumns.length === 0 && <li className="text-slate-400 text-sm">Noch keine Spalten.</li>}
+      </ul>
+      <form onSubmit={handleAddColumn} className="flex gap-2 max-w-md mt-2">
+        <input
+          type="text"
+          placeholder="Neue Spalte"
+          value={newColumnTitel}
+          onChange={(e) => setNewColumnTitel(e.target.value)}
+          className="flex-1 border rounded px-3 py-2"
+        />
+        <button type="submit" className="bg-slate-900 text-white rounded px-3 py-2 text-sm">
+          Hinzufügen
+        </button>
+      </form>
+
+      <p className="text-sm text-slate-600 mt-4 mb-2">Details auf den Karten anzeigen</p>
+      <div className="max-w-md bg-white border rounded p-4 space-y-2">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={boardSettings?.zeige_termin ?? true}
+            onChange={() => toggleBoardSetting('zeige_termin')}
+          />
+          Termin-Symbol (📅)
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={boardSettings?.zeige_zustaendig ?? true}
+            onChange={() => toggleBoardSetting('zeige_zustaendig')}
+          />
+          Zuständigkeit (👤)
+        </label>
+      </div>
     </div>
   )
 }

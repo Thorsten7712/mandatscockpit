@@ -29,6 +29,7 @@ export function CalendarView() {
   const [meineGremien, setMeineGremien] = useState<string[] | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
 
+  const [showAddForm, setShowAddForm] = useState(false)
   const [newTitel, setNewTitel] = useState('')
   const [newStart, setNewStart] = useState('')
   const [newEnde, setNewEnde] = useState('')
@@ -83,6 +84,7 @@ export function CalendarView() {
       setNewStart('')
       setNewEnde('')
       setNewOrt('')
+      setShowAddForm(false)
       await loadEvents()
     }
     setSavingEvent(false)
@@ -110,55 +112,20 @@ export function CalendarView() {
   ].sort((a, b) => a.start.localeCompare(b.start))
 
   return (
-    <div className="space-y-6">
-      <section>
-        <h2 className="font-semibold mb-2">Nächste Termine</h2>
-        <ul className="space-y-1">
-          {aggregated.map((item) => (
-            <li key={item.key}>
-              <Link
-                to={item.link}
-                className={`border rounded px-3 py-2 flex items-center justify-between bg-white hover:bg-slate-50 ${item.abgesagt ? 'opacity-60' : ''}`}
-              >
-                <span className={item.abgesagt ? 'line-through' : ''}>
-                  {item.titel}
-                  {item.kind === 'sitzung' && <span className="text-xs text-slate-400"> · Sitzung</span>}
-                  {item.abgesagt && <span className="text-xs text-red-500 no-underline"> · abgesagt</span>}
-                </span>
-                <span className="text-xs text-slate-500">
-                  {new Date(item.start).toLocaleString('de-DE')}
-                  {item.ort && ` · ${item.ort}`}
-                </span>
-              </Link>
-            </li>
-          ))}
-          {aggregated.length === 0 && <li className="text-slate-400 text-sm">Keine anstehenden Termine.</li>}
-        </ul>
-      </section>
-      <section>
-        <h2 className="font-semibold mb-2">Eigene Termine</h2>
-        <ul className="space-y-1 mb-3">
-          {events.map((e) => (
-            <li key={e.id}>
-              <Link
-                to={`/termin/event/${e.id}`}
-                className={`border rounded px-3 py-2 flex items-center justify-between bg-white hover:bg-slate-50 ${e.status === 'abgesagt' ? 'opacity-60' : ''}`}
-              >
-                <span className={e.status === 'abgesagt' ? 'line-through' : ''}>
-                  {e.titel}
-                  {e.status === 'abgesagt' && <span className="text-xs text-red-500 no-underline"> · abgesagt</span>}
-                </span>
-                <span className="text-xs text-slate-500">
-                  {new Date(e.start).toLocaleString('de-DE')}
-                  {e.ort && ` · ${e.ort}`}
-                  {e.herkunft === 'fraktionsbuero' && ' · vom Fraktionsbüro'}
-                </span>
-              </Link>
-            </li>
-          ))}
-          {events.length === 0 && <li className="text-slate-400 text-sm">Noch keine Termine.</li>}
-        </ul>
-        <form onSubmit={handleAddEvent} className="space-y-2 bg-white border rounded p-3">
+    <section>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-semibold">Nächste Termine</h2>
+        <button
+          type="button"
+          onClick={() => setShowAddForm((v) => !v)}
+          className="text-sm text-slate-600 underline"
+        >
+          {showAddForm ? 'Abbrechen' : '+ Termin'}
+        </button>
+      </div>
+
+      {showAddForm && (
+        <form onSubmit={handleAddEvent} className="space-y-2 bg-white border rounded p-3 mb-3">
           <input
             type="text"
             placeholder="Titel"
@@ -199,45 +166,40 @@ export function CalendarView() {
             {savingEvent ? 'Speichern...' : 'Termin hinzufügen'}
           </button>
         </form>
-      </section>
-      <section>
-        <h2 className="font-semibold mb-2">Sitzungstermine (importiert)</h2>
-        <ul className="space-y-1">
-          {sessions.map((s) => (
-            <li key={s.id}>
-              <Link
-                to={`/termin/session/${s.id}`}
-                className={`border rounded px-3 py-2 flex justify-between bg-white hover:bg-slate-50 ${s.status === 'abgesagt' ? 'opacity-60' : ''}`}
-              >
-                <span className={s.status === 'abgesagt' ? 'line-through' : ''}>
-                  {s.titel}
-                  {s.status === 'abgesagt' && <span className="text-xs text-red-500 no-underline"> · abgesagt</span>}
-                </span>
-                <span className="text-xs text-slate-500">
-                  {new Date(s.datum).toLocaleString('de-DE')}
-                  {s.ort && ` · ${s.ort}`}
-                </span>
-              </Link>
-            </li>
-          ))}
-          {sessions.length === 0 && meineGremien?.length === 0 && (
-            <li className="text-slate-400 text-sm">
-              Noch keine Gremien ausgewählt. Unter{' '}
-              <Link to="/settings" className="underline">
-                Einstellungen
-              </Link>{' '}
-              die Gremien anhaken, in denen du ein Mandat hast.
-            </li>
-          )}
-          {sessions.length === 0 && meineGremien !== null && meineGremien.length > 0 && (
-            <li className="text-slate-400 text-sm">
-              Keine importierten Sitzungen für deine Gremien gefunden. Der ICS-Import-Job läuft täglich
-              04:00 UTC (siehe README.md Abschnitt 7) – oder unter Actions → „ICS-Kalenderquellen
-              importieren" manuell auslösen.
-            </li>
-          )}
-        </ul>
-      </section>
-    </div>
+      )}
+
+      <ul className="space-y-1 max-h-72 overflow-y-auto">
+        {aggregated.map((item) => (
+          <li key={item.key}>
+            <Link
+              to={item.link}
+              className={`border rounded px-3 py-2 flex items-center justify-between bg-white hover:bg-slate-50 ${item.abgesagt ? 'opacity-60' : ''}`}
+            >
+              <span className={item.abgesagt ? 'line-through' : ''}>
+                {item.titel}
+                {item.kind === 'sitzung' && <span className="text-xs text-slate-400"> · Sitzung</span>}
+                {item.abgesagt && <span className="text-xs text-red-500 no-underline"> · abgesagt</span>}
+              </span>
+              <span className="text-xs text-slate-500">
+                {new Date(item.start).toLocaleString('de-DE')}
+                {item.ort && ` · ${item.ort}`}
+              </span>
+            </Link>
+          </li>
+        ))}
+        {aggregated.length === 0 && meineGremien?.length === 0 && (
+          <li className="text-slate-400 text-sm">
+            Keine anstehenden Termine. Unter{' '}
+            <Link to="/settings" className="underline">
+              Einstellungen
+            </Link>{' '}
+            die Gremien anhaken, in denen du ein Mandat hast, um Sitzungstermine zu sehen.
+          </li>
+        )}
+        {aggregated.length === 0 && meineGremien !== null && meineGremien.length > 0 && (
+          <li className="text-slate-400 text-sm">Keine anstehenden Termine.</li>
+        )}
+      </ul>
+    </section>
   )
 }

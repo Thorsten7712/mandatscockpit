@@ -17,11 +17,13 @@ export default function Dashboard() {
           </button>
         </div>
       </header>
-      <main className="grid md:grid-cols-2 gap-8">
-        <CalendarView />
-        <div>
+      <main>
+        <section className="mb-8">
           <h2 className="font-semibold mb-2">ToDo-Board</h2>
           <TodoBoard />
+        </section>
+        <div className="max-w-2xl">
+          <CalendarView />
         </div>
       </main>
     </div>

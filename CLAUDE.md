@@ -120,12 +120,16 @@ Vorhanden:
   - `CalendarView.tsx` zeigt abgesagte Termine/Sitzungen weiterhin an (durchgestrichen, abgedunkelt,
     „· abgesagt"-Tag), blendet sie nicht aus – sonst wäre die Termindetailsicht mit den Notizen nicht
     mehr erreichbar.
-- **ToDo-Board vollständig ausgebaut** (`0011_todo_board_ausbau.sql`): Spalten sind jetzt per UI anlegbar/
-  umbenennbar (Klick auf Titel)/löschbar (mit Warnhinweis, da `column_id` `on delete cascade` hat, also
-  Karten mitreißt)/verschiebbar (◀/▶-Buttons, tauschen `reihenfolge` mit dem Nachbarn – bewusst kein
-  Drag-and-Drop für Spalten, um nicht zwei verschiedene dnd-kit-Draggable-Typen in einem DndContext
-  mischen zu müssen; Karten-Drag-and-Drop bleibt wie gehabt). Jeder Nutzer bekommt beim Signup automatisch
-  vier Standard-Spalten (`handle_new_user()`-Trigger erweitert), bestehende Nutzer wurden per Migration
+- **ToDo-Board vollständig ausgebaut** (`0011_todo_board_ausbau.sql`, `0012_todo_board_settings.sql`):
+  Spalten sind per UI anlegbar/umbenennbar (Klick auf Titel)/löschbar (mit Warnhinweis, da `column_id`
+  `on delete cascade` hat, also Karten mitreißt)/verschiebbar (◀/▶-Buttons, tauschen `reihenfolge` mit
+  dem Nachbarn – bewusst kein Drag-and-Drop für Spalten, um nicht zwei verschiedene
+  dnd-kit-Draggable-Typen in einem DndContext mischen zu müssen). Diese Verwaltung sitzt bewusst **nicht**
+  in `TodoBoard.tsx` selbst, sondern in einem neuen „ToDo-Board"-Abschnitt in `Settings.tsx` (gemeinsam
+  mit den Checkboxen für Karten-Detail-Sichtbarkeit, `todo_board_settings`-Tabelle,
+  `zeige_termin`/`zeige_zustaendig`) – das Board zeigt nur noch Spalten+Karten+Drag&Drop+Schnell-
+  Erfassung, keine Struktur-Konfiguration mehr. Jeder Nutzer bekommt beim Signup automatisch vier
+  Standard-Spalten (`handle_new_user()`-Trigger erweitert), bestehende Nutzer wurden per Migration
   nachgerüstet (nur falls sie noch keine eigenen Spalten hatten).
   - Karten: Schnellerfassung (nur Titel) direkt im Board, volle Bearbeitung auf einer neuen
     Detailseite (`src/pages/TodoDetail.tsx`, Route `/todo/:id`) – Titel, Beschreibung, Zuständigkeit
@@ -143,8 +147,13 @@ Vorhanden:
     Freitext ist. `todo_comments`-Policy hängt an der Eigentümerschaft der zugehörigen Karte
     (`exists (select ... from todos where id = todo_id and user_id = auth.uid())`), nicht an einer
     eigenen Nutzer-Referenz.
-
-Noch NICHT vorhanden (nächste Schritte, grob nach Konzept-Phasen sortiert):
+- **Dashboard-Layout umgebaut** (`Dashboard.tsx`): Kein 2-Spalten-Grid mehr. ToDo-Board sitzt jetzt ganz
+  oben, volle Breite. `CalendarView.tsx` wurde radikal eingedampft – zeigt nur noch den
+  „Nächste Termine"-Block (die alten Sektionen „Eigene Termine" und „Sitzungstermine (importiert)"
+  wurden komplett entfernt, die aggregierte Liste deckt beides ab und verlinkt weiterhin auf
+  `/termin/:kind/:id`). Liste ist auf `max-h-72 overflow-y-auto` begrenzt (~5 Einträge sichtbar, Rest
+  scrollbar). Termin-Anlegen-Formular ist jetzt hinter einem „+ Termin"-Button versteckt
+  (`showAddForm`-Toggle) statt permanent sichtbar.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

@@ -87,6 +87,12 @@ export interface TodoColumn {
   reihenfolge: number
 }
 
+export interface TodoBoardSettings {
+  user_id: string
+  zeige_termin: boolean
+  zeige_zustaendig: boolean
+}
+
 export interface TodoRow {
   id: string
   user_id: string
