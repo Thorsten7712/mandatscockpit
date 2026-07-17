@@ -59,6 +59,7 @@ export interface SummaryRow {
   user_id: string
   document_id: string | null
   session_id: string | null
+  event_id: string | null
   inhalt: string | null
   datei_url: string | null
   sichtbarkeit: Sichtbarkeit

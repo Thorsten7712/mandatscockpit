@@ -128,6 +128,8 @@ Für jede Sitzung (egal ob aktiv, vergangen oder geplant) gibt es eine eigene De
 
 Das ist die zentrale Arbeitsansicht vor und während einer Sitzung: ein Klick auf einen Termin im Kalender oder auf eine Sitzung im Dokumenten-Hub führt direkt hierher.
 
+**Umsetzungsstand:** Die Termindetailsicht (`/termin/:kind/:id`, Klick auf einen Eintrag in „Nächste Termine“/„Eigene Termine“/„Sitzungstermine“) existiert bereits und deckt Notizen + Dokumenten-Upload ab – bewusst über den ursprünglichen Plan hinaus erweitert auf **eigene Termine**, nicht nur Sitzungen (jedes Mitglied wollte das für alle Termine, nicht nur importierte). Was hier noch fehlt: Verknüpfung mit dem Dokumenten-Hub (der existiert noch gar nicht, siehe Abschnitt 5.1) und die ToDo-Verknüpfung.
+
 ## 6. Typischer Nutzungsablauf
 
 1. Login (E-Mail/Passwort oder GitHub-OAuth über Supabase Auth).
@@ -144,7 +146,7 @@ Das ist die zentrale Arbeitsansicht vor und während einer Sitzung: ein Klick au
 - `UserSourceSubscription` (user_id, source_id, gremium_filter optional) – welche Quellen/Gremien ein Mitglied abonniert hat
 - `Session` / Sitzung (id, source_id, titel, gremium, ebene, datum, ort, quelle_url, status: geplant/aktiv/abgeschlossen) – automatisch befüllt aus der jeweiligen ICS-Quelle
 - `Document` (id, titel, quelle_url, ausschuss, session_id, tags)
-- `Summary` / Zusammenfassung (id, user_id, document_id, session_id, inhalt oder datei_url, sichtbarkeit: privat/geteilt, erstellt_am)
+- `Summary` / Zusammenfassung (id, user_id, document_id, session_id, event_id, inhalt oder datei_url, sichtbarkeit: privat/geteilt, erstellt_am) – `event_id` kam nachträglich dazu: Notizen/Dokumente lassen sich nicht nur an Sitzungen/Dokumente, sondern auch an eigene Termine hängen
 - `Event` (id, user_id, titel, start, ende, ort, herkunft: privat/übernommene_sitzung/fraktionsbüro, erstellt_von) – `erstellt_von` unterscheidet Eigeneintrag vom Fraktionsbüro-Eintrag
 - `TodoColumn` (id, user_id, titel, reihenfolge) – vom Mitglied frei definierte Board-Spalten
 - `Todo` (id, user_id, column_id, position, titel, fällig_am, dokument_id optional, session_id optional)

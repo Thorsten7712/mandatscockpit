@@ -79,19 +79,27 @@ Vorhanden:
   supabase/functions/import-ics-source/index.ts` typprüfbar (Deno separat installieren, ist nicht Teil
   von `npm install`) – das eigene `deno.json` im Funktionsordner ist nötig, weil der Node-`package.json`
   im Repo-Root sonst Deno's Modul-Resolution durcheinanderbringt (`nodeModulesDir: "none"`).
-- **Eigene Termine** in `CalendarView` sind jetzt vollständig editierbar: Formular zum Anlegen (Titel,
-  Start, optional Ende, optional Ort) sowie Bearbeiten/Löschen pro Termin (Inline-Formular, gleiches
-  Muster wie die Kalenderquellen-Bearbeitung in `Settings`). Nutzt die bereits bestehenden RLS-Policies
-  `events_insert_own_or_fraktionsbuero`/`_update_own`/`_delete_own` – keine neue Migration für die
-  Rechte nötig, nur `events.ort` kam per `0008_events_ort.sql` neu dazu (`sessions.ort` gab's schon).
-  Neue Termine werden mit `herkunft = 'privat'` (Tabellen-Default) angelegt; vom Fraktionsbüro angelegte
-  Termine (`herkunft = 'fraktionsbuero'`) sind laut KONZEPT.md Abschnitt 5.3 vom Mitglied genauso
-  bearbeitbar, RLS unterscheidet hier nicht nach `herkunft`, nur nach `user_id = auth.uid()`.
+- **Eigene Termine** lassen sich in `CalendarView` anlegen (Formular: Titel, Start, optional Ende,
+  optional Ort). Nutzt die bereits bestehenden RLS-Policies `events_insert_own_or_fraktionsbuero`/
+  `_update_own`/`_delete_own` – keine neue Migration für die Rechte nötig, nur `events.ort` kam per
+  `0008_events_ort.sql` neu dazu (`sessions.ort` gab's schon). Neue Termine werden mit
+  `herkunft = 'privat'` (Tabellen-Default) angelegt; vom Fraktionsbüro angelegte Termine
+  (`herkunft = 'fraktionsbuero'`) sind laut KONZEPT.md Abschnitt 5.3 vom Mitglied genauso bearbeitbar,
+  RLS unterscheidet hier nicht nach `herkunft`, nur nach `user_id = auth.uid()`.
 - **„Nächste Termine"**: aggregierte, chronologisch sortierte Ansicht ganz oben in `CalendarView`, die
   `events` und `sessions` client-seitig zusammenführt (Titel, Start als Datum+Uhrzeit, Ort) und per
   ISO-8601-String-Vergleich sortiert (`a.start.localeCompare(b.start)`, funktioniert weil beide Felder
   bereits als ISO-Timestamp vorliegen). Ergänzt, nicht ersetzt die beiden Detail-Sektionen darunter
-  („Eigene Termine" mit CRUD, „Sitzungstermine" reine Liste).
+  („Eigene Termine", „Sitzungstermine").
+- **Termindetailsicht** (`src/pages/TerminDetail.tsx`, Route `/termin/:kind/:id` mit `kind` = `event`
+  oder `session`): Jede Zeile in den drei Kalender-Listen ist jetzt ein `Link` dorthin (Bearbeiten/
+  Löschen der Eigene-Termine-Liste selbst wurde deshalb aus `CalendarView` entfernt und lebt nur noch
+  hier). Zeigt Titel/Start/Ende/Ort/Gremium je nach Typ; bei `kind=event` zusätzlich Bearbeiten/Löschen
+  (Inline-Formular). Darunter „Notizen & Dokumente": nutzt die `summaries`-Tabelle (jetzt mit
+  `event_id`-Spalte, `0009_summaries_termine.sql`) für Freitext-Notizen und Datei-Uploads. Dateien
+  landen im privaten Storage-Bucket `zusammenfassungen` unter `<user_id>/<dateiname>` (RLS-Policies auf
+  `storage.objects` scopen Zugriff auf den Uploader, per `(storage.foldername(name))[1] = auth.uid()::text`).
+  Downloads laufen über `createSignedUrl()` (60s gültig), da das Bucket nicht public ist.
 
 Noch NICHT vorhanden (nächste Schritte, grob nach Konzept-Phasen sortiert):
 
@@ -100,12 +108,11 @@ Noch NICHT vorhanden (nächste Schritte, grob nach Konzept-Phasen sortiert):
 2. **Fraktionsbüro-Variante der Termin-Erstellung**: eigene Termine anlegen/bearbeiten/löschen ist
    fertig (siehe oben), es fehlt noch die Rolle „Fraktionsbüro", die ein Zielmitglied aus der eigenen
    Fraktion auswählen und für dieses einen Termin (`herkunft = 'fraktionsbuero'`) anlegen kann.
-3. **Dokumenten-Hub** (Phase 2): Liste/Suche für `documents`, zunächst manuell gepflegt.
-4. **Zusammenfassungs-Upload** (Phase 2): Formular zum Hochladen/Einfügen einer Zusammenfassung,
-   Verknüpfung mit `document_id` und `session_id`, Speicherung in Supabase Storage bei Dateien.
-5. **Sitzungsdetailsicht** (Phase 2): Seite pro Sitzung, die Dokumente + eigene Zusammenfassungen +
-   verknüpfte ToDos bündelt (siehe KONZEPT.md Abschnitt 5.5).
-6. **iCal-Export** des zusammengeführten persönlichen Kalenders.
+3. **Dokumenten-Hub** (Phase 2): Liste/Suche für `documents`, zunächst manuell gepflegt. Zusammenfassungs-
+   Upload + Sitzungsdetailsicht sind bereits fertig (siehe „Termindetailsicht" oben, KONZEPT.md
+   Abschnitt 5.5) – es fehlt nur noch die Verknüpfung mit echten `documents`-Einträgen (Dokumenten-Hub
+   existiert noch nicht) und mit ToDo-Karten.
+4. **iCal-Export** des zusammengeführten persönlichen Kalenders.
 
 Bekannte offene Frage bei der Quellen-UI: aktuell kann jedes Mitglied jede selbst angelegte Quelle auch
 wieder löschen (`calendar_sources_delete_own`-Policy), auch wenn andere Mitglieder sie bereits
