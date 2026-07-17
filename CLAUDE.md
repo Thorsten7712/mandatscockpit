@@ -36,8 +36,12 @@ Vorhanden:
   `calendar_sources`-Feeds via `node-ical` und upsertet sie in `sessions`
   (Skript: `scripts/import-ics.mjs`, Details in README.md Abschnitt 7). Läuft mit dem
   `SUPABASE_SERVICE_ROLE_KEY`-Secret, da `sessions` keine Insert/Update-Policy für normale Nutzer hat.
-  Die Gremium-Extraktion aus `SUMMARY` ist eine Heuristik und noch nicht an einem echten
-  ALLRIS-Feed-Auszug verifiziert (offener Punkt, KONZEPT.md Abschnitt 11).
+  Läuft auf Node 22 (nicht 20) – supabase-js initialisiert intern einen Realtime-Client, der unter
+  Node 20 ohne natives WebSocket sofort crasht. Die Gremium-Extraktion aus `SUMMARY` ist an einem
+  echten ALLRIS-Feed-Auszug verifiziert (KONZEPT.md Abschnitt 11): `SUMMARY` enthält dort direkt den
+  Gremiumsnamen, keine „X – Sitzung"-Heuristik nötig. node-ical liefert Properties mit ICS-Parametern
+  (z. B. `SUMMARY;LANGUAGE=de:...`) als `{params, val}`-Objekt statt String – wird über `toText()`
+  normalisiert.
 
 Noch NICHT vorhanden (nächste Schritte, grob nach Konzept-Phasen sortiert):
 

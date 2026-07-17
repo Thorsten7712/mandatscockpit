@@ -20,56 +20,70 @@ if (!supabaseUrl || !serviceRoleKey) {
 
 const supabase = createClient(supabaseUrl, serviceRoleKey)
 
-// Heuristik, um das Gremium aus dem SUMMARY-Feld herauszulesen, z. B.
-// "Bauausschuss - Sitzung" -> "Bauausschuss". Das Feed-Format ist laut
-// docs/KONZEPT.md Abschnitt 11 noch nicht an einem echten Auszug verifiziert –
-// liefert die Heuristik nichts Plausibles, bleibt gremium einfach null.
+// node-ical liefert ICS-Properties mit Parametern (z. B. "SUMMARY;LANGUAGE=de:...",
+// wie im echten ALLRIS-Feed von Iserlohn) als { params, val } statt als String.
+// Diese Funktion normalisiert beide Formen zu einem String.
+function toText(value) {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'object' && 'val' in value) return String(value.val)
+  return String(value)
+}
+
+// An einem echten Auszug des ALLRIS-Feeds (Stadtrat Iserlohn) verifiziert
+// (siehe docs/KONZEPT.md Abschnitt 11): SUMMARY enthält dort bereits direkt
+// den Gremiumsnamen ohne Zusatz (z. B. "Finanzausschuss", "Rat der Stadt
+// Iserlohn"). Für andere Feed-Formate mit "Gremium – Sitzung"-Schema bleibt
+// der Bindestrich-Fallback erhalten.
 function extractGremium(summary) {
-  const match = summary.match(/^(.+?)\s*[-–—]\s*.*sitzung/i)
-  return match ? match[1].trim() : null
+  const dashMatch = summary.match(/^(.+?)\s*[-–—]\s*.*sitzung/i)
+  if (dashMatch) return dashMatch[1].trim()
+  return summary.trim() || null
 }
 
 async function importSource(source) {
   console.log(`Importiere "${source.name}" (${source.ics_url})`)
 
-  let parsed
   try {
-    parsed = await ical.async.fromURL(source.ics_url)
+    const parsed = await ical.async.fromURL(source.ics_url)
+
+    const rows = Object.values(parsed)
+      .filter((entry) => entry.type === 'VEVENT' && entry.uid && entry.start)
+      .map((entry) => {
+        const summary = toText(entry.summary)
+        return {
+          source_id: source.id,
+          ics_uid: entry.uid,
+          titel: summary || 'Ohne Titel',
+          gremium: summary ? extractGremium(summary) : null,
+          ebene: source.ebene,
+          datum: new Date(entry.start).toISOString(),
+          ort: toText(entry.location) || null,
+          quelle_url: toText(entry.url) || source.ics_url,
+        }
+      })
+
+    if (rows.length === 0) {
+      console.log('  Keine VEVENTs im Feed gefunden.')
+      return { source: source.name, imported: 0 }
+    }
+
+    // status wird bewusst NICHT mitgeschickt: beim Insert greift der
+    // Tabellen-Default ('geplant'), beim Update bleibt ein manuell vom
+    // Ratsbüro gesetzter Status (z. B. 'aktiv') unangetastet.
+    const { error } = await supabase.from('sessions').upsert(rows, { onConflict: 'source_id,ics_uid' })
+
+    if (error) {
+      console.error(`  Fehler beim Schreiben: ${error.message}`)
+      return { source: source.name, imported: 0, error: error.message }
+    }
+
+    console.log(`  ${rows.length} Termine importiert/aktualisiert.`)
+    return { source: source.name, imported: rows.length }
   } catch (err) {
-    console.error(`  Fehler beim Laden des Feeds: ${err.message}`)
+    console.error(`  Fehler beim Verarbeiten der Quelle: ${err.message}`)
     return { source: source.name, imported: 0, error: err.message }
   }
-
-  const rows = Object.values(parsed)
-    .filter((entry) => entry.type === 'VEVENT' && entry.uid && entry.start)
-    .map((entry) => ({
-      source_id: source.id,
-      ics_uid: entry.uid,
-      titel: entry.summary ?? 'Ohne Titel',
-      gremium: entry.summary ? extractGremium(entry.summary) : null,
-      ebene: source.ebene,
-      datum: new Date(entry.start).toISOString(),
-      ort: entry.location ?? null,
-      quelle_url: entry.url ?? source.ics_url,
-    }))
-
-  if (rows.length === 0) {
-    console.log('  Keine VEVENTs im Feed gefunden.')
-    return { source: source.name, imported: 0 }
-  }
-
-  // status wird bewusst NICHT mitgeschickt: beim Insert greift der
-  // Tabellen-Default ('geplant'), beim Update bleibt ein manuell vom
-  // Ratsbüro gesetzter Status (z. B. 'aktiv') unangetastet.
-  const { error } = await supabase.from('sessions').upsert(rows, { onConflict: 'source_id,ics_uid' })
-
-  if (error) {
-    console.error(`  Fehler beim Schreiben: ${error.message}`)
-    return { source: source.name, imported: 0, error: error.message }
-  }
-
-  console.log(`  ${rows.length} Termine importiert/aktualisiert.`)
-  return { source: source.name, imported: rows.length }
 }
 
 async function main() {

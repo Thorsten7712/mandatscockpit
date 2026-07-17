@@ -193,7 +193,7 @@ GitHub Issues/Projects (Kanban-Board) eignen sich gut, um die Umsetzung in Phase
 ## 11. Offene Punkte für die nächste Runde
 
 - ~~Endgültiger Projektname~~ – erledigt, `mandatscockpit`.
-- ICS-Feed (`SiKalAbo.ics`) anhand eines echten Auszugs prüfen: Lässt sich das Gremium zuverlässig aus `SUMMARY`/`DESCRIPTION` herauslesen, oder gibt es sogar separate ICS-Links pro Gremium?
+- ~~ICS-Feed (`SiKalAbo.ics`) anhand eines echten Auszugs prüfen~~ – erledigt (2026-07-17, echter Feed unter `public/ics/SiKalAbo.ics` geladen und geparst): `SUMMARY` enthält bereits direkt und ausschließlich den Gremiumsnamen ohne Zusatz (z. B. „Finanzausschuss", „Rat der Stadt Iserlohn", „Betriebsausschuss Kommunales Immobilien Management") – kein „Gremium – Sitzung"-Schema, keine separaten Links pro Gremium nötig. `LOCATION` liefert bei Bedarf den Sitzungssaal. Wichtiges Implementierungsdetail: node-ical liefert Properties mit ICS-Parametern (hier durchgängig `SUMMARY;LANGUAGE=de:...`) als `{ params, val }`-Objekt statt als String – `scripts/import-ics.mjs` normalisiert das über `toText()`.
 - Gibt es doch noch eine funktionierende Schnittstelle für die Antragstexte selbst (Vorlagen), oder bleibt es beim manuellen Import/Scraper?
 - Welche weiteren Ebenen sollen als Erstes unterstützt werden (Kreistag Märkischer Kreis naheliegend) und bieten diese überhaupt einen ICS-Feed oder eine vergleichbare Schnittstelle? Für Landtag NRW und Bundestag vorab grob prüfen, was technisch überhaupt verfügbar ist.
 - Wie wird die „aktive Sitzung" bestimmt – manuell vom Ratsbüro gesetzt oder automatisch anhand des nächsten Sitzungstermins?
