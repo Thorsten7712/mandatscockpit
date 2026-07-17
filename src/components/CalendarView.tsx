@@ -39,7 +39,9 @@ export function CalendarView() {
           ))}
           {sessions.length === 0 && (
             <li className="text-slate-400 text-sm">
-              Noch keine importierten Sitzungen (Phase 1: ICS-Import-Job fehlt noch – siehe CLAUDE.md).
+              Noch keine importierten Sitzungen. Der ICS-Import-Job läuft täglich 04:00 UTC (siehe
+              README.md Abschnitt 7) – oder unter Actions → „ICS-Kalenderquellen importieren" manuell
+              auslösen.
             </li>
           )}
         </ul>
