@@ -9,7 +9,13 @@ export function CalendarView() {
   const [meineGremien, setMeineGremien] = useState<string[] | null>(null)
 
   useEffect(() => {
-    supabase.from('events').select('*').order('start').then(({ data }) => setEvents(data ?? []))
+    const now = new Date().toISOString()
+    supabase
+      .from('events')
+      .select('*')
+      .gte('start', now)
+      .order('start')
+      .then(({ data }) => setEvents(data ?? []))
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
@@ -23,6 +29,7 @@ export function CalendarView() {
         .from('sessions')
         .select('*')
         .in('gremium', gremien)
+        .gte('datum', now)
         .order('datum')
       setSessions(sessionRows ?? [])
     })

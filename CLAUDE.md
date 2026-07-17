@@ -31,11 +31,18 @@ Vorhanden:
   (`Settings`) – nutzt die bereits bestehenden `calendar_sources_insert_own`/`_delete_own`-Policies
 - Vollständiges DB-Schema inkl. RLS-Policies (`supabase/migrations/0001_init.sql`,
   `0002_sessions_ics_uid.sql`, `0003_sessions_ics_uid_constraint.sql`,
-  `0004_sessions_source_cascade.sql`, `0005_user_gremien.sql`)
+  `0004_sessions_source_cascade.sql`, `0005_user_gremien.sql`, `0006_calendar_sources_admin.sql`)
 - Settings-Seite hat außerdem einen „Meine Gremien"-Bereich: Checkliste aller distinct
   `sessions.gremium`-Werte, Auswahl landet in `user_gremien` (user_id, gremium). Der Dashboard-Kalender
-  (`CalendarView`) zeigt dadurch nur noch Sitzungen der angehakten Gremien – bei keiner Auswahl leer,
-  mit Hinweis auf die Settings-Seite.
+  (`CalendarView`) zeigt dadurch nur noch **zukünftige** Sitzungen (`datum >= now()`) der angehakten
+  Gremien an – bei keiner Auswahl leer, mit Hinweis auf die Settings-Seite. „Eigene Termine" ist ebenso
+  auf `start >= now()` gefiltert.
+- Kalenderquellen können jetzt auch bearbeitet werden (Name/Ebene/ICS-URL, Inline-Formular in
+  `Settings`), nicht nur angelegt/gelöscht. Nutzer mit `profiles.rolle = 'admin'` dürfen zusätzlich zu
+  eigenen auch gemeinsam verwaltete Quellen (`verwaltet_von = null`, z. B. die vorkonfigurierte
+  „Stadtrat Iserlohn") sowie fremde bearbeiten/löschen (`0006_calendar_sources_admin.sql`) – vorher war
+  das für niemanden möglich, da `verwaltet_von = auth.uid()` bei `null` nie zutrifft. Um sich selbst zum
+  Admin zu machen: `update public.profiles set rolle = 'admin' where id = auth.uid();` im SQL Editor.
 - GitHub-Actions-Workflows: Deploy nach GitHub Pages, Supabase-Keep-Alive gegen das Auto-Pausieren im
   Free-Tier, **ICS-Import-Job** (`import-ics.yml`, täglich 04:00 UTC + manuell auslösbar) – lädt alle
   `calendar_sources`-Feeds via `node-ical` und upsertet sie in `sessions`

@@ -30,6 +30,14 @@ export default function Settings() {
 
   const [gremien, setGremien] = useState<string[]>([])
   const [meineGremien, setMeineGremien] = useState<string[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editEbene, setEditEbene] = useState<Ebene>('kommune')
+  const [editIcsUrl, setEditIcsUrl] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   async function loadSources() {
     const { data } = await supabase.from('calendar_sources').select('*').order('name')
@@ -49,8 +57,45 @@ export default function Settings() {
       setSubscribed((subs ?? []).map((s) => s.source_id))
       const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
       setMeineGremien((mine ?? []).map((g) => g.gremium))
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('rolle')
+        .eq('id', data.user.id)
+        .single()
+      setIsAdmin(profile?.rolle === 'admin')
     })
   }, [])
+
+  function startEdit(s: CalendarSource) {
+    setEditingId(s.id)
+    setEditName(s.name)
+    setEditEbene(s.ebene)
+    setEditIcsUrl(s.ics_url)
+    setEditError(null)
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditError(null)
+  }
+
+  async function handleSaveEdit(e: FormEvent) {
+    e.preventDefault()
+    if (!editingId) return
+    setEditSaving(true)
+    setEditError(null)
+    const { error } = await supabase
+      .from('calendar_sources')
+      .update({ name: editName, ebene: editEbene, ics_url: editIcsUrl })
+      .eq('id', editingId)
+    if (error) {
+      setEditError(error.message)
+    } else {
+      setEditingId(null)
+      await loadSources()
+    }
+    setEditSaving(false)
+  }
 
   async function toggleGremium(gremium: string) {
     if (!userId) return
@@ -118,25 +163,87 @@ export default function Settings() {
       </header>
       {deleteError && <p className="text-red-600 text-sm mb-2 max-w-md">{deleteError}</p>}
       <ul className="space-y-2 max-w-md">
-        {sources.map((s) => (
-          <li key={s.id} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
-            <span>
-              {s.name} <span className="text-xs text-slate-400">({s.ebene})</span>
-            </span>
-            <div className="flex items-center gap-3">
-              <input type="checkbox" checked={subscribed.includes(s.id)} onChange={() => toggle(s.id)} />
-              {s.verwaltet_von === userId && (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(s.id)}
-                  className="text-xs text-red-500 underline"
-                >
-                  Löschen
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
+        {sources.map((s) => {
+          const canManage = s.verwaltet_von === userId || isAdmin
+          if (editingId === s.id) {
+            return (
+              <li key={s.id} className="border rounded px-3 py-2 bg-white space-y-2">
+                <form onSubmit={handleSaveEdit} className="space-y-2">
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full border rounded px-2 py-1"
+                    required
+                  />
+                  <select
+                    value={editEbene}
+                    onChange={(e) => setEditEbene(e.target.value as Ebene)}
+                    className="w-full border rounded px-2 py-1"
+                  >
+                    {EBENEN.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="url"
+                    value={editIcsUrl}
+                    onChange={(e) => setEditIcsUrl(e.target.value)}
+                    className="w-full border rounded px-2 py-1"
+                    required
+                  />
+                  {editError && <p className="text-red-600 text-sm">{editError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={editSaving}
+                      className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+                    >
+                      {editSaving ? 'Speichern...' : 'Speichern'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="text-sm text-slate-600 underline"
+                    >
+                      Abbrechen
+                    </button>
+                  </div>
+                </form>
+              </li>
+            )
+          }
+          return (
+            <li key={s.id} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
+              <span>
+                {s.name} <span className="text-xs text-slate-400">({s.ebene})</span>
+              </span>
+              <div className="flex items-center gap-3">
+                <input type="checkbox" checked={subscribed.includes(s.id)} onChange={() => toggle(s.id)} />
+                {canManage && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(s)}
+                      className="text-xs text-slate-600 underline"
+                    >
+                      Bearbeiten
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(s.id)}
+                      className="text-xs text-red-500 underline"
+                    >
+                      Löschen
+                    </button>
+                  </>
+                )}
+              </div>
+            </li>
+          )
+        })}
         {sources.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kalenderquellen angelegt.</li>}
       </ul>
 
