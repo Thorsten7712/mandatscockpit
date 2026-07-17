@@ -79,13 +79,21 @@ Vorhanden:
   supabase/functions/import-ics-source/index.ts` typprüfbar (Deno separat installieren, ist nicht Teil
   von `npm install`) – das eigene `deno.json` im Funktionsordner ist nötig, weil der Node-`package.json`
   im Repo-Root sonst Deno's Modul-Resolution durcheinanderbringt (`nodeModulesDir: "none"`).
+- **Eigene Termine** in `CalendarView` sind jetzt vollständig editierbar: Formular zum Anlegen (Titel,
+  Start, optional Ende) sowie Bearbeiten/Löschen pro Termin (Inline-Formular, gleiches Muster wie die
+  Kalenderquellen-Bearbeitung in `Settings`). Nutzt die bereits bestehenden RLS-Policies
+  `events_insert_own_or_fraktionsbuero`/`_update_own`/`_delete_own` – keine neue Migration nötig. Neue
+  Termine werden mit `herkunft = 'privat'` (Tabellen-Default) angelegt; vom Fraktionsbüro angelegte
+  Termine (`herkunft = 'fraktionsbuero'`) sind laut KONZEPT.md Abschnitt 5.3 vom Mitglied genauso
+  bearbeitbar, RLS unterscheidet hier nicht nach `herkunft`, nur nach `user_id = auth.uid()`.
 
 Noch NICHT vorhanden (nächste Schritte, grob nach Konzept-Phasen sortiert):
 
 1. **UI zum Anlegen/Umbenennen/Sortieren von ToDo-Spalten** und zum Erstellen neuer ToDo-Karten
    (aktuell nur Drag & Drop zwischen bereits existierenden Spalten/Karten).
-2. **Termin-Erstellung im UI** (aktuell nur Anzeige) – inkl. Variante für die Fraktionsbüro-Rolle, bei der
-   ein Zielmitglied aus der eigenen Fraktion ausgewählt werden kann.
+2. **Fraktionsbüro-Variante der Termin-Erstellung**: eigene Termine anlegen/bearbeiten/löschen ist
+   fertig (siehe oben), es fehlt noch die Rolle „Fraktionsbüro", die ein Zielmitglied aus der eigenen
+   Fraktion auswählen und für dieses einen Termin (`herkunft = 'fraktionsbuero'`) anlegen kann.
 3. **Dokumenten-Hub** (Phase 2): Liste/Suche für `documents`, zunächst manuell gepflegt.
 4. **Zusammenfassungs-Upload** (Phase 2): Formular zum Hochladen/Einfügen einer Zusammenfassung,
    Verknüpfung mit `document_id` und `session_id`, Speicherung in Supabase Storage bei Dateien.
