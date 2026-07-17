@@ -115,7 +115,9 @@ Ein iCal-Export erlaubt zusätzlich die Synchronisation des kompletten, zusammen
 **Gremien-/Quellen-Auswahl je Mitglied:** Jedes Mitglied abonniert in seinem Profil die für sich relevanten Quellen (z. B. „Stadtrat Iserlohn" + „Kreistag Märkischer Kreis") und wählt innerhalb dieser optional noch einzelne Gremien/Ausschüsse aus. Der Kalender zeigt dann automatisch nur die relevanten Termine an.
 
 ### 5.4 ToDo-Board (Kanban)
-Statt einer einfachen Liste bekommt jedes Mitglied ein eigenes, Jira/Trello-artiges Board: ToDo-Karten lassen sich per Drag & Drop zwischen **frei definierbaren Spalten** verschieben (keine festen Status wie „Offen/Erledigt", sondern vom Mitglied selbst benannte und sortierte Spalten, z. B. „Diese Woche", „Warte auf Rückmeldung", „Erledigt"). Karten können optional mit einem Dokument und/oder einer Sitzung verknüpft werden. Rein persönlich, kein Abgleich mit anderen Mitgliedern nötig.
+Statt einer einfachen Liste bekommt jedes Mitglied ein eigenes, Jira/Trello-artiges Board: ToDo-Karten lassen sich per Drag & Drop zwischen **frei definierbaren Spalten** verschieben (keine festen Status wie „Offen/Erledigt", sondern vom Mitglied selbst benannte und sortierte Spalten). Jeder Nutzer startet mit vier Standard-Spalten: „Neu", „Geplant", „Wartet", „Fertig" – „Geplant" bekommt eine Karte automatisch zugewiesen, sobald ihr ein Datum oder ein Termin/eine Sitzung verknüpft wird (nur beim Übergang aus „Neu", spätere manuelle Verschiebung bleibt jederzeit möglich; greift nur, solange die Spalten noch so heißen).
+
+Karten haben Titel, Beschreibung, eine frei formulierte Zuständigkeit (aktuell Freitext, echte Zuweisung an andere App-Nutzer ist als Ausbaustufe vorgesehen), optional eine Termin-Verknüpfung (eigenes Datum ODER ein bestehender eigener Termin ODER eine importierte Sitzung), einen Kommentar-Verlauf und Datei-Uploads. Rein persönlich, kein Abgleich mit anderen Mitgliedern nötig – das gilt auch für Kommentare, solange Zuständigkeit Freitext bleibt.
 
 Technisch empfiehlt sich eine schlanke Drag-&-Drop-Bibliothek wie `@dnd-kit/core` (React-kompatibel, keine schweren Abhängigkeiten) – passt gut zum ohnehin gewählten React/Vite-Stack.
 
@@ -149,7 +151,8 @@ Das ist die zentrale Arbeitsansicht vor und während einer Sitzung: ein Klick au
 - `Summary` / Zusammenfassung (id, user_id, document_id, session_id, event_id, inhalt oder datei_url, sichtbarkeit: privat/geteilt, erstellt_am) – `event_id` kam nachträglich dazu: Notizen/Dokumente lassen sich nicht nur an Sitzungen/Dokumente, sondern auch an eigene Termine hängen
 - `Event` (id, user_id, titel, start, ende, ort, status: geplant/abgesagt, herkunft: privat/übernommene_sitzung/fraktionsbüro, erstellt_von) – `erstellt_von` unterscheidet Eigeneintrag vom Fraktionsbüro-Eintrag. `abgesagt` wird vom Mitglied manuell gesetzt (statt Löschen), damit Notizen/Dokumente erhalten bleiben
 - `TodoColumn` (id, user_id, titel, reihenfolge) – vom Mitglied frei definierte Board-Spalten
-- `Todo` (id, user_id, column_id, position, titel, fällig_am, dokument_id optional, session_id optional)
+- `Todo` (id, user_id, column_id, position, titel, beschreibung, zustaendig (Freitext), fällig_am, dokument_id optional, session_id optional, event_id optional)
+- `TodoComment` (id, todo_id, user_id, inhalt, erstellt_am) – Kommentar-Verlauf pro Karte
 
 Kein KI-API-Key wird irgendwo gespeichert – die KI-Nutzung findet außerhalb des Systems statt.
 
@@ -202,6 +205,6 @@ GitHub Issues/Projects (Kanban-Board) eignen sich gut, um die Umsetzung in Phase
 - Sollen hochgeladene Zusammenfassungen grundsätzlich privat bleiben oder optional mit anderen Mitgliedern teilbar sein?
 - Welche Dateiformate sollen für den Upload unterstützt werden (Freitext, .txt/.md, auch .pdf)?
 - Darf das Fraktionsbüro von ihm angelegte Termine auch nachträglich bearbeiten/löschen, oder nur einmalig anlegen? Was passiert im Konfliktfall, wenn das Mitglied den Termin inzwischen selbst geändert hat?
-- Sollen ToDo-Boards mit sinnvollen Standard-Spalten vorbelegt werden (z. B. „Offen/In Arbeit/Erledigt"), oder startet jedes Mitglied mit einem leeren Board?
+- ~~Sollen ToDo-Boards mit sinnvollen Standard-Spalten vorbelegt werden?~~ – erledigt: „Neu", „Geplant", „Wartet", „Fertig" (siehe Abschnitt 5.4).
 - Endgültige Wahl des Backend-Anbieters (Supabase empfohlen, Alternativen möglich).
 - ~~Repo öffentlich oder privat~~ – erledigt, public (GitHub-Pages-Zwang im Free-Tier, siehe Abschnitt 8).

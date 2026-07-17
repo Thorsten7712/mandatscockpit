@@ -120,18 +120,43 @@ Vorhanden:
   - `CalendarView.tsx` zeigt abgesagte Termine/Sitzungen weiterhin an (durchgestrichen, abgedunkelt,
     „· abgesagt"-Tag), blendet sie nicht aus – sonst wäre die Termindetailsicht mit den Notizen nicht
     mehr erreichbar.
+- **ToDo-Board vollständig ausgebaut** (`0011_todo_board_ausbau.sql`): Spalten sind jetzt per UI anlegbar/
+  umbenennbar (Klick auf Titel)/löschbar (mit Warnhinweis, da `column_id` `on delete cascade` hat, also
+  Karten mitreißt)/verschiebbar (◀/▶-Buttons, tauschen `reihenfolge` mit dem Nachbarn – bewusst kein
+  Drag-and-Drop für Spalten, um nicht zwei verschiedene dnd-kit-Draggable-Typen in einem DndContext
+  mischen zu müssen; Karten-Drag-and-Drop bleibt wie gehabt). Jeder Nutzer bekommt beim Signup automatisch
+  vier Standard-Spalten (`handle_new_user()`-Trigger erweitert), bestehende Nutzer wurden per Migration
+  nachgerüstet (nur falls sie noch keine eigenen Spalten hatten).
+  - Karten: Schnellerfassung (nur Titel) direkt im Board, volle Bearbeitung auf einer neuen
+    Detailseite (`src/pages/TodoDetail.tsx`, Route `/todo/:id`) – Titel, Beschreibung, Zuständigkeit
+    (`zustaendig`, aktuell **Freitext**, bewusst noch keine echte Nutzer-Zuweisung, siehe unten),
+    Termin-Verknüpfung (Radio: kein/Datum/eigener Termin/Sitzung – exklusiv, beim Speichern werden die
+    jeweils anderen beiden Felder genullt), Kommentare (neue Tabelle `todo_comments`) und
+    Dokumenten-Upload (wiederverwendet `summaries` + Storage-Bucket `zusammenfassungen`, jetzt mit
+    `todo_id`-Spalte – bewusst nur Datei-Upload, kein Freitext-Feld dort, um nicht mit den Kommentaren
+    zu überlappen).
+  - Karte springt beim Verknüpfen eines Datums/Termins automatisch von einer Spalte namens „Neu" in
+    eine Spalte namens „Geplant" (Titel-Matching, case-insensitive – greift nicht mehr, falls der Nutzer
+    die Spalten umbenennt; bewusst so vereinfacht, da Spalten frei umbenennbar sind und es keine
+    stabile ID für „die Neu-Spalte" gibt).
+  - RLS/Sichtbarkeit bleibt unverändert „rein privat" (`todos_manage_own`), da Zuständigkeit nur
+    Freitext ist. `todo_comments`-Policy hängt an der Eigentümerschaft der zugehörigen Karte
+    (`exists (select ... from todos where id = todo_id and user_id = auth.uid())`), nicht an einer
+    eigenen Nutzer-Referenz.
 
 Noch NICHT vorhanden (nächste Schritte, grob nach Konzept-Phasen sortiert):
 
-1. **UI zum Anlegen/Umbenennen/Sortieren von ToDo-Spalten** und zum Erstellen neuer ToDo-Karten
-   (aktuell nur Drag & Drop zwischen bereits existierenden Spalten/Karten).
+1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
+   Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
+   `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte
+   auch sieht/bearbeiten kann – das ToDo-Board ist aktuell komplett privat (`todos_manage_own`).
 2. **Fraktionsbüro-Variante der Termin-Erstellung**: eigene Termine anlegen/bearbeiten/löschen ist
    fertig (siehe oben), es fehlt noch die Rolle „Fraktionsbüro", die ein Zielmitglied aus der eigenen
    Fraktion auswählen und für dieses einen Termin (`herkunft = 'fraktionsbuero'`) anlegen kann.
 3. **Dokumenten-Hub** (Phase 2): Liste/Suche für `documents`, zunächst manuell gepflegt. Zusammenfassungs-
    Upload + Sitzungsdetailsicht sind bereits fertig (siehe „Termindetailsicht" oben, KONZEPT.md
    Abschnitt 5.5) – es fehlt nur noch die Verknüpfung mit echten `documents`-Einträgen (Dokumenten-Hub
-   existiert noch nicht) und mit ToDo-Karten.
+   existiert noch nicht).
 4. **iCal-Export** des zusammengeführten persönlichen Kalenders.
 
 Bekannte offene Frage bei der Quellen-UI: aktuell kann jedes Mitglied jede selbst angelegte Quelle auch

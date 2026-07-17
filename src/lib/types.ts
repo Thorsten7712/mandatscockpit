@@ -61,6 +61,7 @@ export interface SummaryRow {
   document_id: string | null
   session_id: string | null
   event_id: string | null
+  todo_id: string | null
   inhalt: string | null
   datei_url: string | null
   sichtbarkeit: Sichtbarkeit
@@ -92,7 +93,18 @@ export interface TodoRow {
   column_id: string
   position: number
   titel: string
+  beschreibung: string | null
+  zustaendig: string | null
   faellig_am: string | null
   dokument_id: string | null
   session_id: string | null
+  event_id: string | null
+}
+
+export interface TodoComment {
+  id: string
+  todo_id: string
+  user_id: string
+  inhalt: string
+  erstellt_am: string
 }
