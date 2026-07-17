@@ -1,0 +1,25 @@
+name: ICS-Kalenderquellen importieren
+
+# Lädt periodisch alle in calendar_sources konfigurierten ICS-Feeds und
+# schreibt die Sitzungstermine per Upsert in die sessions-Tabelle
+# (siehe scripts/import-ics.mjs, docs/KONZEPT.md Abschnitt 5.3).
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run import-ics
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

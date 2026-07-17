@@ -1,0 +1,20 @@
+name: Supabase Keep-Alive
+
+# Verhindert, dass das kostenlose Supabase-Projekt nach 1 Woche Inaktivität pausiert
+# (siehe docs/KONZEPT.md, Abschnitt 3). Läuft alle 4 Tage eine harmlose Leseanfrage.
+
+on:
+  schedule:
+    - cron: '0 6 */4 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST endpoint
+        run: |
+          curl -s -o /dev/null -w "Status: %{http_code}\n" \
+            "${{ secrets.VITE_SUPABASE_URL }}/rest/v1/calendar_sources?select=id&limit=1" \
+            -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.VITE_SUPABASE_ANON_KEY }}"
