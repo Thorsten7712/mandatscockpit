@@ -30,6 +30,7 @@ export function CalendarView() {
   const [meineGremien, setMeineGremien] = useState<string[] | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [selected, setSelected] = useState<{ kind: 'event' | 'session'; id: string } | null>(null)
+  const [notizenIds, setNotizenIds] = useState<Set<string>>(new Set())
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [newTitel, setNewTitel] = useState('')
@@ -44,8 +45,19 @@ export function CalendarView() {
     setEvents(data ?? [])
   }
 
+  async function loadNotizenFlags() {
+    const { data } = await supabase.from('summaries').select('event_id, session_id')
+    const ids = new Set<string>()
+    ;(data ?? []).forEach((s) => {
+      if (s.event_id) ids.add(s.event_id)
+      if (s.session_id) ids.add(s.session_id)
+    })
+    setNotizenIds(ids)
+  }
+
   useEffect(() => {
     loadEvents()
+    loadNotizenFlags()
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
@@ -180,6 +192,7 @@ export function CalendarView() {
                 className={`w-full text-left border rounded px-3 py-2 flex items-center justify-between bg-white hover:bg-slate-50 ${item.abgesagt ? 'opacity-60' : ''} ${selected?.id === item.id ? 'ring-2 ring-slate-400' : ''}`}
               >
                 <span className={item.abgesagt ? 'line-through' : ''}>
+                  {notizenIds.has(item.id) && <span title="Enthält Notizen/Dokumente">📎 </span>}
                   {item.titel}
                   {item.kind === 'session' && <span className="text-xs text-slate-400"> · Sitzung</span>}
                   {item.abgesagt && <span className="text-xs text-red-500 no-underline"> · abgesagt</span>}
@@ -208,14 +221,29 @@ export function CalendarView() {
 
       <div className="flex-1 min-w-0 max-w-md">
         {selected ? (
-          <TerminDetailPanel
-            kind={selected.kind}
-            id={selected.id}
-            onDeleted={() => {
-              setSelected(null)
-              loadEvents()
-            }}
-          />
+          <div>
+            <div className="flex justify-end mb-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected(null)
+                  loadNotizenFlags()
+                }}
+                className="text-sm text-slate-600 underline"
+              >
+                Schließen
+              </button>
+            </div>
+            <TerminDetailPanel
+              kind={selected.kind}
+              id={selected.id}
+              onDeleted={() => {
+                setSelected(null)
+                loadEvents()
+                loadNotizenFlags()
+              }}
+            />
+          </div>
         ) : (
           <p className="text-slate-400 text-sm">Termin auswählen, um Details zu sehen.</p>
         )}

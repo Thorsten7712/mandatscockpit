@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import type { EventRow, SessionRow, SummaryRow } from '../lib/types'
+import type { EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
+import { TodoDetailModal } from './TodoDetailModal'
 
 function toDatetimeLocalValue(iso: string): string {
   const d = new Date(iso)
@@ -41,6 +42,9 @@ export function TerminDetailPanel({
   const [savingSummary, setSavingSummary] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(null)
 
+  const [linkedTodos, setLinkedTodos] = useState<TodoRow[]>([])
+  const [openTodoId, setOpenTodoId] = useState<string | null>(null)
+
   async function loadTermin() {
     setEvent(null)
     setSession(null)
@@ -68,10 +72,18 @@ export function TerminDetailPanel({
     setSummaries(data ?? [])
   }
 
+  async function loadLinkedTodos() {
+    const column = kind === 'event' ? 'event_id' : 'session_id'
+    const { data } = await supabase.from('todos').select('*').eq(column, id).order('position')
+    setLinkedTodos(data ?? [])
+  }
+
   useEffect(() => {
     setEditing(false)
+    setOpenTodoId(null)
     loadTermin()
     loadSummaries()
+    loadLinkedTodos()
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id)
     })
@@ -275,6 +287,24 @@ export function TerminDetailPanel({
         </div>
       )}
 
+      <h3 className="font-semibold mb-2">Verknüpfte Aufgaben</h3>
+      <ul className="space-y-2 mb-6">
+        {linkedTodos.map((t) => (
+          <li key={t.id}>
+            <button
+              type="button"
+              onClick={() => setOpenTodoId(t.id)}
+              className="w-full text-left border rounded px-3 py-2 bg-white hover:bg-slate-50 text-sm"
+            >
+              {t.titel}
+            </button>
+          </li>
+        ))}
+        {linkedTodos.length === 0 && (
+          <li className="text-slate-400 text-sm">Keine verknüpften Aufgaben.</li>
+        )}
+      </ul>
+
       <h3 className="font-semibold mb-2">Notizen &amp; Dokumente</h3>
       <ul className="space-y-2 mb-3">
         {summaries.map((s) => (
@@ -330,6 +360,10 @@ export function TerminDetailPanel({
           {savingSummary ? 'Speichern...' : 'Hinzufügen'}
         </button>
       </form>
+
+      {openTodoId && (
+        <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadLinkedTodos} />
+      )}
     </div>
   )
 }

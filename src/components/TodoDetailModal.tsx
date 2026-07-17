@@ -26,7 +26,6 @@ export function TodoDetailModal({
   const [linkedEvent, setLinkedEvent] = useState<EventRow | null>(null)
   const [linkedSession, setLinkedSession] = useState<SessionRow | null>(null)
 
-  const [editing, setEditing] = useState(false)
   const [editTitel, setEditTitel] = useState('')
   const [editBeschreibung, setEditBeschreibung] = useState('')
   const [editZustaendig, setEditZustaendig] = useState('')
@@ -57,6 +56,21 @@ export function TodoDetailModal({
       return
     }
     setTodo(data)
+    setEditTitel(data.titel)
+    setEditBeschreibung(data.beschreibung ?? '')
+    setEditZustaendig(data.zustaendig ?? '')
+    if (data.event_id) {
+      setTerminModus('termin')
+      setEditEventId(data.event_id)
+    } else if (data.session_id) {
+      setTerminModus('sitzung')
+      setEditSessionId(data.session_id)
+    } else if (data.faellig_am) {
+      setTerminModus('datum')
+      setEditDatum(data.faellig_am)
+    } else {
+      setTerminModus('keine')
+    }
     setLinkedEvent(null)
     setLinkedSession(null)
     if (data.event_id) {
@@ -104,27 +118,6 @@ export function TodoDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  function startEdit() {
-    if (!todo) return
-    setEditTitel(todo.titel)
-    setEditBeschreibung(todo.beschreibung ?? '')
-    setEditZustaendig(todo.zustaendig ?? '')
-    if (todo.event_id) {
-      setTerminModus('termin')
-      setEditEventId(todo.event_id)
-    } else if (todo.session_id) {
-      setTerminModus('sitzung')
-      setEditSessionId(todo.session_id)
-    } else if (todo.faellig_am) {
-      setTerminModus('datum')
-      setEditDatum(todo.faellig_am)
-    } else {
-      setTerminModus('keine')
-    }
-    setEditError(null)
-    setEditing(true)
-  }
-
   async function handleSaveEdit(e: FormEvent) {
     e.preventDefault()
     if (!todo) return
@@ -159,7 +152,6 @@ export function TodoDetailModal({
       }
     }
 
-    setEditing(false)
     await loadTodo()
     setEditSaving(false)
     onChanged()
@@ -249,145 +241,116 @@ export function TodoDetailModal({
         {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
 
         {todo && (
-          <div className="bg-white border rounded p-4 mb-6 space-y-2">
-            {!editing && (
-              <>
-                {todo.beschreibung && (
-                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{todo.beschreibung}</p>
-                )}
-                {todo.zustaendig && <p className="text-sm text-slate-600">Zuständig: {todo.zustaendig}</p>}
-                {todo.faellig_am && (
-                  <p className="text-sm text-slate-600">
-                    Fällig am {new Date(todo.faellig_am).toLocaleDateString('de-DE')}
-                  </p>
-                )}
-                {linkedEvent && (
-                  <p className="text-sm text-slate-600">
-                    Verknüpfter Termin:{' '}
-                    <Link to={`/termin/event/${linkedEvent.id}`} className="underline">
-                      {linkedEvent.titel} ({new Date(linkedEvent.start).toLocaleString('de-DE')})
-                    </Link>
-                  </p>
-                )}
-                {linkedSession && (
-                  <p className="text-sm text-slate-600">
-                    Verknüpfte Sitzung:{' '}
-                    <Link to={`/termin/session/${linkedSession.id}`} className="underline">
-                      {linkedSession.titel} ({new Date(linkedSession.datum).toLocaleString('de-DE')})
-                    </Link>
-                  </p>
-                )}
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={startEdit} className="text-xs text-slate-600 underline">
-                    Bearbeiten
-                  </button>
-                  <button type="button" onClick={handleDelete} className="text-xs text-red-500 underline">
-                    Löschen
-                  </button>
-                </div>
-                {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
-              </>
-            )}
-            {editing && (
-              <form onSubmit={handleSaveEdit} className="space-y-2">
-                <input
-                  type="text"
-                  value={editTitel}
-                  onChange={(e) => setEditTitel(e.target.value)}
-                  className="w-full border rounded px-2 py-1"
-                  required
-                />
-                <textarea
-                  placeholder="Beschreibung (optional)"
-                  value={editBeschreibung}
-                  onChange={(e) => setEditBeschreibung(e.target.value)}
-                  className="w-full border rounded px-2 py-1"
-                  rows={3}
-                />
-                <input
-                  type="text"
-                  placeholder="Zuständig (optional)"
-                  value={editZustaendig}
-                  onChange={(e) => setEditZustaendig(e.target.value)}
-                  className="w-full border rounded px-2 py-1"
-                />
+          <form onSubmit={handleSaveEdit} className="bg-white border rounded p-4 mb-6 space-y-2">
+            <input
+              type="text"
+              value={editTitel}
+              onChange={(e) => setEditTitel(e.target.value)}
+              className="w-full border rounded px-2 py-1 font-medium"
+              required
+            />
+            <textarea
+              placeholder="Beschreibung (optional)"
+              value={editBeschreibung}
+              onChange={(e) => setEditBeschreibung(e.target.value)}
+              className="w-full border rounded px-2 py-1"
+              rows={3}
+            />
+            <input
+              type="text"
+              placeholder="Zuständig (optional)"
+              value={editZustaendig}
+              onChange={(e) => setEditZustaendig(e.target.value)}
+              className="w-full border rounded px-2 py-1"
+            />
 
-                <div className="space-y-1">
-                  <p className="text-sm text-slate-600">Termin-Verknüpfung</p>
-                  <div className="flex flex-wrap gap-3 text-sm">
-                    {(['keine', 'datum', 'termin', 'sitzung'] as TerminModus[]).map((modus) => (
-                      <label key={modus} className="flex items-center gap-1">
-                        <input
-                          type="radio"
-                          name="terminModus"
-                          checked={terminModus === modus}
-                          onChange={() => setTerminModus(modus)}
-                        />
-                        {modus === 'keine' && 'Keine'}
-                        {modus === 'datum' && 'Datum'}
-                        {modus === 'termin' && 'Eigener Termin'}
-                        {modus === 'sitzung' && 'Sitzung'}
-                      </label>
-                    ))}
-                  </div>
-                  {terminModus === 'datum' && (
+            <div className="space-y-1">
+              <p className="text-sm text-slate-600">Termin-Verknüpfung</p>
+              <div className="flex flex-wrap gap-3 text-sm">
+                {(['keine', 'datum', 'termin', 'sitzung'] as TerminModus[]).map((modus) => (
+                  <label key={modus} className="flex items-center gap-1">
                     <input
-                      type="date"
-                      value={editDatum}
-                      onChange={(e) => setEditDatum(e.target.value)}
-                      className="w-full border rounded px-2 py-1"
+                      type="radio"
+                      name="terminModus"
+                      checked={terminModus === modus}
+                      onChange={() => setTerminModus(modus)}
                     />
-                  )}
-                  {terminModus === 'termin' && (
-                    <select
-                      value={editEventId}
-                      onChange={(e) => setEditEventId(e.target.value)}
-                      className="w-full border rounded px-2 py-1"
-                    >
-                      <option value="">Bitte wählen...</option>
-                      {ownEvents.map((ev) => (
-                        <option key={ev.id} value={ev.id}>
-                          {ev.titel} ({new Date(ev.start).toLocaleDateString('de-DE')})
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {terminModus === 'sitzung' && (
-                    <select
-                      value={editSessionId}
-                      onChange={(e) => setEditSessionId(e.target.value)}
-                      className="w-full border rounded px-2 py-1"
-                    >
-                      <option value="">Bitte wählen...</option>
-                      {ownSessions.map((se) => (
-                        <option key={se.id} value={se.id}>
-                          {se.titel} ({new Date(se.datum).toLocaleDateString('de-DE')})
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+                    {modus === 'keine' && 'Keine'}
+                    {modus === 'datum' && 'Datum'}
+                    {modus === 'termin' && 'Eigener Termin'}
+                    {modus === 'sitzung' && 'Sitzung'}
+                  </label>
+                ))}
+              </div>
+              {terminModus === 'datum' && (
+                <input
+                  type="date"
+                  value={editDatum}
+                  onChange={(e) => setEditDatum(e.target.value)}
+                  className="w-full border rounded px-2 py-1"
+                />
+              )}
+              {terminModus === 'termin' && (
+                <select
+                  value={editEventId}
+                  onChange={(e) => setEditEventId(e.target.value)}
+                  className="w-full border rounded px-2 py-1"
+                >
+                  <option value="">Bitte wählen...</option>
+                  {ownEvents.map((ev) => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.titel} ({new Date(ev.start).toLocaleDateString('de-DE')})
+                    </option>
+                  ))}
+                </select>
+              )}
+              {terminModus === 'sitzung' && (
+                <select
+                  value={editSessionId}
+                  onChange={(e) => setEditSessionId(e.target.value)}
+                  className="w-full border rounded px-2 py-1"
+                >
+                  <option value="">Bitte wählen...</option>
+                  {ownSessions.map((se) => (
+                    <option key={se.id} value={se.id}>
+                      {se.titel} ({new Date(se.datum).toLocaleDateString('de-DE')})
+                    </option>
+                  ))}
+                </select>
+              )}
+              {linkedEvent && (
+                <p className="text-xs text-slate-500">
+                  Aktuell verknüpft:{' '}
+                  <Link to={`/termin/event/${linkedEvent.id}`} className="underline">
+                    {linkedEvent.titel} ({new Date(linkedEvent.start).toLocaleString('de-DE')})
+                  </Link>
+                </p>
+              )}
+              {linkedSession && (
+                <p className="text-xs text-slate-500">
+                  Aktuell verknüpft:{' '}
+                  <Link to={`/termin/session/${linkedSession.id}`} className="underline">
+                    {linkedSession.titel} ({new Date(linkedSession.datum).toLocaleString('de-DE')})
+                  </Link>
+                </p>
+              )}
+            </div>
 
-                {editError && <p className="text-red-600 text-sm">{editError}</p>}
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={editSaving}
-                    className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
-                  >
-                    {editSaving ? 'Speichern...' : 'Speichern'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(false)}
-                    className="text-sm text-slate-600 underline"
-                  >
-                    Abbrechen
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
+            {editError && <p className="text-red-600 text-sm">{editError}</p>}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={editSaving}
+                className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+              >
+                {editSaving ? 'Speichern...' : 'Speichern'}
+              </button>
+              <button type="button" onClick={handleDelete} className="text-sm text-red-500 underline">
+                Löschen
+              </button>
+            </div>
+            {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
+          </form>
         )}
 
         <h2 className="font-semibold mb-2">Kommentare</h2>

@@ -94,15 +94,21 @@ Vorhanden:
 - **Termindetails** leben als wiederverwendbare Präsentationskomponente in
   `src/components/TerminDetailPanel.tsx` (Props: `kind: 'event'|'session'`, `id`, optional
   `onDeleted`). Zeigt Titel/Start/Ende/Ort/Gremium je nach Typ; bei `kind=event` zusätzlich
-  Bearbeiten/Absagen/Löschen (Inline-Formular). Darunter „Notizen & Dokumente": nutzt die
-  `summaries`-Tabelle (mit `event_id`-Spalte, `0009_summaries_termine.sql`) für Freitext-Notizen und
-  Datei-Uploads. Dateien landen im privaten Storage-Bucket `zusammenfassungen` unter
+  Bearbeiten/Absagen/Löschen (Inline-Formular). Darunter „Verknüpfte Aufgaben" (liest `todos` gefiltert
+  nach `event_id`/`session_id` je nach `kind`, Klick öffnet dieselbe `TodoDetailModal` wie das ToDo-Board
+  – das Panel hält dafür ein eigenes `openTodoId`-State, unabhängig vom Board) und „Notizen & Dokumente":
+  nutzt die `summaries`-Tabelle (mit `event_id`-Spalte, `0009_summaries_termine.sql`) für Freitext-Notizen
+  und Datei-Uploads. Dateien landen im privaten Storage-Bucket `zusammenfassungen` unter
   `<user_id>/<dateiname>` (RLS-Policies auf `storage.objects` scopen Zugriff auf den Uploader, per
   `(storage.foldername(name))[1] = auth.uid()::text`). Downloads laufen über `createSignedUrl()`
   (60s gültig), da das Bucket nicht public ist. Zwei Verwendungen:
   - **Inline/Split-View** in `CalendarView.tsx`: Klick auf einen Eintrag in „Nächste Termine" setzt
     `selected` und rendert das Panel in einer zweiten Spalte rechts daneben (kein Navigieren weg vom
-    Dashboard).
+    Dashboard), mit einem eigenen „Schließen"-Button oberhalb des Panels, der `selected` wieder auf
+    `null` setzt. Einträge mit mindestens einer verknüpften `summaries`-Zeile (Notiz oder Dokument)
+    bekommen ein 📎-Icon vor dem Titel – dafür lädt `CalendarView` einmalig alle `event_id`/`session_id`
+    aus `summaries` in ein `notizenIds`-Set (`loadNotizenFlags()`, erneut aufgerufen beim Schließen/
+    Löschen der Split-View, damit neu hinzugefügte Notizen sich zeitnah im Icon niederschlagen).
   - **Standalone-Seite** `src/pages/TerminDetail.tsx` (Route `/termin/:kind/:id`) als dünner Wrapper
     um dasselbe Panel – bleibt erhalten, weil `TodoDetailModal` (siehe unten) von dort aus auf
     verknüpfte Termine/Sitzungen verlinkt und dafür ein eigenständiges Ziel außerhalb des Modals
@@ -140,17 +146,22 @@ Vorhanden:
   - Karten: Schnellerfassung (nur Titel) direkt im Board, volle Bearbeitung als **Overlay/Modal**
     (`src/components/TodoDetailModal.tsx`, Props: `id`, `onClose`, `onChanged`) – öffnet sich bei Klick
     auf eine Karte (kein Navigieren weg vom Dashboard mehr; die frühere Standalone-Seite
-    `src/pages/TodoDetail.tsx` unter `/todo/:id` wurde entfernt, es gibt keine Route mehr dafür). Inhalt:
-    Titel, Beschreibung, Zuständigkeit (`zustaendig`, aktuell **Freitext**, bewusst noch keine echte
-    Nutzer-Zuweisung, siehe unten), Termin-Verknüpfung (Radio: kein/Datum/eigener Termin/Sitzung –
-    exklusiv, beim Speichern werden die jeweils anderen beiden Felder genullt; die Links zu
-    „Verknüpfter Termin"/„Verknüpfte Sitzung" zeigen auf `/termin/:kind/:id`, die Standalone-Seite bleibt
-    dafür also bewusst bestehen), Kommentare (Tabelle `todo_comments`) und Dokumenten-Upload
-    (wiederverwendet `summaries` + Storage-Bucket `zusammenfassungen`, mit `todo_id`-Spalte – bewusst nur
-    Datei-Upload, kein Freitext-Feld dort, um nicht mit den Kommentaren zu überlappen). Backdrop-Klick
-    schließt das Modal (`stopPropagation` auf dem inneren Panel); Speichern/Löschen ruft `onChanged`
-    bzw. schließt via `onClose`, statt zu navigieren – `TodoBoard.tsx` hält dafür `openTodoId` im State
-    und lädt die Karten nach Änderungen per `onChanged={load}` neu.
+    `src/pages/TodoDetail.tsx` unter `/todo/:id` wurde entfernt, es gibt keine Route mehr dafür). Anders
+    als bei `TerminDetailPanel` gibt es hier **keinen** Lese-/Bearbeiten-Umschalter mehr – das Modal zeigt
+    beim Öffnen direkt das editierbare Formular (Titel, Beschreibung, Zuständigkeit als Inputs), kein
+    zusätzlicher „Bearbeiten"-Klick nötig. Inhalt: Titel, Beschreibung, Zuständigkeit (`zustaendig`,
+    aktuell **Freitext**, bewusst noch keine echte Nutzer-Zuweisung, siehe unten), Termin-Verknüpfung
+    (Radio: kein/Datum/eigener Termin/Sitzung – exklusiv, beim Speichern werden die jeweils anderen
+    beiden Felder genullt; darunter ein „Aktuell verknüpft"-Link auf `/termin/:kind/:id`, der den
+    **gespeicherten** Link zeigt, unabhängig vom gerade in Bearbeitung befindlichen Radio-Wert – die
+    Standalone-Seite bleibt dafür also bewusst bestehen), Kommentare (Tabelle `todo_comments`) und
+    Dokumenten-Upload (wiederverwendet `summaries` + Storage-Bucket `zusammenfassungen`, mit `todo_id`-
+    Spalte – bewusst nur Datei-Upload, kein Freitext-Feld dort, um nicht mit den Kommentaren zu
+    überlappen). Backdrop-Klick schließt das Modal (`stopPropagation` auf dem inneren Panel); Speichern/
+    Löschen ruft `onChanged` bzw. schließt via `onClose`, statt zu navigieren. `TodoDetailModal` wird an
+    zwei Stellen instanziiert, jeweils mit eigenem `openTodoId`-State: `TodoBoard.tsx` (Kartenklick, lädt
+    nach Änderungen per `onChanged={load}` neu) und `TerminDetailPanel.tsx` (Klick auf eine „Verknüpfte
+    Aufgabe", siehe oben).
   - Karte springt beim Verknüpfen eines Datums/Termins automatisch von einer Spalte namens „Neu" in
     eine Spalte namens „Geplant" (Titel-Matching, case-insensitive – greift nicht mehr, falls der Nutzer
     die Spalten umbenennt; bewusst so vereinfacht, da Spalten frei umbenennbar sind und es keine
