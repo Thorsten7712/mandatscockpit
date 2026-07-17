@@ -31,7 +31,15 @@ Vorhanden:
   (`Settings`) – nutzt die bereits bestehenden `calendar_sources_insert_own`/`_delete_own`-Policies
 - Vollständiges DB-Schema inkl. RLS-Policies (`supabase/migrations/0001_init.sql`,
   `0002_sessions_ics_uid.sql`, `0003_sessions_ics_uid_constraint.sql`,
-  `0004_sessions_source_cascade.sql`, `0005_user_gremien.sql`, `0006_calendar_sources_admin.sql`)
+  `0004_sessions_source_cascade.sql`, `0005_user_gremien.sql`, `0006_calendar_sources_admin.sql`,
+  `0007_fix_profiles_rls_recursion.sql`)
+- **Wichtig für neue Policies:** Eine Policy auf `profiles`, die in ihrer eigenen USING-Klausel wieder
+  `profiles` abfragt (z. B. `fraktion = (select fraktion from profiles where id = auth.uid())`), verursacht
+  "infinite recursion detected in policy" (Postgres 42P17) – siehe `0007_fix_profiles_rls_recursion.sql`
+  für den Fix per SECURITY DEFINER-Funktion (`current_user_fraktion()`). Gleiche Vorsicht gilt für jede
+  neue Policy, die profiles per Subquery abfragt (z. B. Rollen-Checks wie in
+  `0006_calendar_sources_admin.sql`) – funktioniert nur, weil `0007` die profiles-Policy selbst
+  entschärft hat.
 - Settings-Seite hat außerdem einen „Meine Gremien"-Bereich: Checkliste aller distinct
   `sessions.gremium`-Werte, Auswahl landet in `user_gremien` (user_id, gremium). Der Dashboard-Kalender
   (`CalendarView`) zeigt dadurch nur noch **zukünftige** Sitzungen (`datum >= now()`) der angehakten
