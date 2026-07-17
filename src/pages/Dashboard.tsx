@@ -1,23 +1,14 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { CalendarView } from '../components/CalendarView'
 import { TodoBoard } from '../components/TodoBoard'
 
 export default function Dashboard() {
-  const [refreshKey, setRefreshKey] = useState(0)
-
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <header className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">MandatsCockpit</h1>
         <div className="space-x-4">
-          <button
-            onClick={() => setRefreshKey((k) => k + 1)}
-            className="text-sm text-slate-600 underline"
-          >
-            Aktualisieren
-          </button>
           <Link to="/settings" className="text-sm text-slate-600 underline">
             Einstellungen
           </Link>
@@ -27,10 +18,10 @@ export default function Dashboard() {
         </div>
       </header>
       <main className="grid md:grid-cols-2 gap-8">
-        <CalendarView key={refreshKey} />
+        <CalendarView />
         <div>
           <h2 className="font-semibold mb-2">ToDo-Board</h2>
-          <TodoBoard key={refreshKey} />
+          <TodoBoard />
         </div>
       </main>
     </div>

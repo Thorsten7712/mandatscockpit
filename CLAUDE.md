@@ -28,7 +28,11 @@ Vorhanden:
 - Login (Supabase Auth, E-Mail/Passwort) mit Redirect-Schutz (`ProtectedRoute`)
 - Dashboard-Seite mit einfacher Kalenderansicht (`CalendarView`) und ToDo-Board (`TodoBoard`)
 - Settings-Seite zum An-/Abmelden von Kalenderquellen sowie zum Anlegen/Löschen eigener Quellen
-  (`Settings`) – nutzt die bereits bestehenden `calendar_sources_insert_own`/`_delete_own`-Policies
+  (`Settings`) – nutzt die bereits bestehenden `calendar_sources_insert_own`/`_delete_own`-Policies. Hat
+  einen „Aktualisieren"-Button neben der Überschrift, der Quellen + Gremien-Liste neu lädt und dabei
+  prüft, ob angehakte `user_gremien`-Einträge noch in den aktuell importierten Sessions vorkommen –
+  falls nicht, Warnhinweis (Häkchen bleibt trotzdem bestehen, für den Fall dass das Gremium später
+  wieder importiert wird).
 - Vollständiges DB-Schema inkl. RLS-Policies (`supabase/migrations/0001_init.sql`,
   `0002_sessions_ics_uid.sql`, `0003_sessions_ics_uid_constraint.sql`,
   `0004_sessions_source_cascade.sql`, `0005_user_gremien.sql`, `0006_calendar_sources_admin.sql`,

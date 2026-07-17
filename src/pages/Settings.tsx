@@ -30,7 +30,9 @@ export default function Settings() {
 
   const [gremien, setGremien] = useState<string[]>([])
   const [meineGremien, setMeineGremien] = useState<string[]>([])
+  const [staleGremien, setStaleGremien] = useState<string[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
@@ -44,27 +46,42 @@ export default function Settings() {
     setSources(data ?? [])
   }
 
+  async function loadUserData(uid: string) {
+    const { data: subs } = await supabase
+      .from('user_source_subscriptions')
+      .select('source_id')
+      .eq('user_id', uid)
+    setSubscribed((subs ?? []).map((s) => s.source_id))
+    const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', uid)
+    const currentSelection = (mine ?? []).map((g) => g.gremium)
+    setMeineGremien(currentSelection)
+    const { data: profile } = await supabase.from('profiles').select('rolle').eq('id', uid).single()
+    setIsAdmin(profile?.rolle === 'admin')
+    return currentSelection
+  }
+
   useEffect(() => {
     loadSources()
     loadDistinctGremien().then(setGremien)
-    supabase.auth.getUser().then(async ({ data }) => {
+    supabase.auth.getUser().then(({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
-      const { data: subs } = await supabase
-        .from('user_source_subscriptions')
-        .select('source_id')
-        .eq('user_id', data.user.id)
-      setSubscribed((subs ?? []).map((s) => s.source_id))
-      const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
-      setMeineGremien((mine ?? []).map((g) => g.gremium))
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('rolle')
-        .eq('id', data.user.id)
-        .single()
-      setIsAdmin(profile?.rolle === 'admin')
+      loadUserData(data.user.id)
     })
   }, [])
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    setStaleGremien([])
+    await loadSources()
+    const freshGremien = await loadDistinctGremien()
+    setGremien(freshGremien)
+    if (userId) {
+      const currentSelection = await loadUserData(userId)
+      setStaleGremien(currentSelection.filter((g) => !freshGremien.includes(g)))
+    }
+    setRefreshing(false)
+  }
 
   function startEdit(s: CalendarSource) {
     setEditingId(s.id)
@@ -157,11 +174,27 @@ export default function Settings() {
     <div className="min-h-screen bg-slate-50 p-6">
       <header className="flex justify-between items-center mb-4">
         <h1 className="text-xl font-bold">Kalenderquellen abonnieren</h1>
-        <Link to="/" className="text-sm text-slate-600 underline">
-          Zurück zum Dashboard
-        </Link>
+        <div className="space-x-4">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="text-sm text-slate-600 underline disabled:opacity-50"
+          >
+            {refreshing ? 'Aktualisiert...' : 'Aktualisieren'}
+          </button>
+          <Link to="/" className="text-sm text-slate-600 underline">
+            Zurück zum Dashboard
+          </Link>
+        </div>
       </header>
       {deleteError && <p className="text-red-600 text-sm mb-2 max-w-md">{deleteError}</p>}
+      {staleGremien.length > 0 && (
+        <p className="text-amber-600 text-sm mb-2 max-w-md">
+          Diese angehakten Gremien haben aktuell keine Sitzungen mehr: {staleGremien.join(', ')}. Häkchen
+          bleibt bestehen, falls das Gremium später wieder importiert wird.
+        </p>
+      )}
       <ul className="space-y-2 max-w-md">
         {sources.map((s) => {
           const canManage = s.verwaltet_von === userId || isAdmin
