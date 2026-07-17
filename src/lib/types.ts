@@ -4,7 +4,8 @@
 export type Rolle = 'mitglied' | 'fraktionsbuero' | 'admin'
 export type Ebene = 'kommune' | 'kreis' | 'land' | 'bund'
 export type EventHerkunft = 'privat' | 'uebernommene_sitzung' | 'fraktionsbuero'
-export type SessionStatus = 'geplant' | 'aktiv' | 'abgeschlossen'
+export type SessionStatus = 'geplant' | 'aktiv' | 'abgeschlossen' | 'abgesagt'
+export type EventStatus = 'geplant' | 'abgesagt'
 export type Sichtbarkeit = 'privat' | 'geteilt'
 
 export interface Profile {
@@ -73,6 +74,7 @@ export interface EventRow {
   start: string
   ende: string | null
   ort: string | null
+  status: EventStatus
   herkunft: EventHerkunft
   erstellt_von: string
 }

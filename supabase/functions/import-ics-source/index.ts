@@ -56,6 +56,7 @@ interface IcalEntry {
   summary?: unknown
   location?: unknown
   url?: unknown
+  status?: string
 }
 
 Deno.serve(async (req) => {
@@ -93,6 +94,17 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Kalenderquelle nicht gefunden.' }, 404)
   }
 
+  // Bestehende Sessions dieser Quelle VOR dem Import laden, um nachher zu
+  // erkennen, welche UIDs aus dem Feed verschwunden sind (= vermutlich
+  // abgesagt - der ALLRIS-Feed markiert Absagen nicht über STATUS:CANCELLED,
+  // sondern entfernt den Termin einfach aus dem Feed).
+  const { data: existingRows } = await supabase
+    .from('sessions')
+    .select('ics_uid, status')
+    .eq('source_id', source.id)
+    .not('ics_uid', 'is', null)
+  const existingByUid = new Map<string, string>((existingRows ?? []).map((r) => [r.ics_uid as string, r.status as string]))
+
   let parsed: Record<string, unknown>
   try {
     parsed = await ical.async.fromURL(source.ics_url)
@@ -100,23 +112,24 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: `Fehler beim Laden des ICS-Feeds: ${String(err)}` }, 502)
   }
 
-  const rows = (Object.values(parsed) as IcalEntry[])
-    .filter((entry): entry is IcalEntry & { uid: string; start: Date } =>
+  const entries = (Object.values(parsed) as IcalEntry[]).filter(
+    (entry): entry is IcalEntry & { uid: string; start: Date } =>
       entry.type === 'VEVENT' && Boolean(entry.uid) && Boolean(entry.start),
-    )
-    .map((entry) => {
-      const summary = toText(entry.summary)
-      return {
-        source_id: source.id,
-        ics_uid: entry.uid,
-        titel: summary || 'Ohne Titel',
-        gremium: summary ? extractGremium(summary) : null,
-        ebene: source.ebene,
-        datum: new Date(entry.start).toISOString(),
-        ort: toText(entry.location) || null,
-        quelle_url: toText(entry.url) || source.ics_url,
-      }
-    })
+  )
+
+  const rows = entries.map((entry) => {
+    const summary = toText(entry.summary)
+    return {
+      source_id: source.id,
+      ics_uid: entry.uid,
+      titel: summary || 'Ohne Titel',
+      gremium: summary ? extractGremium(summary) : null,
+      ebene: source.ebene,
+      datum: new Date(entry.start).toISOString(),
+      ort: toText(entry.location) || null,
+      quelle_url: toText(entry.url) || source.ics_url,
+    }
+  })
 
   if (rows.length === 0) {
     return jsonResponse({ imported: 0 })
@@ -124,7 +137,8 @@ Deno.serve(async (req) => {
 
   // status wird bewusst nicht mitgeschickt (siehe scripts/import-ics.mjs für
   // die Begründung: Insert nutzt den Tabellen-Default, Update lässt einen
-  // manuell gesetzten Status wie 'aktiv' unangetastet).
+  // manuell gesetzten Status wie 'aktiv' unangetastet). Cancel-/Uncancel-
+  // Logik läuft danach separat.
   const { error: upsertError } = await supabase
     .from('sessions')
     .upsert(rows, { onConflict: 'source_id,ics_uid' })
@@ -133,5 +147,21 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: upsertError.message }, 500)
   }
 
-  return jsonResponse({ imported: rows.length })
+  const seenUids = new Set(rows.map((r) => r.ics_uid))
+  const cancelledInFeed = new Set(entries.filter((e) => e.status === 'CANCELLED').map((e) => e.uid))
+  const missingFromFeed = new Set([...existingByUid.keys()].filter((uid) => !seenUids.has(uid)))
+  const toCancel = [...new Set([...cancelledInFeed, ...missingFromFeed])]
+
+  const toUncancel = [...existingByUid.entries()]
+    .filter(([uid, status]) => status === 'abgesagt' && seenUids.has(uid) && !cancelledInFeed.has(uid))
+    .map(([uid]) => uid)
+
+  if (toCancel.length > 0) {
+    await supabase.from('sessions').update({ status: 'abgesagt' }).eq('source_id', source.id).in('ics_uid', toCancel)
+  }
+  if (toUncancel.length > 0) {
+    await supabase.from('sessions').update({ status: 'geplant' }).eq('source_id', source.id).in('ics_uid', toUncancel)
+  }
+
+  return jsonResponse({ imported: rows.length, abgesagt: toCancel.length, reaktiviert: toUncancel.length })
 })

@@ -94,12 +94,32 @@ Vorhanden:
 - **Termindetailsicht** (`src/pages/TerminDetail.tsx`, Route `/termin/:kind/:id` mit `kind` = `event`
   oder `session`): Jede Zeile in den drei Kalender-Listen ist jetzt ein `Link` dorthin (Bearbeiten/
   Löschen der Eigene-Termine-Liste selbst wurde deshalb aus `CalendarView` entfernt und lebt nur noch
-  hier). Zeigt Titel/Start/Ende/Ort/Gremium je nach Typ; bei `kind=event` zusätzlich Bearbeiten/Löschen
-  (Inline-Formular). Darunter „Notizen & Dokumente": nutzt die `summaries`-Tabelle (jetzt mit
-  `event_id`-Spalte, `0009_summaries_termine.sql`) für Freitext-Notizen und Datei-Uploads. Dateien
-  landen im privaten Storage-Bucket `zusammenfassungen` unter `<user_id>/<dateiname>` (RLS-Policies auf
-  `storage.objects` scopen Zugriff auf den Uploader, per `(storage.foldername(name))[1] = auth.uid()::text`).
-  Downloads laufen über `createSignedUrl()` (60s gültig), da das Bucket nicht public ist.
+  hier). Zeigt Titel/Start/Ende/Ort/Gremium je nach Typ; bei `kind=event` zusätzlich Bearbeiten/
+  Absagen/Löschen (Inline-Formular). Darunter „Notizen & Dokumente": nutzt die `summaries`-Tabelle
+  (jetzt mit `event_id`-Spalte, `0009_summaries_termine.sql`) für Freitext-Notizen und Datei-Uploads.
+  Dateien landen im privaten Storage-Bucket `zusammenfassungen` unter `<user_id>/<dateiname>`
+  (RLS-Policies auf `storage.objects` scopen Zugriff auf den Uploader, per
+  `(storage.foldername(name))[1] = auth.uid()::text`). Downloads laufen über `createSignedUrl()`
+  (60s gültig), da das Bucket nicht public ist.
+- **„Abgesagt" statt Löschen** (`0010_abgesagt_status.sql`): `sessions.status` hat jetzt zusätzlich
+  `'abgesagt'`, `events` hat ein neues `status`-Feld (`'geplant'`/`'abgesagt'`, Default `'geplant'`).
+  Grund: `summaries.event_id` hat `on delete cascade` – ein hart gelöschter Termin würde seine Notizen
+  mitreißen, ein abgesagter nicht. `TerminDetail.tsx` hat für `kind=event` einen „Absagen"/„Reaktivieren"-
+  Toggle zusätzlich zu „Löschen" (Absagen bleibt die empfohlene, nicht-destruktive Aktion). Sessions
+  können nicht manuell abgesagt werden, nur der Import-Job setzt/entfernt diesen Status:
+  - `scripts/import-ics.mjs` und `supabase/functions/import-ics-source/index.ts` laden vor dem Upsert
+    die bestehenden `(ics_uid, status)`-Paare der Quelle, um danach zu erkennen, welche UIDs aus dem
+    Feed verschwunden sind (= abgesagt) und welche zuvor abgesagten UIDs wieder normal auftauchen
+    (= reaktiviert). `STATUS:CANCELLED` im Feed wird zusätzlich ausgewertet, verifiziert an einer
+    synthetischen Test-ICS (der reale ALLRIS-Feed nutzt `STATUS` gar nicht, entfernt abgesagte Termine
+    offenbar einfach aus dem Feed – „UID verschwunden" ist daher der wichtigere Erkennungsweg).
+  - Diese Cancel/Uncancel-Updates laufen bewusst **getrennt** vom Haupt-Upsert (der `status` weiterhin
+    nicht mitschickt, um einen manuell gesetzten `'aktiv'`-Status nicht zu überschreiben) – sonst hätte
+    jede Zeile im Upsert-Array einen anderen Status gebraucht, was ein einzelner Bulk-Upsert nicht sauber
+    abbilden kann.
+  - `CalendarView.tsx` zeigt abgesagte Termine/Sitzungen weiterhin an (durchgestrichen, abgedunkelt,
+    „· abgesagt"-Tag), blendet sie nicht aus – sonst wäre die Termindetailsicht mit den Notizen nicht
+    mehr erreichbar.
 
 Noch NICHT vorhanden (nächste Schritte, grob nach Konzept-Phasen sortiert):
 

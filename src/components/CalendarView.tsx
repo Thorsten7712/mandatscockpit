@@ -20,6 +20,7 @@ interface AggregatedItem {
   start: string
   ort: string | null
   kind: 'termin' | 'sitzung'
+  abgesagt: boolean
 }
 
 export function CalendarView() {
@@ -95,6 +96,7 @@ export function CalendarView() {
       start: e.start,
       ort: e.ort,
       kind: 'termin' as const,
+      abgesagt: e.status === 'abgesagt',
     })),
     ...sessions.map((s) => ({
       key: `sitzung-${s.id}`,
@@ -103,6 +105,7 @@ export function CalendarView() {
       start: s.datum,
       ort: s.ort,
       kind: 'sitzung' as const,
+      abgesagt: s.status === 'abgesagt',
     })),
   ].sort((a, b) => a.start.localeCompare(b.start))
 
@@ -115,11 +118,12 @@ export function CalendarView() {
             <li key={item.key}>
               <Link
                 to={item.link}
-                className="border rounded px-3 py-2 flex items-center justify-between bg-white hover:bg-slate-50"
+                className={`border rounded px-3 py-2 flex items-center justify-between bg-white hover:bg-slate-50 ${item.abgesagt ? 'opacity-60' : ''}`}
               >
-                <span>
+                <span className={item.abgesagt ? 'line-through' : ''}>
                   {item.titel}
                   {item.kind === 'sitzung' && <span className="text-xs text-slate-400"> · Sitzung</span>}
+                  {item.abgesagt && <span className="text-xs text-red-500 no-underline"> · abgesagt</span>}
                 </span>
                 <span className="text-xs text-slate-500">
                   {new Date(item.start).toLocaleString('de-DE')}
@@ -138,9 +142,12 @@ export function CalendarView() {
             <li key={e.id}>
               <Link
                 to={`/termin/event/${e.id}`}
-                className="border rounded px-3 py-2 flex items-center justify-between bg-white hover:bg-slate-50"
+                className={`border rounded px-3 py-2 flex items-center justify-between bg-white hover:bg-slate-50 ${e.status === 'abgesagt' ? 'opacity-60' : ''}`}
               >
-                <span>{e.titel}</span>
+                <span className={e.status === 'abgesagt' ? 'line-through' : ''}>
+                  {e.titel}
+                  {e.status === 'abgesagt' && <span className="text-xs text-red-500 no-underline"> · abgesagt</span>}
+                </span>
                 <span className="text-xs text-slate-500">
                   {new Date(e.start).toLocaleString('de-DE')}
                   {e.ort && ` · ${e.ort}`}
@@ -200,9 +207,12 @@ export function CalendarView() {
             <li key={s.id}>
               <Link
                 to={`/termin/session/${s.id}`}
-                className="border rounded px-3 py-2 flex justify-between bg-white hover:bg-slate-50"
+                className={`border rounded px-3 py-2 flex justify-between bg-white hover:bg-slate-50 ${s.status === 'abgesagt' ? 'opacity-60' : ''}`}
               >
-                <span>{s.titel}</span>
+                <span className={s.status === 'abgesagt' ? 'line-through' : ''}>
+                  {s.titel}
+                  {s.status === 'abgesagt' && <span className="text-xs text-red-500 no-underline"> · abgesagt</span>}
+                </span>
                 <span className="text-xs text-slate-500">
                   {new Date(s.datum).toLocaleString('de-DE')}
                   {s.ort && ` · ${s.ort}`}

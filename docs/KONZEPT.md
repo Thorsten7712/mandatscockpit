@@ -144,10 +144,10 @@ Das ist die zentrale Arbeitsansicht vor und während einer Sitzung: ein Klick au
 - `User` (id, name, rolle, fraktion)
 - `CalendarSource` (id, name, ebene: kommune/kreis/land/bund, ics_url, verwaltet_von: gemeinsam/user_id) – z. B. „Stadtrat Iserlohn", vom Ratsbüro oder einzeln vom Mitglied angelegt
 - `UserSourceSubscription` (user_id, source_id, gremium_filter optional) – welche Quellen/Gremien ein Mitglied abonniert hat
-- `Session` / Sitzung (id, source_id, titel, gremium, ebene, datum, ort, quelle_url, status: geplant/aktiv/abgeschlossen) – automatisch befüllt aus der jeweiligen ICS-Quelle
+- `Session` / Sitzung (id, source_id, titel, gremium, ebene, datum, ort, quelle_url, status: geplant/aktiv/abgeschlossen/abgesagt) – automatisch befüllt aus der jeweiligen ICS-Quelle. `abgesagt` wird vom Import-Job erkannt (STATUS:CANCELLED im Feed oder eine UID, die aus dem Feed verschwunden ist) statt die Session zu löschen – so bleiben verknüpfte Notizen/Dokumente erhalten.
 - `Document` (id, titel, quelle_url, ausschuss, session_id, tags)
 - `Summary` / Zusammenfassung (id, user_id, document_id, session_id, event_id, inhalt oder datei_url, sichtbarkeit: privat/geteilt, erstellt_am) – `event_id` kam nachträglich dazu: Notizen/Dokumente lassen sich nicht nur an Sitzungen/Dokumente, sondern auch an eigene Termine hängen
-- `Event` (id, user_id, titel, start, ende, ort, herkunft: privat/übernommene_sitzung/fraktionsbüro, erstellt_von) – `erstellt_von` unterscheidet Eigeneintrag vom Fraktionsbüro-Eintrag
+- `Event` (id, user_id, titel, start, ende, ort, status: geplant/abgesagt, herkunft: privat/übernommene_sitzung/fraktionsbüro, erstellt_von) – `erstellt_von` unterscheidet Eigeneintrag vom Fraktionsbüro-Eintrag. `abgesagt` wird vom Mitglied manuell gesetzt (statt Löschen), damit Notizen/Dokumente erhalten bleiben
 - `TodoColumn` (id, user_id, titel, reihenfolge) – vom Mitglied frei definierte Board-Spalten
 - `Todo` (id, user_id, column_id, position, titel, fällig_am, dokument_id optional, session_id optional)
 

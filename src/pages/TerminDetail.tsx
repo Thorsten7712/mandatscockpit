@@ -117,6 +117,18 @@ export default function TerminDetail() {
     navigate('/')
   }
 
+  async function handleToggleAbsage() {
+    if (!event) return
+    setDeleteError(null)
+    const nextStatus = event.status === 'abgesagt' ? 'geplant' : 'abgesagt'
+    const { error } = await supabase.from('events').update({ status: nextStatus }).eq('id', event.id)
+    if (error) {
+      setDeleteError(error.message)
+      return
+    }
+    await loadTermin()
+  }
+
   async function handleAddSummary(e: FormEvent) {
     e.preventDefault()
     if (!userId || !id) return
@@ -178,6 +190,7 @@ export default function TerminDetail() {
   const titel = event?.titel ?? session?.titel
   const start = event?.start ?? session?.datum
   const ort = event?.ort ?? session?.ort
+  const abgesagt = event?.status === 'abgesagt' || session?.status === 'abgesagt'
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -194,6 +207,7 @@ export default function TerminDetail() {
         <div className="bg-white border rounded p-4 mb-6 max-w-md space-y-1">
           {!editing && (
             <>
+              {abgesagt && <p className="text-sm font-semibold text-red-600">Abgesagt</p>}
               {start && <p className="text-sm text-slate-600">{new Date(start).toLocaleString('de-DE')}</p>}
               {event?.ende && (
                 <p className="text-sm text-slate-600">bis {new Date(event.ende).toLocaleString('de-DE')}</p>
@@ -207,6 +221,9 @@ export default function TerminDetail() {
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={startEdit} className="text-xs text-slate-600 underline">
                     Bearbeiten
+                  </button>
+                  <button type="button" onClick={handleToggleAbsage} className="text-xs text-slate-600 underline">
+                    {event.status === 'abgesagt' ? 'Reaktivieren' : 'Absagen'}
                   </button>
                   <button type="button" onClick={handleDelete} className="text-xs text-red-500 underline">
                     Löschen

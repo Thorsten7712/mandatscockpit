@@ -45,23 +45,33 @@ async function importSource(source) {
   console.log(`Importiere "${source.name}" (${source.ics_url})`)
 
   try {
-    const parsed = await ical.async.fromURL(source.ics_url)
+    // Bestehende Sessions dieser Quelle VOR dem Import laden, um nachher zu
+    // erkennen, welche UIDs aus dem Feed verschwunden sind (= vermutlich
+    // abgesagt - der ALLRIS-Feed markiert Absagen nicht über STATUS:CANCELLED,
+    // sondern entfernt den Termin einfach aus dem Feed).
+    const { data: existing } = await supabase
+      .from('sessions')
+      .select('ics_uid, status')
+      .eq('source_id', source.id)
+      .not('ics_uid', 'is', null)
+    const existingByUid = new Map((existing ?? []).map((row) => [row.ics_uid, row.status]))
 
-    const rows = Object.values(parsed)
-      .filter((entry) => entry.type === 'VEVENT' && entry.uid && entry.start)
-      .map((entry) => {
-        const summary = toText(entry.summary)
-        return {
-          source_id: source.id,
-          ics_uid: entry.uid,
-          titel: summary || 'Ohne Titel',
-          gremium: summary ? extractGremium(summary) : null,
-          ebene: source.ebene,
-          datum: new Date(entry.start).toISOString(),
-          ort: toText(entry.location) || null,
-          quelle_url: toText(entry.url) || source.ics_url,
-        }
-      })
+    const parsed = await ical.async.fromURL(source.ics_url)
+    const entries = Object.values(parsed).filter((entry) => entry.type === 'VEVENT' && entry.uid && entry.start)
+
+    const rows = entries.map((entry) => {
+      const summary = toText(entry.summary)
+      return {
+        source_id: source.id,
+        ics_uid: entry.uid,
+        titel: summary || 'Ohne Titel',
+        gremium: summary ? extractGremium(summary) : null,
+        ebene: source.ebene,
+        datum: new Date(entry.start).toISOString(),
+        ort: toText(entry.location) || null,
+        quelle_url: toText(entry.url) || source.ics_url,
+      }
+    })
 
     if (rows.length === 0) {
       console.log('  Keine VEVENTs im Feed gefunden.')
@@ -70,7 +80,8 @@ async function importSource(source) {
 
     // status wird bewusst NICHT mitgeschickt: beim Insert greift der
     // Tabellen-Default ('geplant'), beim Update bleibt ein manuell vom
-    // Ratsbüro gesetzter Status (z. B. 'aktiv') unangetastet.
+    // Ratsbüro gesetzter Status (z. B. 'aktiv') unangetastet. Cancel-/
+    // Uncancel-Logik läuft danach separat (siehe unten).
     const { error } = await supabase.from('sessions').upsert(rows, { onConflict: 'source_id,ics_uid' })
 
     if (error) {
@@ -78,7 +89,34 @@ async function importSource(source) {
       return { source: source.name, imported: 0, error: error.message }
     }
 
-    console.log(`  ${rows.length} Termine importiert/aktualisiert.`)
+    // Absagen erkennen: STATUS:CANCELLED im Feed (falls der Feed das nutzt)
+    // ODER eine zuvor bekannte UID, die jetzt komplett aus dem Feed
+    // verschwunden ist (der Fall beim ALLRIS-Feed).
+    const seenUids = new Set(rows.map((r) => r.ics_uid))
+    const cancelledInFeed = new Set(
+      entries.filter((e) => e.status === 'CANCELLED').map((e) => e.uid),
+    )
+    const missingFromFeed = new Set([...existingByUid.keys()].filter((uid) => !seenUids.has(uid)))
+    const toCancel = [...new Set([...cancelledInFeed, ...missingFromFeed])]
+
+    // Uncancel: eine zuvor abgesagte UID taucht wieder normal (nicht
+    // CANCELLED) im Feed auf.
+    const toUncancel = [...existingByUid.entries()]
+      .filter(([uid, status]) => status === 'abgesagt' && seenUids.has(uid) && !cancelledInFeed.has(uid))
+      .map(([uid]) => uid)
+
+    if (toCancel.length > 0) {
+      await supabase.from('sessions').update({ status: 'abgesagt' }).eq('source_id', source.id).in('ics_uid', toCancel)
+    }
+    if (toUncancel.length > 0) {
+      await supabase.from('sessions').update({ status: 'geplant' }).eq('source_id', source.id).in('ics_uid', toUncancel)
+    }
+
+    console.log(
+      `  ${rows.length} Termine importiert/aktualisiert.` +
+        (toCancel.length > 0 ? ` ${toCancel.length} als abgesagt markiert.` : '') +
+        (toUncancel.length > 0 ? ` ${toUncancel.length} wieder aktiviert.` : ''),
+    )
     return { source: source.name, imported: rows.length }
   } catch (err) {
     console.error(`  Fehler beim Verarbeiten der Quelle: ${err.message}`)
