@@ -20,6 +20,7 @@ export default function Settings() {
   const [icsUrl, setIcsUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   async function loadSources() {
     const { data } = await supabase.from('calendar_sources').select('*').order('name')
@@ -74,7 +75,12 @@ export default function Settings() {
   }
 
   async function handleDelete(sourceId: string) {
-    await supabase.from('calendar_sources').delete().eq('id', sourceId)
+    setDeleteError(null)
+    const { error } = await supabase.from('calendar_sources').delete().eq('id', sourceId)
+    if (error) {
+      setDeleteError(error.message)
+      return
+    }
     await loadSources()
     setSubscribed((prev) => prev.filter((id) => id !== sourceId))
   }
@@ -87,6 +93,7 @@ export default function Settings() {
           Zurück zum Dashboard
         </Link>
       </header>
+      {deleteError && <p className="text-red-600 text-sm mb-2 max-w-md">{deleteError}</p>}
       <ul className="space-y-2 max-w-md">
         {sources.map((s) => (
           <li key={s.id} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
