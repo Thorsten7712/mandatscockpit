@@ -28,6 +28,11 @@ export interface UserSourceSubscription {
   gremium_filter: string | null
 }
 
+export interface UserGremium {
+  user_id: string
+  gremium: string
+}
+
 export interface SessionRow {
   id: string
   source_id: string | null

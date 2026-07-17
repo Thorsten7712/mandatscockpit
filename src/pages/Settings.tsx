@@ -3,6 +3,12 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, Ebene } from '../lib/types'
 
+async function loadDistinctGremien(): Promise<string[]> {
+  const { data } = await supabase.from('sessions').select('gremium').not('gremium', 'is', null)
+  const unique = new Set((data ?? []).map((row) => row.gremium as string))
+  return Array.from(unique).sort((a, b) => a.localeCompare(b, 'de'))
+}
+
 const EBENEN: { value: Ebene; label: string }[] = [
   { value: 'kommune', label: 'Kommune' },
   { value: 'kreis', label: 'Kreis' },
@@ -22,6 +28,9 @@ export default function Settings() {
   const [error, setError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  const [gremien, setGremien] = useState<string[]>([])
+  const [meineGremien, setMeineGremien] = useState<string[]>([])
+
   async function loadSources() {
     const { data } = await supabase.from('calendar_sources').select('*').order('name')
     setSources(data ?? [])
@@ -29,6 +38,7 @@ export default function Settings() {
 
   useEffect(() => {
     loadSources()
+    loadDistinctGremien().then(setGremien)
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
@@ -37,8 +47,21 @@ export default function Settings() {
         .select('source_id')
         .eq('user_id', data.user.id)
       setSubscribed((subs ?? []).map((s) => s.source_id))
+      const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
+      setMeineGremien((mine ?? []).map((g) => g.gremium))
     })
   }, [])
+
+  async function toggleGremium(gremium: string) {
+    if (!userId) return
+    if (meineGremien.includes(gremium)) {
+      await supabase.from('user_gremien').delete().eq('user_id', userId).eq('gremium', gremium)
+      setMeineGremien((prev) => prev.filter((g) => g !== gremium))
+    } else {
+      await supabase.from('user_gremien').insert({ user_id: userId, gremium })
+      setMeineGremien((prev) => [...prev, gremium])
+    }
+  }
 
   async function toggle(sourceId: string) {
     if (!userId) return
@@ -115,6 +138,25 @@ export default function Settings() {
           </li>
         ))}
         {sources.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kalenderquellen angelegt.</li>}
+      </ul>
+
+      <h2 className="text-lg font-semibold mt-8 mb-2">Meine Gremien</h2>
+      <p className="text-xs text-slate-400 mb-2 max-w-md">
+        Häkchen bei den Gremien, in denen du ein Mandat hast. Das Dashboard zeigt dann nur noch
+        Sitzungstermine dieser Gremien an.
+      </p>
+      <ul className="space-y-2 max-w-md">
+        {gremien.map((g) => (
+          <li key={g} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
+            <span>{g}</span>
+            <input type="checkbox" checked={meineGremien.includes(g)} onChange={() => toggleGremium(g)} />
+          </li>
+        ))}
+        {gremien.length === 0 && (
+          <li className="text-slate-400 text-sm">
+            Noch keine Gremien vorhanden – erst importiert der ICS-Import-Job Sitzungen (siehe oben).
+          </li>
+        )}
       </ul>
 
       <h2 className="text-lg font-semibold mt-8 mb-2">Eigene Quelle hinzufügen</h2>
