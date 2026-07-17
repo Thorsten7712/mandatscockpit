@@ -9,6 +9,16 @@ function toDatetimeLocalValue(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+// Cutoff für "zukünftige Termine" ist der Beginn des heutigen Tages (lokale
+// Zeit), nicht der exakte aktuelle Zeitpunkt - sonst fallen bereits
+// vergangene Termine von heute komplett raus, auch wenn heute später noch
+// welche anstehen.
+function startOfTodayIso(): string {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d.toISOString()
+}
+
 interface AggregatedItem {
   key: string
   titel: string
@@ -39,8 +49,7 @@ export function CalendarView() {
   const [editEventError, setEditEventError] = useState<string | null>(null)
 
   async function loadEvents() {
-    const now = new Date().toISOString()
-    const { data } = await supabase.from('events').select('*').gte('start', now).order('start')
+    const { data } = await supabase.from('events').select('*').gte('start', startOfTodayIso()).order('start')
     setEvents(data ?? [])
   }
 
@@ -49,7 +58,6 @@ export function CalendarView() {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
-      const now = new Date().toISOString()
       const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
       const gremien = (mine ?? []).map((g) => g.gremium)
       setMeineGremien(gremien)
@@ -61,7 +69,7 @@ export function CalendarView() {
         .from('sessions')
         .select('*')
         .in('gremium', gremien)
-        .gte('datum', now)
+        .gte('datum', startOfTodayIso())
         .order('datum')
       setSessions(sessionRows ?? [])
     })
