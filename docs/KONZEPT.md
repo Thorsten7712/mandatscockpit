@@ -145,7 +145,7 @@ Das ist die zentrale Arbeitsansicht vor und während einer Sitzung: ein Klick au
 - `Session` / Sitzung (id, source_id, titel, gremium, ebene, datum, ort, quelle_url, status: geplant/aktiv/abgeschlossen) – automatisch befüllt aus der jeweiligen ICS-Quelle
 - `Document` (id, titel, quelle_url, ausschuss, session_id, tags)
 - `Summary` / Zusammenfassung (id, user_id, document_id, session_id, inhalt oder datei_url, sichtbarkeit: privat/geteilt, erstellt_am)
-- `Event` (id, user_id, titel, start, ende, herkunft: privat/übernommene_sitzung/fraktionsbüro, erstellt_von) – `erstellt_von` unterscheidet Eigeneintrag vom Fraktionsbüro-Eintrag
+- `Event` (id, user_id, titel, start, ende, ort, herkunft: privat/übernommene_sitzung/fraktionsbüro, erstellt_von) – `erstellt_von` unterscheidet Eigeneintrag vom Fraktionsbüro-Eintrag
 - `TodoColumn` (id, user_id, titel, reihenfolge) – vom Mitglied frei definierte Board-Spalten
 - `Todo` (id, user_id, column_id, position, titel, fällig_am, dokument_id optional, session_id optional)
 

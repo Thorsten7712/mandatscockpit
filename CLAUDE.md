@@ -80,12 +80,18 @@ Vorhanden:
   von `npm install`) – das eigene `deno.json` im Funktionsordner ist nötig, weil der Node-`package.json`
   im Repo-Root sonst Deno's Modul-Resolution durcheinanderbringt (`nodeModulesDir: "none"`).
 - **Eigene Termine** in `CalendarView` sind jetzt vollständig editierbar: Formular zum Anlegen (Titel,
-  Start, optional Ende) sowie Bearbeiten/Löschen pro Termin (Inline-Formular, gleiches Muster wie die
-  Kalenderquellen-Bearbeitung in `Settings`). Nutzt die bereits bestehenden RLS-Policies
-  `events_insert_own_or_fraktionsbuero`/`_update_own`/`_delete_own` – keine neue Migration nötig. Neue
-  Termine werden mit `herkunft = 'privat'` (Tabellen-Default) angelegt; vom Fraktionsbüro angelegte
+  Start, optional Ende, optional Ort) sowie Bearbeiten/Löschen pro Termin (Inline-Formular, gleiches
+  Muster wie die Kalenderquellen-Bearbeitung in `Settings`). Nutzt die bereits bestehenden RLS-Policies
+  `events_insert_own_or_fraktionsbuero`/`_update_own`/`_delete_own` – keine neue Migration für die
+  Rechte nötig, nur `events.ort` kam per `0008_events_ort.sql` neu dazu (`sessions.ort` gab's schon).
+  Neue Termine werden mit `herkunft = 'privat'` (Tabellen-Default) angelegt; vom Fraktionsbüro angelegte
   Termine (`herkunft = 'fraktionsbuero'`) sind laut KONZEPT.md Abschnitt 5.3 vom Mitglied genauso
   bearbeitbar, RLS unterscheidet hier nicht nach `herkunft`, nur nach `user_id = auth.uid()`.
+- **„Nächste Termine"**: aggregierte, chronologisch sortierte Ansicht ganz oben in `CalendarView`, die
+  `events` und `sessions` client-seitig zusammenführt (Titel, Start als Datum+Uhrzeit, Ort) und per
+  ISO-8601-String-Vergleich sortiert (`a.start.localeCompare(b.start)`, funktioniert weil beide Felder
+  bereits als ISO-Timestamp vorliegen). Ergänzt, nicht ersetzt die beiden Detail-Sektionen darunter
+  („Eigene Termine" mit CRUD, „Sitzungstermine" reine Liste).
 
 Noch NICHT vorhanden (nächste Schritte, grob nach Konzept-Phasen sortiert):
 

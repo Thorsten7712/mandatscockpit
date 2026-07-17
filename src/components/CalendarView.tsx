@@ -9,6 +9,14 @@ function toDatetimeLocalValue(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+interface AggregatedItem {
+  key: string
+  titel: string
+  start: string
+  ort: string | null
+  kind: 'termin' | 'sitzung'
+}
+
 export function CalendarView() {
   const [events, setEvents] = useState<EventRow[]>([])
   const [sessions, setSessions] = useState<SessionRow[]>([])
@@ -18,6 +26,7 @@ export function CalendarView() {
   const [newTitel, setNewTitel] = useState('')
   const [newStart, setNewStart] = useState('')
   const [newEnde, setNewEnde] = useState('')
+  const [newOrt, setNewOrt] = useState('')
   const [savingEvent, setSavingEvent] = useState(false)
   const [eventError, setEventError] = useState<string | null>(null)
 
@@ -25,6 +34,7 @@ export function CalendarView() {
   const [editTitel, setEditTitel] = useState('')
   const [editStart, setEditStart] = useState('')
   const [editEnde, setEditEnde] = useState('')
+  const [editOrt, setEditOrt] = useState('')
   const [editEventSaving, setEditEventSaving] = useState(false)
   const [editEventError, setEditEventError] = useState<string | null>(null)
 
@@ -68,6 +78,7 @@ export function CalendarView() {
       titel: newTitel,
       start: new Date(newStart).toISOString(),
       ende: newEnde ? new Date(newEnde).toISOString() : null,
+      ort: newOrt || null,
     })
     if (error) {
       setEventError(error.message)
@@ -75,6 +86,7 @@ export function CalendarView() {
       setNewTitel('')
       setNewStart('')
       setNewEnde('')
+      setNewOrt('')
       await loadEvents()
     }
     setSavingEvent(false)
@@ -85,6 +97,7 @@ export function CalendarView() {
     setEditTitel(e.titel)
     setEditStart(toDatetimeLocalValue(e.start))
     setEditEnde(e.ende ? toDatetimeLocalValue(e.ende) : '')
+    setEditOrt(e.ort ?? '')
     setEditEventError(null)
   }
 
@@ -104,6 +117,7 @@ export function CalendarView() {
         titel: editTitel,
         start: new Date(editStart).toISOString(),
         ende: editEnde ? new Date(editEnde).toISOString() : null,
+        ort: editOrt || null,
       })
       .eq('id', editingEventId)
     if (error) {
@@ -120,8 +134,31 @@ export function CalendarView() {
     await loadEvents()
   }
 
+  const aggregated: AggregatedItem[] = [
+    ...events.map((e) => ({ key: `termin-${e.id}`, titel: e.titel, start: e.start, ort: e.ort, kind: 'termin' as const })),
+    ...sessions.map((s) => ({ key: `sitzung-${s.id}`, titel: s.titel, start: s.datum, ort: s.ort, kind: 'sitzung' as const })),
+  ].sort((a, b) => a.start.localeCompare(b.start))
+
   return (
     <div className="space-y-6">
+      <section>
+        <h2 className="font-semibold mb-2">Nächste Termine</h2>
+        <ul className="space-y-1">
+          {aggregated.map((item) => (
+            <li key={item.key} className="border rounded px-3 py-2 flex items-center justify-between bg-white">
+              <span>
+                {item.titel}
+                {item.kind === 'sitzung' && <span className="text-xs text-slate-400"> · Sitzung</span>}
+              </span>
+              <span className="text-xs text-slate-500">
+                {new Date(item.start).toLocaleString('de-DE')}
+                {item.ort && ` · ${item.ort}`}
+              </span>
+            </li>
+          ))}
+          {aggregated.length === 0 && <li className="text-slate-400 text-sm">Keine anstehenden Termine.</li>}
+        </ul>
+      </section>
       <section>
         <h2 className="font-semibold mb-2">Eigene Termine</h2>
         <ul className="space-y-1 mb-3">
@@ -152,6 +189,13 @@ export function CalendarView() {
                         className="flex-1 border rounded px-2 py-1"
                       />
                     </div>
+                    <input
+                      type="text"
+                      placeholder="Ort (optional)"
+                      value={editOrt}
+                      onChange={(ev) => setEditOrt(ev.target.value)}
+                      className="w-full border rounded px-2 py-1"
+                    />
                     {editEventError && <p className="text-red-600 text-sm">{editEventError}</p>}
                     <div className="flex gap-2">
                       <button
@@ -175,6 +219,7 @@ export function CalendarView() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-slate-500">
                     {new Date(e.start).toLocaleString('de-DE')}
+                    {e.ort && ` · ${e.ort}`}
                     {e.herkunft === 'fraktionsbuero' && ' · vom Fraktionsbüro'}
                   </span>
                   <button
@@ -222,6 +267,13 @@ export function CalendarView() {
               placeholder="Ende (optional)"
             />
           </div>
+          <input
+            type="text"
+            placeholder="Ort (optional)"
+            value={newOrt}
+            onChange={(e) => setNewOrt(e.target.value)}
+            className="w-full border rounded px-2 py-1"
+          />
           {eventError && <p className="text-red-600 text-sm">{eventError}</p>}
           <button
             type="submit"
@@ -238,7 +290,10 @@ export function CalendarView() {
           {sessions.map((s) => (
             <li key={s.id} className="border rounded px-3 py-2 flex justify-between bg-white">
               <span>{s.titel}</span>
-              <span className="text-xs text-slate-500">{new Date(s.datum).toLocaleString('de-DE')}</span>
+              <span className="text-xs text-slate-500">
+                {new Date(s.datum).toLocaleString('de-DE')}
+                {s.ort && ` · ${s.ort}`}
+              </span>
             </li>
           ))}
           {sessions.length === 0 && meineGremien?.length === 0 && (

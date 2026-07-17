@@ -71,6 +71,7 @@ export interface EventRow {
   titel: string
   start: string
   ende: string | null
+  ort: string | null
   herkunft: EventHerkunft
   erstellt_von: string
 }
