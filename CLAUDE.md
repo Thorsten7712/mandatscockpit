@@ -91,16 +91,22 @@ Vorhanden:
   ISO-8601-String-Vergleich sortiert (`a.start.localeCompare(b.start)`, funktioniert weil beide Felder
   bereits als ISO-Timestamp vorliegen). Ergänzt, nicht ersetzt die beiden Detail-Sektionen darunter
   („Eigene Termine", „Sitzungstermine").
-- **Termindetailsicht** (`src/pages/TerminDetail.tsx`, Route `/termin/:kind/:id` mit `kind` = `event`
-  oder `session`): Jede Zeile in den drei Kalender-Listen ist jetzt ein `Link` dorthin (Bearbeiten/
-  Löschen der Eigene-Termine-Liste selbst wurde deshalb aus `CalendarView` entfernt und lebt nur noch
-  hier). Zeigt Titel/Start/Ende/Ort/Gremium je nach Typ; bei `kind=event` zusätzlich Bearbeiten/
-  Absagen/Löschen (Inline-Formular). Darunter „Notizen & Dokumente": nutzt die `summaries`-Tabelle
-  (jetzt mit `event_id`-Spalte, `0009_summaries_termine.sql`) für Freitext-Notizen und Datei-Uploads.
-  Dateien landen im privaten Storage-Bucket `zusammenfassungen` unter `<user_id>/<dateiname>`
-  (RLS-Policies auf `storage.objects` scopen Zugriff auf den Uploader, per
+- **Termindetails** leben als wiederverwendbare Präsentationskomponente in
+  `src/components/TerminDetailPanel.tsx` (Props: `kind: 'event'|'session'`, `id`, optional
+  `onDeleted`). Zeigt Titel/Start/Ende/Ort/Gremium je nach Typ; bei `kind=event` zusätzlich
+  Bearbeiten/Absagen/Löschen (Inline-Formular). Darunter „Notizen & Dokumente": nutzt die
+  `summaries`-Tabelle (mit `event_id`-Spalte, `0009_summaries_termine.sql`) für Freitext-Notizen und
+  Datei-Uploads. Dateien landen im privaten Storage-Bucket `zusammenfassungen` unter
+  `<user_id>/<dateiname>` (RLS-Policies auf `storage.objects` scopen Zugriff auf den Uploader, per
   `(storage.foldername(name))[1] = auth.uid()::text`). Downloads laufen über `createSignedUrl()`
-  (60s gültig), da das Bucket nicht public ist.
+  (60s gültig), da das Bucket nicht public ist. Zwei Verwendungen:
+  - **Inline/Split-View** in `CalendarView.tsx`: Klick auf einen Eintrag in „Nächste Termine" setzt
+    `selected` und rendert das Panel in einer zweiten Spalte rechts daneben (kein Navigieren weg vom
+    Dashboard).
+  - **Standalone-Seite** `src/pages/TerminDetail.tsx` (Route `/termin/:kind/:id`) als dünner Wrapper
+    um dasselbe Panel – bleibt erhalten, weil `TodoDetailModal` (siehe unten) von dort aus auf
+    verknüpfte Termine/Sitzungen verlinkt und dafür ein eigenständiges Ziel außerhalb des Modals
+    braucht.
 - **„Abgesagt" statt Löschen** (`0010_abgesagt_status.sql`): `sessions.status` hat jetzt zusätzlich
   `'abgesagt'`, `events` hat ein neues `status`-Feld (`'geplant'`/`'abgesagt'`, Default `'geplant'`).
   Grund: `summaries.event_id` hat `on delete cascade` – ein hart gelöschter Termin würde seine Notizen
@@ -131,14 +137,20 @@ Vorhanden:
   Erfassung, keine Struktur-Konfiguration mehr. Jeder Nutzer bekommt beim Signup automatisch vier
   Standard-Spalten (`handle_new_user()`-Trigger erweitert), bestehende Nutzer wurden per Migration
   nachgerüstet (nur falls sie noch keine eigenen Spalten hatten).
-  - Karten: Schnellerfassung (nur Titel) direkt im Board, volle Bearbeitung auf einer neuen
-    Detailseite (`src/pages/TodoDetail.tsx`, Route `/todo/:id`) – Titel, Beschreibung, Zuständigkeit
-    (`zustaendig`, aktuell **Freitext**, bewusst noch keine echte Nutzer-Zuweisung, siehe unten),
-    Termin-Verknüpfung (Radio: kein/Datum/eigener Termin/Sitzung – exklusiv, beim Speichern werden die
-    jeweils anderen beiden Felder genullt), Kommentare (neue Tabelle `todo_comments`) und
-    Dokumenten-Upload (wiederverwendet `summaries` + Storage-Bucket `zusammenfassungen`, jetzt mit
-    `todo_id`-Spalte – bewusst nur Datei-Upload, kein Freitext-Feld dort, um nicht mit den Kommentaren
-    zu überlappen).
+  - Karten: Schnellerfassung (nur Titel) direkt im Board, volle Bearbeitung als **Overlay/Modal**
+    (`src/components/TodoDetailModal.tsx`, Props: `id`, `onClose`, `onChanged`) – öffnet sich bei Klick
+    auf eine Karte (kein Navigieren weg vom Dashboard mehr; die frühere Standalone-Seite
+    `src/pages/TodoDetail.tsx` unter `/todo/:id` wurde entfernt, es gibt keine Route mehr dafür). Inhalt:
+    Titel, Beschreibung, Zuständigkeit (`zustaendig`, aktuell **Freitext**, bewusst noch keine echte
+    Nutzer-Zuweisung, siehe unten), Termin-Verknüpfung (Radio: kein/Datum/eigener Termin/Sitzung –
+    exklusiv, beim Speichern werden die jeweils anderen beiden Felder genullt; die Links zu
+    „Verknüpfter Termin"/„Verknüpfte Sitzung" zeigen auf `/termin/:kind/:id`, die Standalone-Seite bleibt
+    dafür also bewusst bestehen), Kommentare (Tabelle `todo_comments`) und Dokumenten-Upload
+    (wiederverwendet `summaries` + Storage-Bucket `zusammenfassungen`, mit `todo_id`-Spalte – bewusst nur
+    Datei-Upload, kein Freitext-Feld dort, um nicht mit den Kommentaren zu überlappen). Backdrop-Klick
+    schließt das Modal (`stopPropagation` auf dem inneren Panel); Speichern/Löschen ruft `onChanged`
+    bzw. schließt via `onClose`, statt zu navigieren – `TodoBoard.tsx` hält dafür `openTodoId` im State
+    und lädt die Karten nach Änderungen per `onChanged={load}` neu.
   - Karte springt beim Verknüpfen eines Datums/Termins automatisch von einer Spalte namens „Neu" in
     eine Spalte namens „Geplant" (Titel-Matching, case-insensitive – greift nicht mehr, falls der Nutzer
     die Spalten umbenennt; bewusst so vereinfacht, da Spalten frei umbenennbar sind und es keine
@@ -150,10 +162,16 @@ Vorhanden:
 - **Dashboard-Layout umgebaut** (`Dashboard.tsx`): Kein 2-Spalten-Grid mehr. ToDo-Board sitzt jetzt ganz
   oben, volle Breite. `CalendarView.tsx` wurde radikal eingedampft – zeigt nur noch den
   „Nächste Termine"-Block (die alten Sektionen „Eigene Termine" und „Sitzungstermine (importiert)"
-  wurden komplett entfernt, die aggregierte Liste deckt beides ab und verlinkt weiterhin auf
-  `/termin/:kind/:id`). Liste ist auf `max-h-72 overflow-y-auto` begrenzt (~5 Einträge sichtbar, Rest
-  scrollbar). Termin-Anlegen-Formular ist jetzt hinter einem „+ Termin"-Button versteckt
-  (`showAddForm`-Toggle) statt permanent sichtbar.
+  wurden komplett entfernt, die aggregierte Liste deckt beides ab). Liste ist auf
+  `max-h-72 overflow-y-auto` begrenzt (~5 Einträge sichtbar, Rest scrollbar). Termin-Anlegen-Formular
+  ist jetzt hinter einem „+ Termin"-Button versteckt (`showAddForm`-Toggle) statt permanent sichtbar.
+- **Klick-Interaktionen statt Navigation** (Vorgabe: Karten sollen als Overlay/Modal editierbar sein,
+  Termine sollen Details in einer Split-View rechts daneben zeigen, ohne das Dashboard zu verlassen):
+  ToDo-Karten öffnen `TodoDetailModal` als Overlay, „Nächste Termine"-Einträge öffnen
+  `TerminDetailPanel` in einer zweiten Spalte rechts neben der Liste (`CalendarView.tsx` ist dafür
+  `flex gap-6` mit zwei `flex-1 max-w-md`-Spalten; ausgewählter Eintrag bekommt `ring-2` als
+  Selektions-Indikator). Details zu beiden Komponenten siehe „Termindetails" und „ToDo-Board vollständig
+  ausgebaut" oben.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

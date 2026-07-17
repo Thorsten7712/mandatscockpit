@@ -1,5 +1,4 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
 import {
   DndContext,
   PointerSensor,
@@ -11,8 +10,17 @@ import {
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
 import type { TodoBoardSettings, TodoColumn, TodoRow } from '../lib/types'
+import { TodoDetailModal } from './TodoDetailModal'
 
-function Card({ todo, settings }: { todo: TodoRow; settings: TodoBoardSettings | null }) {
+function Card({
+  todo,
+  settings,
+  onOpen,
+}: {
+  todo: TodoRow
+  settings: TodoBoardSettings | null
+  onOpen: () => void
+}) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: todo.id })
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
@@ -21,13 +29,13 @@ function Card({ todo, settings }: { todo: TodoRow; settings: TodoBoardSettings |
   const zeigeTermin = (settings?.zeige_termin ?? true) && hasTermin
   const zeigeZustaendig = (settings?.zeige_zustaendig ?? true) && todo.zustaendig
   return (
-    <Link
-      to={`/todo/${todo.id}`}
+    <div
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
-      className="block bg-white border rounded px-3 py-2 shadow-sm cursor-grab select-none hover:bg-slate-50"
+      onClick={onOpen}
+      className="bg-white border rounded px-3 py-2 shadow-sm cursor-grab select-none hover:bg-slate-50"
     >
       <p>{todo.titel}</p>
       {(zeigeTermin || zeigeZustaendig) && (
@@ -35,7 +43,7 @@ function Card({ todo, settings }: { todo: TodoRow; settings: TodoBoardSettings |
           {zeigeTermin && '📅'} {zeigeZustaendig && `👤 ${todo.zustaendig}`}
         </p>
       )}
-    </Link>
+    </div>
   )
 }
 
@@ -44,11 +52,13 @@ function Column({
   todos,
   settings,
   onAddCard,
+  onOpenTodo,
 }: {
   column: TodoColumn
   todos: TodoRow[]
   settings: TodoBoardSettings | null
   onAddCard: (titel: string) => void
+  onOpenTodo: (id: string) => void
 }) {
   const { setNodeRef } = useDroppable({ id: column.id })
   const [newCardTitel, setNewCardTitel] = useState('')
@@ -65,7 +75,7 @@ function Column({
       <h3 className="font-medium mb-2">{column.titel}</h3>
       <div className="space-y-2 min-h-[40px]">
         {todos.map((t) => (
-          <Card key={t.id} todo={t} settings={settings} />
+          <Card key={t.id} todo={t} settings={settings} onOpen={() => onOpenTodo(t.id)} />
         ))}
       </div>
       <form onSubmit={handleAddCard} className="mt-2">
@@ -86,6 +96,7 @@ export function TodoBoard() {
   const [columns, setColumns] = useState<TodoColumn[]>([])
   const [todos, setTodos] = useState<TodoRow[]>([])
   const [settings, setSettings] = useState<TodoBoardSettings | null>(null)
+  const [openTodoId, setOpenTodoId] = useState<string | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -137,18 +148,24 @@ export function TodoBoard() {
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 overflow-x-auto items-start">
-        {sortedColumns.map((col) => (
-          <Column
-            key={col.id}
-            column={col}
-            todos={todos.filter((t) => t.column_id === col.id)}
-            settings={settings}
-            onAddCard={(titel) => handleAddCard(col.id, titel)}
-          />
-        ))}
-      </div>
-    </DndContext>
+    <>
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <div className="flex gap-4 overflow-x-auto items-start">
+          {sortedColumns.map((col) => (
+            <Column
+              key={col.id}
+              column={col}
+              todos={todos.filter((t) => t.column_id === col.id)}
+              settings={settings}
+              onAddCard={(titel) => handleAddCard(col.id, titel)}
+              onOpenTodo={setOpenTodoId}
+            />
+          ))}
+        </div>
+      </DndContext>
+      {openTodoId && (
+        <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={load} />
+      )}
+    </>
   )
 }

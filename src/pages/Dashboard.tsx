@@ -22,9 +22,7 @@ export default function Dashboard() {
           <h2 className="font-semibold mb-2">ToDo-Board</h2>
           <TodoBoard />
         </section>
-        <div className="max-w-2xl">
-          <CalendarView />
-        </div>
+        <CalendarView />
       </main>
     </div>
   )

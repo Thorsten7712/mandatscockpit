@@ -130,7 +130,7 @@ Für jede Sitzung (egal ob aktiv, vergangen oder geplant) gibt es eine eigene De
 
 Das ist die zentrale Arbeitsansicht vor und während einer Sitzung: ein Klick auf einen Termin im Kalender oder auf eine Sitzung im Dokumenten-Hub führt direkt hierher.
 
-**Umsetzungsstand:** Die Termindetailsicht (`/termin/:kind/:id`, Klick auf einen Eintrag in „Nächste Termine“/„Eigene Termine“/„Sitzungstermine“) existiert bereits und deckt Notizen + Dokumenten-Upload ab – bewusst über den ursprünglichen Plan hinaus erweitert auf **eigene Termine**, nicht nur Sitzungen (jedes Mitglied wollte das für alle Termine, nicht nur importierte). Was hier noch fehlt: Verknüpfung mit dem Dokumenten-Hub (der existiert noch gar nicht, siehe Abschnitt 5.1) und die ToDo-Verknüpfung.
+**Umsetzungsstand:** Die Termindetailsicht existiert bereits (als wiederverwendbare Komponente `TerminDetailPanel`) und deckt Notizen + Dokumenten-Upload ab – bewusst über den ursprünglichen Plan hinaus erweitert auf **eigene Termine**, nicht nur Sitzungen (jedes Mitglied wollte das für alle Termine, nicht nur importierte). Klick auf einen Eintrag in „Nächste Termine“ öffnet die Details inline als Split-View rechts neben der Liste, kein Seitenwechsel mehr nötig; die Route `/termin/:kind/:id` existiert als Standalone-Fallback weiterhin (u. a. für Links aus dem ToDo-Karten-Modal). Was hier noch fehlt: Verknüpfung mit dem Dokumenten-Hub (der existiert noch gar nicht, siehe Abschnitt 5.1) und die ToDo-Verknüpfung.
 
 ## 6. Typischer Nutzungsablauf
 

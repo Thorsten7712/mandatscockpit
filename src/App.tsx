@@ -3,7 +3,6 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import TerminDetail from './pages/TerminDetail'
-import TodoDetail from './pages/TodoDetail'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 export default function App() {
@@ -32,14 +31,6 @@ export default function App() {
           element={
             <ProtectedRoute>
               <TerminDetail />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/todo/:id"
-          element={
-            <ProtectedRoute>
-              <TodoDetail />
             </ProtectedRoute>
           }
         />
