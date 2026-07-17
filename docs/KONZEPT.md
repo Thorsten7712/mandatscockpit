@@ -157,7 +157,7 @@ Kein KI-API-Key wird irgendwo gespeichert – die KI-Nutzung findet außerhalb d
 - Accounts, Kalender, ToDos und hochgeladene Zusammenfassungen sind personenbezogene Daten und bleiben DSGVO-relevant. Absicherung über Row-Level-Security in Supabase (jedes Mitglied sieht standardmäßig nur seine eigenen Einträge), EU-Hosting-Region und einen Auftragsverarbeitungsvertrag mit dem Backend-Anbieter.
 - Die Fraktionsbüro-Rolle ist eine bewusste, eng begrenzte Ausnahme vom „privat by default"-Prinzip: Sie erlaubt gezielt Schreibzugriff auf `Event`-Einträge der eigenen Fraktionsmitglieder, aber ausdrücklich **keinen** Zugriff auf ToDo-Boards oder Zusammenfassungen. Das sollte als eigene, klar benannte RLS-Policy umgesetzt werden, nicht als pauschale Admin-Rechte-Erweiterung.
 - Da keine KI-API im System selbst verwendet wird, entfällt jede Frage nach Auftragsverarbeitung mit einem KI-Anbieter auf Projektseite komplett – jedes Mitglied nutzt seine KI in eigener Verantwortung, so wie es das ohnehin schon privat tut.
-- Für das Repository empfiehlt sich ein **privates** GitHub-Repo (Quellcode kann trotzdem offen entwickelt werden, falls gewünscht öffentlich machbar, da keine Zugangsdaten oder personenbezogenen Daten im Code liegen – die liegen ausschließlich in der Datenbank).
+- **Entschieden:** Das Repository ist **public** (Free-Tier-Zwang – GitHub Pages lässt sich aus privaten Repos erst ab GitHub Pro/Team/Enterprise veröffentlichen). Unbedenklich, da keine Zugangsdaten oder personenbezogenen Daten im Code liegen – die liegen ausschließlich in der Datenbank, und `.env`/`.env.local` sind gitignored.
 
 ## 9. GitHub-Projektstruktur (Vorschlag)
 
@@ -202,4 +202,4 @@ GitHub Issues/Projects (Kanban-Board) eignen sich gut, um die Umsetzung in Phase
 - Darf das Fraktionsbüro von ihm angelegte Termine auch nachträglich bearbeiten/löschen, oder nur einmalig anlegen? Was passiert im Konfliktfall, wenn das Mitglied den Termin inzwischen selbst geändert hat?
 - Sollen ToDo-Boards mit sinnvollen Standard-Spalten vorbelegt werden (z. B. „Offen/In Arbeit/Erledigt"), oder startet jedes Mitglied mit einem leeren Board?
 - Endgültige Wahl des Backend-Anbieters (Supabase empfohlen, Alternativen möglich).
-- Repo öffentlich oder privat (Starter-Repo `mandatscockpit` ist bereits angelegt, siehe README).
+- ~~Repo öffentlich oder privat~~ – erledigt, public (GitHub-Pages-Zwang im Free-Tier, siehe Abschnitt 8).
