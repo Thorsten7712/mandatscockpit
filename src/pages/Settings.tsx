@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, Ebene } from '../lib/types'
 
@@ -80,7 +81,12 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
-      <h1 className="text-xl font-bold mb-4">Kalenderquellen abonnieren</h1>
+      <header className="flex justify-between items-center mb-4">
+        <h1 className="text-xl font-bold">Kalenderquellen abonnieren</h1>
+        <Link to="/" className="text-sm text-slate-600 underline">
+          Zurück zum Dashboard
+        </Link>
+      </header>
       <ul className="space-y-2 max-w-md">
         {sources.map((s) => (
           <li key={s.id} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
