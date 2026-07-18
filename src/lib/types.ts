@@ -14,6 +14,8 @@ export interface Profile {
   rolle: Rolle
   fraktion: string | null
   foto_url: string | null
+  /** Theme-Id aus src/lib/themes.ts (cdu/spd/fdp/...), null = neutral */
+  partei: string | null
 }
 
 export interface CalendarSource {

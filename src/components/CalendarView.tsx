@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import type { EventRow, SessionRow } from '../lib/types'
 import { TerminDetailPanel } from './TerminDetailPanel'
+import { formatDateTime } from '../lib/format'
 
 // Cutoff für "zukünftige Termine" ist der Beginn des heutigen Tages (lokale
 // Zeit), nicht der exakte aktuelle Zeitpunkt - sonst fallen bereits
@@ -133,7 +134,7 @@ export function CalendarView() {
           <button
             type="button"
             onClick={() => setShowAddForm((v) => !v)}
-            className="text-sm text-slate-600 underline"
+            className="text-sm text-primary font-medium underline"
           >
             {showAddForm ? 'Abbrechen' : '+ Termin'}
           </button>
@@ -176,7 +177,7 @@ export function CalendarView() {
             <button
               type="submit"
               disabled={savingEvent || !userId}
-              className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+              className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
             >
               {savingEvent ? 'Speichern...' : 'Termin hinzufügen'}
             </button>
@@ -189,16 +190,16 @@ export function CalendarView() {
               <button
                 type="button"
                 onClick={() => setSelected({ kind: item.kind, id: item.id })}
-                className={`w-full text-left border rounded px-3 py-2 flex items-center justify-between bg-white hover:bg-slate-50 ${item.abgesagt ? 'opacity-60' : ''} ${selected?.id === item.id ? 'ring-2 ring-slate-400' : ''}`}
+                className={`w-full text-left border rounded px-3 py-2 bg-white hover:bg-slate-50 ${item.abgesagt ? 'opacity-60' : ''} ${selected?.id === item.id ? 'ring-2 ring-primary' : ''}`}
               >
-                <span className={item.abgesagt ? 'line-through' : ''}>
+                <span className={`block truncate ${item.abgesagt ? 'line-through' : ''}`}>
                   {notizenIds.has(item.id) && <span title="Enthält Notizen/Dokumente">📎 </span>}
                   {item.titel}
                   {item.kind === 'session' && <span className="text-xs text-slate-400"> · Sitzung</span>}
                   {item.abgesagt && <span className="text-xs text-red-500 no-underline"> · abgesagt</span>}
                 </span>
-                <span className="text-xs text-slate-500">
-                  {new Date(item.start).toLocaleString('de-DE')}
+                <span className="block text-xs text-slate-500 mt-0.5">
+                  {formatDateTime(item.start)}
                   {item.ort && ` · ${item.ort}`}
                 </span>
               </button>

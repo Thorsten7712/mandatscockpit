@@ -4,10 +4,12 @@ import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import TerminDetail from './pages/TerminDetail'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { ThemeLoader } from './components/ThemeLoader'
 
 export default function App() {
   return (
     <BrowserRouter basename="/mandatscockpit">
+      <ThemeLoader />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route

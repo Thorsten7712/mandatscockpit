@@ -196,6 +196,28 @@ Vorhanden:
   Dokument-Downloads), weil das Foto dauerhaft als `<img>` im Header/in den Settings sichtbar ist statt
   nur einmalig angeklickt zu werden.
 
+- **Partei-Theming** (`0014_profiles_partei.sql`): Das UI lässt sich je nach Partei des Mandatsträgers
+  im Partei-CI darstellen (CDU/SPD/FDP/Grüne/Linke/AfD + neutral). Architektur:
+  - `profiles.partei` (Text, nullable, bewusst **ohne** CHECK-Constraint und bewusst getrennt von
+    `fraktion`, das RLS-Semantik trägt) speichert die Theme-Id; Auswahl per Dropdown im Profil-Bereich
+    der Settings („Partei (bestimmt das Farbschema)"), Theme wird beim Ändern sofort angewendet.
+  - Farb-Tokens als CSS-Variablen in `src/index.css` (`:root` = neutral, `[data-theme='cdu']` etc.;
+    RGB-Tripel wegen Tailwind-Alpha), Tailwind-Farben `primary`/`primary-hover`/`accent`/`topbar` in
+    `tailwind.config.js` via `rgb(var(--mc-*) / <alpha-value>)`. Fokus-Ringe und
+    Checkbox/Radio-`accent-color` sind global im `@layer base` von index.css gethemed.
+  - `src/lib/themes.ts`: Registry (Id, Label, Logo-Datei) + `applyTheme()` (setzt `data-theme` auf
+    `<html>`); `src/components/ThemeLoader.tsx` (in App.tsx gemountet) lädt die Partei einmalig aus dem
+    Profil. Neues Theme = CSS-Block + Registry-Eintrag + Logo-SVG, keine Migration nötig.
+  - Partei-Logos (von Wikimedia Commons, offizielle SVGs) unter `public/parteilogos/*.svg`, werden
+    rechts im Dashboard-Header angezeigt. Farbwerte an den echten Partei-Websites verifiziert
+    (cdu-iserlohn.de: Türkis #52b7c1; fdp.de: #2b4b9f/#eb008b/Gelb; SPD-Rot #e3000f). FDP-Topbar ist
+    Gelb, AfD-Primary ist gegenüber dem CI-Hellblau abgedunkelt (AA-Kontrast für weiße Button-Texte).
+  - Alle Primär-Buttons nutzen `bg-primary hover:bg-primary-hover`, Selektions-Ringe `ring-primary`,
+    jede Seite hat eine 1,5px-Akzentleiste (`bg-topbar`) ganz oben.
+- **UX-Feinschliff** (zusammen mit dem Theming): Einträge in „Nächste Termine" sind zweizeilig
+  (Titel+Tags oben, Datum·Ort darunter, `truncate` statt Umbruch-Chaos); Datums-/Zeitangaben laufen
+  zentral über `src/lib/format.ts` (`formatDateTime`/`formatDate`, ohne Sekunden).
+
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
    `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte

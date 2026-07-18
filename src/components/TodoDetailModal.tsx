@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import type { EventRow, SessionRow, SummaryRow, TodoComment, TodoColumn, TodoRow } from '../lib/types'
+import { formatDate, formatDateTime } from '../lib/format'
 
 type TerminModus = 'keine' | 'datum' | 'termin' | 'sitzung'
 
@@ -299,7 +300,7 @@ export function TodoDetailModal({
                   <option value="">Bitte wählen...</option>
                   {ownEvents.map((ev) => (
                     <option key={ev.id} value={ev.id}>
-                      {ev.titel} ({new Date(ev.start).toLocaleDateString('de-DE')})
+                      {ev.titel} ({formatDate(ev.start)})
                     </option>
                   ))}
                 </select>
@@ -313,7 +314,7 @@ export function TodoDetailModal({
                   <option value="">Bitte wählen...</option>
                   {ownSessions.map((se) => (
                     <option key={se.id} value={se.id}>
-                      {se.titel} ({new Date(se.datum).toLocaleDateString('de-DE')})
+                      {se.titel} ({formatDate(se.datum)})
                     </option>
                   ))}
                 </select>
@@ -322,7 +323,7 @@ export function TodoDetailModal({
                 <p className="text-xs text-slate-500">
                   Aktuell verknüpft:{' '}
                   <Link to={`/termin/event/${linkedEvent.id}`} className="underline">
-                    {linkedEvent.titel} ({new Date(linkedEvent.start).toLocaleString('de-DE')})
+                    {linkedEvent.titel} ({formatDateTime(linkedEvent.start)})
                   </Link>
                 </p>
               )}
@@ -330,7 +331,7 @@ export function TodoDetailModal({
                 <p className="text-xs text-slate-500">
                   Aktuell verknüpft:{' '}
                   <Link to={`/termin/session/${linkedSession.id}`} className="underline">
-                    {linkedSession.titel} ({new Date(linkedSession.datum).toLocaleString('de-DE')})
+                    {linkedSession.titel} ({formatDateTime(linkedSession.datum)})
                   </Link>
                 </p>
               )}
@@ -341,7 +342,7 @@ export function TodoDetailModal({
               <button
                 type="submit"
                 disabled={editSaving}
-                className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+                className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
               >
                 {editSaving ? 'Speichern...' : 'Speichern'}
               </button>
@@ -359,7 +360,7 @@ export function TodoDetailModal({
             <li key={c.id} className="border rounded px-3 py-2 bg-white">
               <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-slate-400">{new Date(c.erstellt_am).toLocaleString('de-DE')}</span>
+                <span className="text-xs text-slate-400">{formatDateTime(c.erstellt_am)}</span>
                 {c.user_id === userId && (
                   <button
                     type="button"
@@ -385,7 +386,7 @@ export function TodoDetailModal({
           <button
             type="submit"
             disabled={savingComment || !newComment.trim()}
-            className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+            className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
           >
             {savingComment ? 'Speichern...' : 'Kommentieren'}
           </button>
@@ -425,7 +426,7 @@ export function TodoDetailModal({
           <button
             type="submit"
             disabled={savingDocument || !newFile}
-            className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+            className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
           >
             {savingDocument ? 'Hochladen...' : 'Hochladen'}
           </button>

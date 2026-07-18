@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import type { EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
+import { formatDateTime } from '../lib/format'
 
 function toDatetimeLocalValue(iso: string): string {
   const d = new Date(iso)
@@ -209,9 +210,9 @@ export function TerminDetailPanel({
           {!editing && (
             <>
               {abgesagt && <p className="text-sm font-semibold text-red-600">Abgesagt</p>}
-              {start && <p className="text-sm text-slate-600">{new Date(start).toLocaleString('de-DE')}</p>}
+              {start && <p className="text-sm text-slate-600">{formatDateTime(start)}</p>}
               {event?.ende && (
-                <p className="text-sm text-slate-600">bis {new Date(event.ende).toLocaleString('de-DE')}</p>
+                <p className="text-sm text-slate-600">bis {formatDateTime(event.ende)}</p>
               )}
               {ort && <p className="text-sm text-slate-600">Ort: {ort}</p>}
               {session?.gremium && <p className="text-sm text-slate-600">Gremium: {session.gremium}</p>}
@@ -270,7 +271,7 @@ export function TerminDetailPanel({
                 <button
                   type="submit"
                   disabled={editSaving}
-                  className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+                  className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
                 >
                   {editSaving ? 'Speichern...' : 'Speichern'}
                 </button>
@@ -320,7 +321,7 @@ export function TerminDetailPanel({
               </button>
             )}
             <div className="flex items-center justify-between mt-1">
-              <span className="text-xs text-slate-400">{new Date(s.erstellt_am).toLocaleString('de-DE')}</span>
+              <span className="text-xs text-slate-400">{formatDateTime(s.erstellt_am)}</span>
               {s.user_id === userId && (
                 <button
                   type="button"
@@ -355,7 +356,7 @@ export function TerminDetailPanel({
         <button
           type="submit"
           disabled={savingSummary || (!newInhalt && !newFile)}
-          className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+          className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
         >
           {savingSummary ? 'Speichern...' : 'Hinzufügen'}
         </button>

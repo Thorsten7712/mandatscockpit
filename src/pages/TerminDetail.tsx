@@ -18,15 +18,18 @@ export default function TerminDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <header className="flex justify-between items-center mb-6">
-        <h1 className="text-xl font-bold">Termindetails</h1>
-        <Link to="/" className="text-sm text-slate-600 underline">
-          Zurück zum Dashboard
-        </Link>
-      </header>
-      <div className="max-w-md">
-        <TerminDetailPanel kind={kind} id={id} onDeleted={() => navigate('/')} />
+    <div className="min-h-screen bg-slate-50">
+      <div className="h-1.5 bg-topbar" aria-hidden="true" />
+      <div className="p-6">
+        <header className="flex justify-between items-center mb-6">
+          <h1 className="text-xl font-bold">Termindetails</h1>
+          <Link to="/" className="text-sm text-slate-600 underline">
+            Zurück zum Dashboard
+          </Link>
+        </header>
+        <div className="max-w-md">
+          <TerminDetailPanel kind={kind} id={id} onDeleted={() => navigate('/')} />
+        </div>
       </div>
     </div>
   )

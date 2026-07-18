@@ -1,3 +1,85 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Formularelemente global im Partei-Theme: Fokus-Ring und Checkbox/Radio-
+ * Akzentfarbe folgen --mc-primary, ohne dass jede Komponente eigene
+ * focus:-Klassen braucht. */
+@layer base {
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid rgb(var(--mc-primary) / 0.55);
+    outline-offset: 0;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: rgb(var(--mc-primary));
+  }
+}
+
+/*
+ * Partei-Themes: Farb-Tokens als RGB-Tripel (für Tailwind-Alpha via
+ * rgb(var(--x) / <alpha-value>), siehe tailwind.config.js).
+ *
+ * --mc-primary       Primärfarbe (Buttons, aktive Zustände, Selektion)
+ * --mc-primary-hover dunklere Hover-Variante
+ * --mc-accent        Zweitfarbe der Partei (Akzente, Details)
+ * --mc-topbar        Farbe der schmalen Akzentleiste ganz oben
+ *
+ * Quelle der Farbwerte: offizielle Partei-CIs, verifiziert an den
+ * Live-Websites (cdu-iserlohn.de: Türkis #52b7c1 + Dunkelblau; fdp.de:
+ * Blau #2b4b9f / Magenta #eb008b / Gelb #ffed00; spd.de: SPD-Rot #e3000f).
+ * Neues Theme: Block hier ergänzen + Eintrag in src/lib/themes.ts.
+ */
+
+:root {
+  /* neutral (kein Partei-Theme): bisheriger Slate-Look */
+  --mc-primary: 15 23 42; /* slate-900 */
+  --mc-primary-hover: 30 41 59; /* slate-800 */
+  --mc-accent: 71 85 105; /* slate-600 */
+  --mc-topbar: 15 23 42;
+}
+
+[data-theme='cdu'] {
+  --mc-primary: 11 51 88; /* CDU-Dunkelblau */
+  --mc-primary-hover: 14 68 112;
+  --mc-accent: 82 183 193; /* CDU-Türkis */
+  --mc-topbar: 82 183 193;
+}
+
+[data-theme='spd'] {
+  --mc-primary: 227 0 15; /* SPD-Rot #e3000f */
+  --mc-primary-hover: 195 0 13;
+  --mc-accent: 227 0 15;
+  --mc-topbar: 227 0 15;
+}
+
+[data-theme='fdp'] {
+  --mc-primary: 43 75 159; /* FDP-Blau #2b4b9f */
+  --mc-primary-hover: 3 45 103; /* Dunkelblau #032d67 */
+  --mc-accent: 235 0 139; /* Magenta #eb008b */
+  --mc-topbar: 255 237 0; /* Gelb #ffed00 */
+}
+
+[data-theme='gruene'] {
+  --mc-primary: 0 85 56; /* Tannengrün #005538 */
+  --mc-primary-hover: 0 113 75;
+  --mc-accent: 70 150 43; /* Grasgrün #46962b */
+  --mc-topbar: 70 150 43;
+}
+
+[data-theme='linke'] {
+  --mc-primary: 223 4 4; /* Linke-Rot #df0404 */
+  --mc-primary-hover: 184 3 3;
+  --mc-accent: 223 4 4;
+  --mc-topbar: 223 4 4;
+}
+
+[data-theme='afd'] {
+  --mc-primary: 0 119 179; /* abgedunkeltes AfD-Blau (AA-Kontrast auf Weiß) */
+  --mc-primary-hover: 0 95 143;
+  --mc-accent: 0 158 224; /* AfD-Hellblau #009ee0 */
+  --mc-topbar: 0 158 224;
+}

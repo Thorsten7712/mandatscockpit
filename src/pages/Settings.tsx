@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
+import { PARTEI_THEMES, applyTheme } from '../lib/themes'
 
 async function loadDistinctGremien(): Promise<string[]> {
   const { data } = await supabase.from('sessions').select('gremium').not('gremium', 'is', null)
@@ -36,6 +37,8 @@ export default function Settings() {
   const [newFoto, setNewFoto] = useState<File | null>(null)
   const [savingFoto, setSavingFoto] = useState(false)
   const [fotoError, setFotoError] = useState<string | null>(null)
+  const [partei, setPartei] = useState('')
+  const [parteiError, setParteiError] = useState<string | null>(null)
 
   const [gremien, setGremien] = useState<string[]>([])
   const [meineGremien, setMeineGremien] = useState<string[]>([])
@@ -86,6 +89,7 @@ export default function Settings() {
     const { data } = await supabase.from('profiles').select('*').eq('id', uid).single()
     setProfile(data)
     setProfileName(data?.name ?? '')
+    setPartei(data?.partei ?? '')
     if (data?.foto_url) {
       const { data: signed } = await supabase.storage.from('profilbilder').createSignedUrl(data.foto_url, 3600)
       setProfileFotoUrl(signed?.signedUrl ?? null)
@@ -255,6 +259,20 @@ export default function Settings() {
     setSavingName(false)
   }
 
+  async function handleParteiChange(next: string) {
+    if (!userId) return
+    setParteiError(null)
+    setPartei(next)
+    // Theme sofort anwenden - nicht erst nach dem Roundtrip, damit die
+    // Auswahl direkt sichtbares Feedback gibt.
+    applyTheme(next)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ partei: next || null })
+      .eq('id', userId)
+    if (error) setParteiError(error.message)
+  }
+
   async function handleUploadFoto() {
     if (!userId || !newFoto) return
     setSavingFoto(true)
@@ -342,7 +360,9 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-slate-50">
+      <div className="h-1.5 bg-topbar" aria-hidden="true" />
+      <div className="p-6">
       <header className="flex justify-between items-center mb-4">
         <h1 className="text-xl font-bold">Einstellungen</h1>
         <Link to="/" className="text-sm text-slate-600 underline">
@@ -390,12 +410,31 @@ export default function Settings() {
           <button
             type="submit"
             disabled={savingName}
-            className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+            className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
           >
             {savingName ? 'Speichern...' : 'Speichern'}
           </button>
         </form>
         {nameError && <p className="text-red-600 text-sm">{nameError}</p>}
+
+        <div>
+          <label className="block text-sm text-slate-600 mb-1" htmlFor="profil-partei">
+            Partei (bestimmt das Farbschema)
+          </label>
+          <select
+            id="profil-partei"
+            value={partei}
+            onChange={(e) => handleParteiChange(e.target.value)}
+            className="w-full border rounded px-2 py-1"
+          >
+            {PARTEI_THEMES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          {parteiError && <p className="text-red-600 text-sm mt-1">{parteiError}</p>}
+        </div>
       </div>
 
       <h2 className="text-lg font-semibold mb-2">Kalenderquellen abonnieren</h2>
@@ -443,7 +482,7 @@ export default function Settings() {
                     <button
                       type="submit"
                       disabled={editSaving}
-                      className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+                      className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
                     >
                       {editSaving ? 'Speichern...' : 'Speichern'}
                     </button>
@@ -580,7 +619,7 @@ export default function Settings() {
         <button
           type="submit"
           disabled={saving || !userId}
-          className="w-full bg-slate-900 text-white rounded px-3 py-2 disabled:opacity-50"
+          className="w-full bg-primary hover:bg-primary-hover text-white rounded px-3 py-2 disabled:opacity-50"
         >
           {saving ? 'Speichern...' : 'Quelle hinzufügen'}
         </button>
@@ -657,7 +696,7 @@ export default function Settings() {
           onChange={(e) => setNewColumnTitel(e.target.value)}
           className="flex-1 border rounded px-3 py-2"
         />
-        <button type="submit" className="bg-slate-900 text-white rounded px-3 py-2 text-sm">
+        <button type="submit" className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-2 text-sm">
           Hinzufügen
         </button>
       </form>
@@ -680,6 +719,7 @@ export default function Settings() {
           />
           Zuständigkeit (👤)
         </label>
+      </div>
       </div>
     </div>
   )
