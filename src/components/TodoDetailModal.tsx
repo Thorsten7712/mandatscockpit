@@ -225,16 +225,16 @@ export function TodoDetailModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+      className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="bg-slate-50 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto p-6"
+        className="mc-animate-pop max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex justify-between items-center mb-4">
-          <h1 className="text-xl font-bold">{todo?.titel ?? 'Karte'}</h1>
-          <button type="button" onClick={onClose} className="text-sm text-slate-600 underline">
+        <header className="mb-4 flex items-center justify-between gap-4">
+          <h1 className="truncate text-xl font-bold text-slate-900">{todo?.titel ?? 'Karte'}</h1>
+          <button type="button" onClick={onClose} className="mc-btn-ghost shrink-0">
             Schließen
           </button>
         </header>
@@ -242,19 +242,19 @@ export function TodoDetailModal({
         {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
 
         {todo && (
-          <form onSubmit={handleSaveEdit} className="bg-white border rounded p-4 mb-6 space-y-2">
+          <form onSubmit={handleSaveEdit} className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <input
               type="text"
               value={editTitel}
               onChange={(e) => setEditTitel(e.target.value)}
-              className="w-full border rounded px-2 py-1 font-medium"
+              className="mc-input w-full font-medium"
               required
             />
             <textarea
               placeholder="Beschreibung (optional)"
               value={editBeschreibung}
               onChange={(e) => setEditBeschreibung(e.target.value)}
-              className="w-full border rounded px-2 py-1"
+              className="mc-input w-full"
               rows={3}
             />
             <input
@@ -262,7 +262,7 @@ export function TodoDetailModal({
               placeholder="Zuständig (optional)"
               value={editZustaendig}
               onChange={(e) => setEditZustaendig(e.target.value)}
-              className="w-full border rounded px-2 py-1"
+              className="mc-input w-full"
             />
 
             <div className="space-y-1">
@@ -288,14 +288,14 @@ export function TodoDetailModal({
                   type="date"
                   value={editDatum}
                   onChange={(e) => setEditDatum(e.target.value)}
-                  className="w-full border rounded px-2 py-1"
+                  className="mc-input w-full"
                 />
               )}
               {terminModus === 'termin' && (
                 <select
                   value={editEventId}
                   onChange={(e) => setEditEventId(e.target.value)}
-                  className="w-full border rounded px-2 py-1"
+                  className="mc-input w-full"
                 >
                   <option value="">Bitte wählen...</option>
                   {ownEvents.map((ev) => (
@@ -309,7 +309,7 @@ export function TodoDetailModal({
                 <select
                   value={editSessionId}
                   onChange={(e) => setEditSessionId(e.target.value)}
-                  className="w-full border rounded px-2 py-1"
+                  className="mc-input w-full"
                 >
                   <option value="">Bitte wählen...</option>
                   {ownSessions.map((se) => (
@@ -342,11 +342,11 @@ export function TodoDetailModal({
               <button
                 type="submit"
                 disabled={editSaving}
-                className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+                className="mc-btn-primary"
               >
                 {editSaving ? 'Speichern...' : 'Speichern'}
               </button>
-              <button type="button" onClick={handleDelete} className="text-sm text-red-500 underline">
+              <button type="button" onClick={handleDelete} className="mc-btn-danger">
                 Löschen
               </button>
             </div>
@@ -357,7 +357,7 @@ export function TodoDetailModal({
         <h2 className="font-semibold mb-2">Kommentare</h2>
         <ul className="space-y-2 mb-3">
           {comments.map((c) => (
-            <li key={c.id} className="border rounded px-3 py-2 bg-white">
+            <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
               <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
               <div className="flex items-center justify-between mt-1">
                 <span className="text-xs text-slate-400">{formatDateTime(c.erstellt_am)}</span>
@@ -365,7 +365,7 @@ export function TodoDetailModal({
                   <button
                     type="button"
                     onClick={() => handleDeleteComment(c.id)}
-                    className="text-xs text-red-500 underline"
+                    className="mc-btn-danger !px-2 !py-1 !text-xs"
                   >
                     Löschen
                   </button>
@@ -375,18 +375,18 @@ export function TodoDetailModal({
           ))}
           {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
         </ul>
-        <form onSubmit={handleAddComment} className="space-y-2 bg-white border rounded p-3 mb-6">
+        <form onSubmit={handleAddComment} className="mb-6 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <textarea
             placeholder="Kommentar hinzufügen"
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
-            className="w-full border rounded px-2 py-1"
+            className="mc-input w-full"
             rows={2}
           />
           <button
             type="submit"
             disabled={savingComment || !newComment.trim()}
-            className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+            className="mc-btn-primary"
           >
             {savingComment ? 'Speichern...' : 'Kommentieren'}
           </button>
@@ -395,12 +395,15 @@ export function TodoDetailModal({
         <h2 className="font-semibold mb-2">Dokumente</h2>
         <ul className="space-y-2 mb-3">
           {documents.map((d) => (
-            <li key={d.id} className="border rounded px-3 py-2 bg-white flex items-center justify-between">
+            <li
+              key={d.id}
+              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+            >
               {d.datei_url && (
                 <button
                   type="button"
                   onClick={() => handleDownload(d.datei_url!)}
-                  className="text-xs text-slate-600 underline"
+                  className="mc-btn-ghost !px-2 !py-1 !text-xs"
                 >
                   📎 {fileNameFromPath(d.datei_url)}
                 </button>
@@ -408,7 +411,7 @@ export function TodoDetailModal({
               <button
                 type="button"
                 onClick={() => handleDeleteDocument(d.id)}
-                className="text-xs text-red-500 underline"
+                className="mc-btn-danger !px-2 !py-1 !text-xs"
               >
                 Löschen
               </button>
@@ -416,7 +419,7 @@ export function TodoDetailModal({
           ))}
           {documents.length === 0 && <li className="text-slate-400 text-sm">Noch keine Dokumente.</li>}
         </ul>
-        <form onSubmit={handleUploadDocument} className="space-y-2 bg-white border rounded p-3">
+        <form onSubmit={handleUploadDocument} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <input
             type="file"
             onChange={(e) => setNewFile(e.target.files?.[0] ?? null)}
@@ -426,7 +429,7 @@ export function TodoDetailModal({
           <button
             type="submit"
             disabled={savingDocument || !newFile}
-            className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+            className="mc-btn-primary"
           >
             {savingDocument ? 'Hochladen...' : 'Hochladen'}
           </button>

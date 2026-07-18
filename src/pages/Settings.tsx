@@ -360,18 +360,20 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-100">
       <div className="h-1.5 bg-topbar" aria-hidden="true" />
-      <div className="p-6">
-      <header className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Einstellungen</h1>
-        <Link to="/" className="text-sm text-slate-600 underline">
-          Zurück zum Dashboard
-        </Link>
+      <header className="bg-gradient-to-r from-primary to-primary-hover text-white shadow-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
+          <h1 className="text-lg font-bold">Einstellungen</h1>
+          <Link to="/" className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">
+            Zurück zum Dashboard
+          </Link>
+        </div>
       </header>
+      <div className="mx-auto max-w-7xl px-6 py-8">
 
-      <h2 className="text-lg font-semibold mb-2">Profil</h2>
-      <div className="max-w-md bg-white border rounded p-4 space-y-3 mb-8">
+      <h2 className="mb-2 text-base font-semibold text-slate-900">Profil</h2>
+      <div className="mc-card mb-8 max-w-md space-y-3 p-4">
         <div className="flex items-center gap-4">
           {profileFotoUrl ? (
             <img src={profileFotoUrl} alt="Profilfoto" className="w-16 h-16 rounded-full object-cover" />
@@ -391,7 +393,7 @@ export default function Settings() {
               type="button"
               onClick={handleUploadFoto}
               disabled={!newFoto || savingFoto}
-              className="text-xs text-slate-600 underline disabled:opacity-50"
+              className="mc-btn-ghost !px-2 !py-1 !text-xs"
             >
               {savingFoto ? 'Hochladen...' : 'Foto hochladen'}
             </button>
@@ -404,7 +406,7 @@ export default function Settings() {
             type="text"
             value={profileName}
             onChange={(e) => setProfileName(e.target.value)}
-            className="flex-1 border rounded px-2 py-1"
+            className="mc-input flex-1"
             required
           />
           <button
@@ -425,7 +427,7 @@ export default function Settings() {
             id="profil-partei"
             value={partei}
             onChange={(e) => handleParteiChange(e.target.value)}
-            className="w-full border rounded px-2 py-1"
+            className="mc-input w-full"
           >
             {PARTEI_THEMES.map((t) => (
               <option key={t.id} value={t.id}>
@@ -437,7 +439,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <h2 className="text-lg font-semibold mb-2">Kalenderquellen abonnieren</h2>
+      <h2 className="mb-2 text-base font-semibold text-slate-900">Kalenderquellen abonnieren</h2>
       {deleteError && <p className="text-red-600 text-sm mb-2 max-w-md">{deleteError}</p>}
       {staleGremien.length > 0 && (
         <p className="text-amber-600 text-sm mb-2 max-w-md">
@@ -450,19 +452,19 @@ export default function Settings() {
           const canManage = s.verwaltet_von === userId || isAdmin
           if (editingId === s.id) {
             return (
-              <li key={s.id} className="border rounded px-3 py-2 bg-white space-y-2">
+              <li key={s.id} className="mc-card space-y-2 px-3 py-2 !rounded-lg">
                 <form onSubmit={handleSaveEdit} className="space-y-2">
                   <input
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full border rounded px-2 py-1"
+                    className="mc-input w-full"
                     required
                   />
                   <select
                     value={editEbene}
                     onChange={(e) => setEditEbene(e.target.value as Ebene)}
-                    className="w-full border rounded px-2 py-1"
+                    className="mc-input w-full"
                   >
                     {EBENEN.map((o) => (
                       <option key={o.value} value={o.value}>
@@ -474,7 +476,7 @@ export default function Settings() {
                     type="url"
                     value={editIcsUrl}
                     onChange={(e) => setEditIcsUrl(e.target.value)}
-                    className="w-full border rounded px-2 py-1"
+                    className="mc-input w-full"
                     required
                   />
                   {editError && <p className="text-red-600 text-sm">{editError}</p>}
@@ -489,7 +491,7 @@ export default function Settings() {
                     <button
                       type="button"
                       onClick={cancelEdit}
-                      className="text-sm text-slate-600 underline"
+                      className="mc-btn-ghost"
                     >
                       Abbrechen
                     </button>
@@ -500,7 +502,7 @@ export default function Settings() {
           }
           const isRefreshing = refreshingSourceId === s.id
           return (
-            <li key={s.id} className="border rounded px-3 py-2 bg-white">
+            <li key={s.id} className="mc-card px-3 py-2 !rounded-lg">
               <div className="flex items-center justify-between">
                 <span>
                   {s.name} <span className="text-xs text-slate-400">({s.ebene})</span>
@@ -511,7 +513,7 @@ export default function Settings() {
                     type="button"
                     onClick={() => handleRefreshSource(s.id)}
                     disabled={isRefreshing}
-                    className="text-xs text-slate-600 underline disabled:opacity-50"
+                    className="mc-btn-ghost !px-2 !py-1 !text-xs"
                   >
                     {isRefreshing ? 'Aktualisiert...' : 'Aktualisieren'}
                   </button>
@@ -520,14 +522,14 @@ export default function Settings() {
                       <button
                         type="button"
                         onClick={() => startEdit(s)}
-                        className="text-xs text-slate-600 underline"
+                        className="mc-btn-ghost !px-2 !py-1 !text-xs"
                       >
                         Bearbeiten
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(s.id)}
-                        className="text-xs text-red-500 underline"
+                        className="mc-btn-danger !px-2 !py-1 !text-xs"
                       >
                         Löschen
                       </button>
@@ -549,14 +551,14 @@ export default function Settings() {
         {sources.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kalenderquellen angelegt.</li>}
       </ul>
 
-      <h2 className="text-lg font-semibold mt-8 mb-2">Meine Gremien</h2>
+      <h2 className="mt-10 mb-2 text-base font-semibold text-slate-900">Meine Gremien</h2>
       <p className="text-xs text-slate-400 mb-2 max-w-md">
         Häkchen bei den Gremien, in denen du ein Mandat hast. Das Dashboard zeigt dann nur noch
         Sitzungstermine dieser Gremien an.
       </p>
       <ul className="space-y-2 max-w-md">
         {gremien.map((g) => (
-          <li key={g} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
+          <li key={g} className="mc-card flex items-center justify-between px-3 py-2 !rounded-lg">
             <span>{g}</span>
             <input type="checkbox" checked={meineGremien.includes(g)} onChange={() => toggleGremium(g)} />
           </li>
@@ -568,8 +570,8 @@ export default function Settings() {
         )}
       </ul>
 
-      <h2 className="text-lg font-semibold mt-8 mb-2">Eigene Quelle hinzufügen</h2>
-      <form onSubmit={handleAddSource} className="space-y-3 max-w-md bg-white border rounded p-4">
+      <h2 className="mt-10 mb-2 text-base font-semibold text-slate-900">Eigene Quelle hinzufügen</h2>
+      <form onSubmit={handleAddSource} className="mc-card max-w-md space-y-3 p-4">
         <div>
           <label className="block text-sm text-slate-600 mb-1" htmlFor="source-name">
             Name
@@ -580,7 +582,7 @@ export default function Settings() {
             placeholder="z. B. Kreistag Märkischer Kreis"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            className="mc-input w-full"
             required
           />
         </div>
@@ -592,7 +594,7 @@ export default function Settings() {
             id="source-ebene"
             value={ebene}
             onChange={(e) => setEbene(e.target.value as Ebene)}
-            className="w-full border rounded px-3 py-2"
+            className="mc-input w-full"
           >
             {EBENEN.map((o) => (
               <option key={o.value} value={o.value}>
@@ -611,7 +613,7 @@ export default function Settings() {
             placeholder="https://.../kalender.ics"
             value={icsUrl}
             onChange={(e) => setIcsUrl(e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            className="mc-input w-full"
             required
           />
         </div>
@@ -629,7 +631,7 @@ export default function Settings() {
         </p>
       </form>
 
-      <h2 className="text-lg font-semibold mt-8 mb-2">ToDo-Board</h2>
+      <h2 className="mt-10 mb-2 text-base font-semibold text-slate-900">ToDo-Board</h2>
       <p className="text-xs text-slate-400 mb-2 max-w-md">Spalten verwalten und sortieren.</p>
       <ul className="space-y-2 max-w-md">
         {[...todoColumns]
@@ -637,7 +639,7 @@ export default function Settings() {
           .map((col, i, sorted) => {
             if (editingColumnId === col.id) {
               return (
-                <li key={col.id} className="border rounded px-3 py-2 bg-white">
+                <li key={col.id} className="mc-card px-3 py-2 !rounded-lg">
                   <input
                     type="text"
                     value={editColumnTitel}
@@ -648,13 +650,13 @@ export default function Settings() {
                       if (e.key === 'Escape') setEditingColumnId(null)
                     }}
                     autoFocus
-                    className="w-full border rounded px-2 py-1"
+                    className="mc-input w-full"
                   />
                 </li>
               )
             }
             return (
-              <li key={col.id} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
+              <li key={col.id} className="mc-card flex items-center justify-between px-3 py-2 !rounded-lg">
                 <span className="cursor-pointer" onClick={() => startEditColumn(col)}>
                   {col.titel}
                 </span>
@@ -694,7 +696,7 @@ export default function Settings() {
           placeholder="Neue Spalte"
           value={newColumnTitel}
           onChange={(e) => setNewColumnTitel(e.target.value)}
-          className="flex-1 border rounded px-3 py-2"
+          className="mc-input flex-1"
         />
         <button type="submit" className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-2 text-sm">
           Hinzufügen
@@ -702,7 +704,7 @@ export default function Settings() {
       </form>
 
       <p className="text-sm text-slate-600 mt-4 mb-2">Details auf den Karten anzeigen</p>
-      <div className="max-w-md bg-white border rounded p-4 space-y-2">
+      <div className="mc-card max-w-md space-y-2 p-4">
         <label className="flex items-center gap-2">
           <input
             type="checkbox"

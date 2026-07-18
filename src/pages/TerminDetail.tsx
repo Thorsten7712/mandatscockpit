@@ -18,16 +18,18 @@ export default function TerminDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-100">
       <div className="h-1.5 bg-topbar" aria-hidden="true" />
-      <div className="p-6">
-        <header className="flex justify-between items-center mb-6">
-          <h1 className="text-xl font-bold">Termindetails</h1>
-          <Link to="/" className="text-sm text-slate-600 underline">
+      <header className="bg-gradient-to-r from-primary to-primary-hover text-white shadow-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
+          <h1 className="text-lg font-bold">Termindetails</h1>
+          <Link to="/" className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">
             Zurück zum Dashboard
           </Link>
-        </header>
-        <div className="max-w-md">
+        </div>
+      </header>
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mc-card mc-animate-pop max-w-lg p-5">
           <TerminDetailPanel kind={kind} id={id} onDeleted={() => navigate('/')} />
         </div>
       </div>

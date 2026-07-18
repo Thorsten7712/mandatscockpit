@@ -226,7 +226,35 @@ Vorhanden:
     jede Seite hat eine 1,5px-Akzentleiste (`bg-topbar`) ganz oben.
 - **UX-Feinschliff** (zusammen mit dem Theming): Einträge in „Nächste Termine" sind zweizeilig
   (Titel+Tags oben, Datum·Ort darunter, `truncate` statt Umbruch-Chaos); Datums-/Zeitangaben laufen
-  zentral über `src/lib/format.ts` (`formatDateTime`/`formatDate`, ohne Sekunden).
+  zentral über `src/lib/format.ts` (`formatDateTime`/`formatDate`/`formatTime`/`formatDayMonth`,
+  ohne Sekunden).
+- **UI-Redesign** („Wow"-Polish, nach dem ersten Theming-Wurf): Das Partei-Theme trägt jetzt durchs
+  ganze UI, nicht nur Logo+Topbar.
+  - **Schrift:** Inter Variable via `@fontsource-variable/inter` (Import in `main.tsx`,
+    `fontFamily.sans` in `tailwind.config.js`), wird von Vite mit gebündelt (kein CDN, passt zu
+    GitHub-Pages-Hosting).
+  - **Gemeinsames Komponenten-Vokabular** in `src/index.css` `@layer components`: `.mc-card`
+    (rounded-xl, border, shadow-sm), `.mc-input`, `.mc-btn` (Press-Feedback `active:scale(0.97)` bei
+    160ms mit kräftiger ease-out-Kurve `--mc-ease-out`), `.mc-btn-primary`/`-ghost`/`-danger`.
+    Kleine Varianten in Listen per `!px-2 !py-1 !text-xs`-Overrides. Bewusst zentral statt
+    Utility-Wiederholung in jedem JSX, damit alle Flächen identisch aussehen/reagieren; Layout bleibt
+    Utilities im JSX (CLAUDE.md-Konvention „keine CSS-Datei pro Komponente" bleibt gewahrt).
+  - **Entrance-Animationen** (`mc-animate-fade/-pop/-slide`, nur transform+opacity, nie aus scale(0),
+    220-240ms): Modal poppt (Backdrop `bg-slate-900/50` + `backdrop-blur-[2px]` + Fade), Split-View-
+    Panel slidet von rechts ein (per `key` auf dem Panel-Container re-triggert bei Terminwechsel).
+    `prefers-reduced-motion` fällt auf reinen Opacity-Fade zurück.
+  - **App-Bar:** Alle Seiten (Dashboard, Settings, TerminDetail) haben statt des weißen Headers eine
+    Partei-farbige Leiste (`bg-gradient-to-r from-primary to-primary-hover`, weiße Schrift, Avatar mit
+    `ring-white/40`, Partei-Logo auf weißem Chip rechts), darüber weiterhin die `bg-topbar`-Akzentlinie
+    (FDP: Gelb über Blau). Content in `max-w-7xl mx-auto`.
+  - **Terminliste:** Einträge als Karten mit Datums-Chip links (Tag+Kurzmonat, `bg-primary/10
+    text-primary`, abgesagt: rot getönt), Titel + SITZUNG/ABGESAGT-Badges, Zeit·Ort-Zeile;
+    Selektion `ring-2 ring-primary`. Empty-States als gestrichelte Platzhalterflächen.
+  - **Board:** Spalten `bg-slate-200/50 rounded-xl` mit Karten-Count-Badge, Karten mit
+    Hover-Schatten-Lift und Chip-Metadaten (📅 Termin primary-getönt, 👤 Zuständig), Drag-Zustand
+    `ring-primary/40`; „+ Karte hinzufügen" als gestricheltes Ghost-Input.
+  - Modal-/Panel-Innensektionen (Formulare, Kommentar-/Dokument-Listen) als `bg-slate-50`-Karten auf
+    weißem Grund; Login als zentrierte Card. Alle sechs Themes + neutral im Browser verifiziert.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

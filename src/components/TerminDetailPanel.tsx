@@ -201,12 +201,12 @@ export function TerminDetailPanel({
 
   return (
     <div>
-      <h2 className="text-lg font-bold mb-3">{titel ?? 'Termin'}</h2>
+      <h2 className="mb-3 text-lg font-bold text-slate-900">{titel ?? 'Termin'}</h2>
 
       {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
 
       {(event || session) && (
-        <div className="bg-white border rounded p-4 mb-6 space-y-1">
+        <div className="mb-6 space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-4">
           {!editing && (
             <>
               {abgesagt && <p className="text-sm font-semibold text-red-600">Abgesagt</p>}
@@ -220,14 +220,18 @@ export function TerminDetailPanel({
                 <p className="text-sm text-slate-600">Angelegt vom Fraktionsbüro</p>
               )}
               {event && (
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={startEdit} className="text-xs text-slate-600 underline">
+                <div className="flex gap-2 pt-2">
+                  <button type="button" onClick={startEdit} className="mc-btn-ghost !px-2 !py-1 !text-xs">
                     Bearbeiten
                   </button>
-                  <button type="button" onClick={handleToggleAbsage} className="text-xs text-slate-600 underline">
+                  <button
+                    type="button"
+                    onClick={handleToggleAbsage}
+                    className="mc-btn-ghost !px-2 !py-1 !text-xs"
+                  >
                     {event.status === 'abgesagt' ? 'Reaktivieren' : 'Absagen'}
                   </button>
-                  <button type="button" onClick={handleDelete} className="text-xs text-red-500 underline">
+                  <button type="button" onClick={handleDelete} className="mc-btn-danger !px-2 !py-1 !text-xs">
                     Löschen
                   </button>
                 </div>
@@ -241,7 +245,7 @@ export function TerminDetailPanel({
                 type="text"
                 value={editTitel}
                 onChange={(e) => setEditTitel(e.target.value)}
-                className="w-full border rounded px-2 py-1"
+                className="mc-input w-full"
                 required
               />
               <div className="flex gap-2">
@@ -249,14 +253,14 @@ export function TerminDetailPanel({
                   type="datetime-local"
                   value={editStart}
                   onChange={(e) => setEditStart(e.target.value)}
-                  className="flex-1 border rounded px-2 py-1"
+                  className="mc-input flex-1"
                   required
                 />
                 <input
                   type="datetime-local"
                   value={editEnde}
                   onChange={(e) => setEditEnde(e.target.value)}
-                  className="flex-1 border rounded px-2 py-1"
+                  className="mc-input flex-1"
                 />
               </div>
               <input
@@ -264,21 +268,21 @@ export function TerminDetailPanel({
                 placeholder="Ort (optional)"
                 value={editOrt}
                 onChange={(e) => setEditOrt(e.target.value)}
-                className="w-full border rounded px-2 py-1"
+                className="mc-input w-full"
               />
               {editError && <p className="text-red-600 text-sm">{editError}</p>}
               <div className="flex gap-2">
                 <button
                   type="submit"
                   disabled={editSaving}
-                  className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+                  className="mc-btn-primary"
                 >
                   {editSaving ? 'Speichern...' : 'Speichern'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditing(false)}
-                  className="text-sm text-slate-600 underline"
+                  className="mc-btn-ghost"
                 >
                   Abbrechen
                 </button>
@@ -288,14 +292,14 @@ export function TerminDetailPanel({
         </div>
       )}
 
-      <h3 className="font-semibold mb-2">Verknüpfte Aufgaben</h3>
-      <ul className="space-y-2 mb-6">
+      <h3 className="mb-2 text-sm font-semibold text-slate-900">Verknüpfte Aufgaben</h3>
+      <ul className="mb-6 space-y-2">
         {linkedTodos.map((t) => (
           <li key={t.id}>
             <button
               type="button"
               onClick={() => setOpenTodoId(t.id)}
-              className="w-full text-left border rounded px-3 py-2 bg-white hover:bg-slate-50 text-sm"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-800 shadow-sm transition-shadow duration-150 hover:shadow-md"
             >
               {t.titel}
             </button>
@@ -306,16 +310,16 @@ export function TerminDetailPanel({
         )}
       </ul>
 
-      <h3 className="font-semibold mb-2">Notizen &amp; Dokumente</h3>
-      <ul className="space-y-2 mb-3">
+      <h3 className="mb-2 text-sm font-semibold text-slate-900">Notizen &amp; Dokumente</h3>
+      <ul className="mb-3 space-y-2">
         {summaries.map((s) => (
-          <li key={s.id} className="border rounded px-3 py-2 bg-white">
+          <li key={s.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
             {s.inhalt && <p className="text-sm whitespace-pre-wrap">{s.inhalt}</p>}
             {s.datei_url && (
               <button
                 type="button"
                 onClick={() => handleDownload(s.datei_url!)}
-                className="text-xs text-slate-600 underline"
+                className="mc-btn-ghost !px-2 !py-1 !text-xs"
               >
                 📎 {fileNameFromPath(s.datei_url)}
               </button>
@@ -326,7 +330,7 @@ export function TerminDetailPanel({
                 <button
                   type="button"
                   onClick={() => handleDeleteSummary(s.id)}
-                  className="text-xs text-red-500 underline"
+                  className="mc-btn-danger !px-2 !py-1 !text-xs"
                 >
                   Löschen
                 </button>
@@ -339,12 +343,12 @@ export function TerminDetailPanel({
         )}
       </ul>
 
-      <form onSubmit={handleAddSummary} className="space-y-2 bg-white border rounded p-3">
+      <form onSubmit={handleAddSummary} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <textarea
           placeholder="Notiz (optional)"
           value={newInhalt}
           onChange={(e) => setNewInhalt(e.target.value)}
-          className="w-full border rounded px-2 py-1"
+          className="mc-input w-full"
           rows={3}
         />
         <input
@@ -356,7 +360,7 @@ export function TerminDetailPanel({
         <button
           type="submit"
           disabled={savingSummary || (!newInhalt && !newFile)}
-          className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+          className="mc-btn-primary"
         >
           {savingSummary ? 'Speichern...' : 'Hinzufügen'}
         </button>

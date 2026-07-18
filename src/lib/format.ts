@@ -19,3 +19,16 @@ export function formatDate(iso: string): string {
     year: 'numeric',
   })
 }
+
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** Für Datums-Chips in Listen: Tag ("10") und Kurzmonat ("Sep."). */
+export function formatDayMonth(iso: string): { day: string; month: string } {
+  const d = new Date(iso)
+  return {
+    day: d.toLocaleDateString('de-DE', { day: '2-digit' }),
+    month: d.toLocaleDateString('de-DE', { month: 'short' }),
+  }
+}

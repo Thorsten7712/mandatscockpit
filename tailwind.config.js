@@ -3,6 +3,9 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter Variable', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+      },
       colors: {
         // Partei-Theme-Tokens, Werte kommen aus CSS-Variablen in src/index.css
         // ([data-theme=...]-Blöcke). RGB-Tripel-Syntax, damit Tailwind-Alpha

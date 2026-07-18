@@ -6,6 +6,19 @@
  * Akzentfarbe folgen --mc-primary, ohne dass jede Komponente eigene
  * focus:-Klassen braucht. */
 @layer base {
+  :root {
+    /* Kräftige Easing-Kurven (Standard-CSS-Easings sind zu schwach):
+     * ease-out für Enter/Feedback, drawer-Kurve für größere Flächen. */
+    --mc-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --mc-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  html {
+    font-family: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible {
@@ -13,9 +26,96 @@
     outline-offset: 0;
   }
 
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid rgb(var(--mc-primary) / 0.55);
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+
   input[type='checkbox'],
   input[type='radio'] {
     accent-color: rgb(var(--mc-primary));
+  }
+}
+
+/* Kleines gemeinsames Komponenten-Vokabular (bewusst zentral statt pro
+ * Komponente, damit Buttons/Inputs/Cards überall identisch aussehen und
+ * sich identisch anfühlen - gleiche Radien, gleiches Press-Feedback,
+ * gleiche Fokusringe). Layout bleibt Utility-Klassen im JSX. */
+@layer components {
+  .mc-card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+
+  .mc-input {
+    @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .mc-btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg font-medium select-none;
+    transition:
+      transform 160ms var(--mc-ease-out),
+      background-color 150ms ease,
+      color 150ms ease,
+      box-shadow 150ms ease;
+  }
+  .mc-btn:active {
+    transform: scale(0.97);
+  }
+  .mc-btn:disabled {
+    @apply pointer-events-none opacity-50;
+  }
+
+  .mc-btn-primary {
+    @apply mc-btn bg-primary px-3.5 py-2 text-sm text-white shadow-sm hover:bg-primary-hover;
+  }
+
+  .mc-btn-ghost {
+    @apply mc-btn px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-900/5 hover:text-slate-900;
+  }
+
+  .mc-btn-danger {
+    @apply mc-btn px-2.5 py-1.5 text-sm text-red-600 hover:bg-red-50;
+  }
+}
+
+/* Entrance-Animationen: nur transform+opacity (GPU), kräftiges ease-out,
+ * nie aus scale(0). Unter prefers-reduced-motion bleibt ein reiner
+ * Opacity-Fade erhalten (Bewegung raus, Verständlichkeit bleibt). */
+@keyframes mc-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes mc-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+@keyframes mc-slide {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+.mc-animate-fade {
+  animation: mc-fade 150ms var(--mc-ease-out);
+}
+.mc-animate-pop {
+  animation: mc-pop 220ms var(--mc-ease-out);
+}
+.mc-animate-slide {
+  animation: mc-slide 240ms var(--mc-ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-animate-pop,
+  .mc-animate-slide {
+    animation: mc-fade 150ms ease;
   }
 }
 

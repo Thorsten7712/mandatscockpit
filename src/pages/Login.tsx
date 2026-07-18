@@ -23,15 +23,21 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <form onSubmit={handleLogin} className="bg-white p-8 rounded-lg shadow-md w-full max-w-sm space-y-4">
-        <h1 className="text-xl font-semibold">MandatsCockpit Login</h1>
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
+      <form
+        onSubmit={handleLogin}
+        className="mc-animate-pop w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-8 shadow-xl"
+      >
+        <div className="space-y-1 text-center">
+          <h1 className="text-2xl font-bold text-slate-900">MandatsCockpit</h1>
+          <p className="text-sm text-slate-500">Dein Dashboard fürs Mandat</p>
+        </div>
         <input
           type="email"
           placeholder="E-Mail"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full border rounded px-3 py-2"
+          className="mc-input w-full"
           required
         />
         <input
@@ -39,18 +45,14 @@ export default function Login() {
           placeholder="Passwort"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full border rounded px-3 py-2"
+          className="mc-input w-full"
           required
         />
-        {error && <p className="text-red-600 text-sm">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-primary hover:bg-primary-hover text-white rounded px-3 py-2 disabled:opacity-50"
-        >
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button type="submit" disabled={loading} className="mc-btn-primary w-full !py-2.5">
           {loading ? 'Anmelden...' : 'Anmelden'}
         </button>
-        <p className="text-xs text-slate-400">
+        <p className="text-center text-xs text-slate-400">
           Accounts werden aktuell vom Ratsbüro über das Supabase-Dashboard angelegt (siehe README).
         </p>
       </form>
