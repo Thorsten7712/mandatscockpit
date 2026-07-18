@@ -24,6 +24,8 @@ export interface CalendarSource {
   ebene: Ebene
   ics_url: string
   verwaltet_von: string | null
+  /** Token-Id aus src/lib/sourceColors.ts, null = Theme-Primärfarbe */
+  farbe: string | null
 }
 
 export interface UserSourceSubscription {

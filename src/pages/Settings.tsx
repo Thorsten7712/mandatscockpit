@@ -4,6 +4,7 @@ import { CalendarDays, Landmark, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
 import { PARTEI_THEMES, applyTheme } from '../lib/themes'
+import { EBENE_LABEL, SOURCE_COLORS, sourceColorById } from '../lib/sourceColors'
 import { UserManagement } from '../components/UserManagement'
 
 type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'benutzer'
@@ -16,10 +17,25 @@ const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: b
   { id: 'benutzer', label: 'Benutzerverwaltung', icon: Users, adminOnly: true },
 ]
 
-async function loadDistinctGremien(): Promise<string[]> {
-  const { data } = await supabase.from('sessions').select('gremium').not('gremium', 'is', null)
-  const unique = new Set((data ?? []).map((row) => row.gremium as string))
-  return Array.from(unique).sort((a, b) => a.localeCompare(b, 'de'))
+interface GremiumEntry {
+  gremium: string
+  source_id: string | null
+}
+
+// Distinct (gremium, quelle)-Paare - die Meine-Gremien-Checkliste ist nach
+// Quellen gruppiert. Taucht dasselbe Gremium in mehreren Quellen auf, wird
+// es pro Quelle gelistet (Auswahl bleibt trotzdem gremium-Text-basiert).
+async function loadDistinctGremien(): Promise<GremiumEntry[]> {
+  const { data } = await supabase.from('sessions').select('gremium, source_id').not('gremium', 'is', null)
+  const seen = new Set<string>()
+  const entries: GremiumEntry[] = []
+  for (const row of data ?? []) {
+    const key = `${row.source_id ?? ''}|${row.gremium}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    entries.push({ gremium: row.gremium as string, source_id: (row.source_id as string | null) ?? null })
+  }
+  return entries.sort((a, b) => a.gremium.localeCompare(b.gremium, 'de'))
 }
 
 const EBENEN: { value: Ebene; label: string }[] = [
@@ -53,7 +69,7 @@ export default function Settings() {
   const [partei, setPartei] = useState('')
   const [parteiError, setParteiError] = useState<string | null>(null)
 
-  const [gremien, setGremien] = useState<string[]>([])
+  const [gremien, setGremien] = useState<GremiumEntry[]>([])
   const [meineGremien, setMeineGremien] = useState<string[]>([])
   const [staleGremien, setStaleGremien] = useState<string[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
@@ -166,7 +182,7 @@ export default function Settings() {
     setGremien(freshGremien)
     if (userId) {
       const currentSelection = await loadUserData(userId)
-      setStaleGremien(currentSelection.filter((g) => !freshGremien.includes(g)))
+      setStaleGremien(currentSelection.filter((g) => !freshGremien.some((e) => e.gremium === g)))
     }
     setRefreshingSourceId(null)
   }
@@ -200,6 +216,13 @@ export default function Settings() {
       await loadSources()
     }
     setEditSaving(false)
+  }
+
+  async function handleSetFarbe(sourceId: string, farbe: string | null) {
+    // Optimistisch setzen, dann speichern - bei Fehler einfach neu laden.
+    setSources((prev) => prev.map((s) => (s.id === sourceId ? { ...s, farbe } : s)))
+    const { error } = await supabase.from('calendar_sources').update({ farbe }).eq('id', sourceId)
+    if (error) await loadSources()
   }
 
   async function toggleGremium(gremium: string) {
@@ -522,11 +545,7 @@ export default function Settings() {
                   />
                   {editError && <p className="text-red-600 text-sm">{editError}</p>}
                   <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={editSaving}
-                      className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
-                    >
+                    <button type="submit" disabled={editSaving} className="mc-btn-primary">
                       {editSaving ? 'Speichern...' : 'Speichern'}
                     </button>
                     <button
@@ -542,14 +561,46 @@ export default function Settings() {
             )
           }
           const isRefreshing = refreshingSourceId === s.id
+          const farbe = sourceColorById(s.farbe)
           return (
-            <li key={s.id} className="mc-card px-3 py-2 !rounded-lg">
-              <div className="flex items-center justify-between">
-                <span>
-                  {s.name} <span className="text-xs text-slate-400">({s.ebene})</span>
+            <li key={s.id} className="mc-card px-3 py-2.5 !rounded-lg">
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${farbe.dot}`} aria-hidden="true" />
+                  <span className="truncate text-sm font-medium text-slate-900">{s.name}</span>
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${farbe.chip}`}>
+                    {EBENE_LABEL[s.ebene] ?? s.ebene}
+                  </span>
                 </span>
-                <div className="flex items-center gap-3">
+                <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500">
+                  Abonniert
                   <input type="checkbox" checked={subscribed.includes(s.id)} onChange={() => toggle(s.id)} />
+                </label>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                {canManage ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="mr-1 text-xs text-slate-400">Farbe:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSetFarbe(s.id, null)}
+                      title="Theme-Farbe (Standard)"
+                      className={`h-5 w-5 rounded-full bg-primary transition-transform hover:scale-110 ${!s.farbe ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                    />
+                    {SOURCE_COLORS.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => handleSetFarbe(s.id, c.id)}
+                        title={c.label}
+                        className={`h-5 w-5 rounded-full ${c.dot} transition-transform hover:scale-110 ${s.farbe === c.id ? `ring-2 ${c.ring} ring-offset-2` : ''}`}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <span />
+                )}
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => handleRefreshSource(s.id)}
@@ -602,13 +653,60 @@ export default function Settings() {
         Häkchen bei den Gremien, in denen du ein Mandat hast. Das Dashboard zeigt dann nur noch
         Sitzungstermine dieser Gremien an.
       </p>
-      <ul className="space-y-2 max-w-md">
-        {gremien.map((g) => (
-          <li key={g} className="mc-card flex items-center justify-between px-3 py-2 !rounded-lg">
-            <span>{g}</span>
-            <input type="checkbox" checked={meineGremien.includes(g)} onChange={() => toggleGremium(g)} />
-          </li>
-        ))}
+      {/* Gruppiert nach Kalenderquelle: Gruppen-Header mit Farbpunkt der
+          Quelle + Ebene-Badge, damit die Zuordnung Kommune/Kreis/Land/Bund
+          direkt sichtbar ist. Gremien ohne zuordenbare Quelle landen in
+          einer "Ohne Quelle"-Gruppe am Ende. */}
+      <div className="max-w-md space-y-6">
+        {[
+          ...sources
+            .filter((s) => gremien.some((g) => g.source_id === s.id))
+            .map((s) => ({ source: s as CalendarSource | null, entries: gremien.filter((g) => g.source_id === s.id) })),
+          ...(gremien.some((g) => g.source_id === null || !sources.some((s) => s.id === g.source_id))
+            ? [
+                {
+                  source: null as CalendarSource | null,
+                  entries: gremien.filter(
+                    (g) => g.source_id === null || !sources.some((s) => s.id === g.source_id),
+                  ),
+                },
+              ]
+            : []),
+        ].map(({ source, entries }) => {
+          const farbe = sourceColorById(source?.farbe)
+          return (
+            <div key={source?.id ?? 'ohne-quelle'}>
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${farbe.dot}`} aria-hidden="true" />
+                <h3 className="text-sm font-semibold text-slate-900">{source?.name ?? 'Ohne Quelle'}</h3>
+                {source && (
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${farbe.chip}`}
+                  >
+                    {EBENE_LABEL[source.ebene] ?? source.ebene}
+                  </span>
+                )}
+              </div>
+              <ul className="space-y-2">
+                {entries.map((g) => (
+                  <li
+                    key={`${source?.id ?? ''}-${g.gremium}`}
+                    className="mc-card flex items-center justify-between px-3 py-2 !rounded-lg"
+                  >
+                    <span className="text-sm">{g.gremium}</span>
+                    <input
+                      type="checkbox"
+                      checked={meineGremien.includes(g.gremium)}
+                      onChange={() => toggleGremium(g.gremium)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        })}
+      </div>
+      <ul className="max-w-md">
         {gremien.length === 0 && (
           <li className="text-slate-400 text-sm">
             Noch keine Gremien vorhanden – erst importiert der ICS-Import-Job Sitzungen (siehe oben).

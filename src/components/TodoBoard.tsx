@@ -76,7 +76,7 @@ function Column({
   }
 
   return (
-    <div ref={setNodeRef} className="w-72 flex-shrink-0 rounded-xl bg-slate-200/50 p-3">
+    <div ref={setNodeRef} className="rounded-xl bg-slate-200/50 p-3">
       <div className="mb-2.5 flex items-center justify-between px-1">
         <h3 className="text-sm font-semibold text-slate-700">{column.titel}</h3>
         {todos.length > 0 && (
@@ -162,7 +162,11 @@ export function TodoBoard() {
   return (
     <>
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className="flex items-start gap-4 overflow-x-auto pb-2">
+        {/* Grid mit auto-fill statt horizontalem Scrollen: bei vielen
+            Spalten brechen sie in weitere Zeilen um, bei wenigen teilen sie
+            sich die Breite. Drag & Drop über Zeilen hinweg funktioniert,
+            weil dnd-kit rein pointer-basiert droppt. */}
+        <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(272px,1fr))]">
           {sortedColumns.map((col) => (
             <Column
               key={col.id}

@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import type { EventRow, SessionRow } from '../lib/types'
+import type { CalendarSource, EventRow, SessionRow } from '../lib/types'
 import { TerminDetailPanel } from './TerminDetailPanel'
 import { formatDayMonth, formatTime } from '../lib/format'
+import { EBENE_LABEL, THEME_COLOR, sourceColorById } from '../lib/sourceColors'
 
 // Cutoff für "zukünftige Termine" ist der Beginn des heutigen Tages (lokale
 // Zeit), nicht der exakte aktuelle Zeitpunkt - sonst fallen bereits
@@ -23,6 +24,8 @@ interface AggregatedItem {
   start: string
   ort: string | null
   abgesagt: boolean
+  /** Kalenderquelle der Sitzung (null bei eigenen Terminen) */
+  source_id: string | null
 }
 
 export function CalendarView() {
@@ -32,6 +35,7 @@ export function CalendarView() {
   const [userId, setUserId] = useState<string | null>(null)
   const [selected, setSelected] = useState<{ kind: 'event' | 'session'; id: string } | null>(null)
   const [notizenIds, setNotizenIds] = useState<Set<string>>(new Set())
+  const [sources, setSources] = useState<CalendarSource[]>([])
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [newTitel, setNewTitel] = useState('')
@@ -59,6 +63,11 @@ export function CalendarView() {
   useEffect(() => {
     loadEvents()
     loadNotizenFlags()
+    // Quellen für Farbe + Ebene-Badge der Sitzungen in der Terminliste
+    supabase
+      .from('calendar_sources')
+      .select('*')
+      .then(({ data }) => setSources(data ?? []))
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
@@ -114,6 +123,7 @@ export function CalendarView() {
       start: e.start,
       ort: e.ort,
       abgesagt: e.status === 'abgesagt',
+      source_id: null,
     })),
     ...sessions.map((s) => ({
       key: `sitzung-${s.id}`,
@@ -123,8 +133,11 @@ export function CalendarView() {
       start: s.datum,
       ort: s.ort,
       abgesagt: s.status === 'abgesagt',
+      source_id: s.source_id,
     })),
   ].sort((a, b) => a.start.localeCompare(b.start))
+
+  const sourceById = new Map(sources.map((s) => [s.id, s]))
 
   return (
     <section className="flex items-start gap-6">
@@ -184,6 +197,12 @@ export function CalendarView() {
           {aggregated.map((item) => {
             const { day, month } = formatDayMonth(item.start)
             const isSelected = selected?.id === item.id
+            // Sitzungen tragen die Farbe ihrer Kalenderquelle (Ebene auf
+            // einen Blick), eigene Termine die Theme-Primärfarbe.
+            const source = item.source_id ? sourceById.get(item.source_id) : undefined
+            const farbe = item.kind === 'session' ? sourceColorById(source?.farbe) : THEME_COLOR
+            const badgeText =
+              item.kind === 'session' ? (source ? (EBENE_LABEL[source.ebene] ?? 'Sitzung') : 'Sitzung') : null
             return (
               <li key={item.key}>
                 <button
@@ -192,7 +211,7 @@ export function CalendarView() {
                   className={`flex w-full items-center gap-3 rounded-xl border bg-white p-3 text-left shadow-sm transition-[box-shadow,border-color] duration-150 hover:shadow-md ${item.abgesagt ? 'opacity-60' : ''} ${isSelected ? 'border-transparent ring-2 ring-primary' : 'border-slate-200'}`}
                 >
                   <span
-                    className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg ${item.abgesagt ? 'bg-red-50 text-red-400' : 'bg-primary/10 text-primary'}`}
+                    className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg ${item.abgesagt ? 'bg-red-50 text-red-400' : farbe.chip}`}
                   >
                     <span className="text-base font-bold leading-none">{day}</span>
                     <span className="text-[10px] font-semibold uppercase leading-tight">{month}</span>
@@ -207,9 +226,11 @@ export function CalendarView() {
                           📎
                         </span>
                       )}
-                      {item.kind === 'session' && (
-                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 no-underline">
-                          Sitzung
+                      {badgeText && (
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
+                        >
+                          {badgeText}
                         </span>
                       )}
                       {item.abgesagt && (

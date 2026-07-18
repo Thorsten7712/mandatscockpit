@@ -279,6 +279,26 @@ Vorhanden:
   (Admin=primary-getönt, Fraktionsbüro=amber, Mitglied=slate), Partei-Badge, „Du"-Kennzeichnung,
   Anlege-/Bearbeiten-Formular (`UserForm`, 2-spaltiges Grid), Selbst-Löschen-Button disabled.
 
+- **Quellen-Farben & Ebenen-Kennzeichnung** (`0015_calendar_sources_farbe.sql`):
+  `calendar_sources.farbe` speichert eine Token-Id aus der kuratierten Palette in
+  `src/lib/sourceColors.ts` (sky/emerald/amber/violet/rose/teal als `SOURCE_COLORS`, bewusst gedeckte
+  Töne, die mit jedem Partei-Theme harmonieren; Klassen ausgeschrieben wegen Tailwind-Purge). `null` =
+  `THEME_COLOR` (bg-primary/10) – Quellen ohne Farbe und eigene Termine folgen damit automatisch dem
+  Partei-CI. Farbwahl per Swatch-Reihe in der Quellenzeile der Settings (nur `canManage`, optimistisches
+  Update). In der Dashboard-Terminliste tragen Sitzungen den Datums-Chip und ein **Ebene-Badge**
+  (KOMMUNE/KREIS/LAND/BUND aus `EBENE_LABEL`) in der Quellfarbe – die Ebene ist so auf einen Blick
+  erkennbar; `CalendarView` lädt dafür zusätzlich alle `calendar_sources`. Die Quellenzeile in den
+  Settings ist zweizeilig (Name+Ebene-Badge+Abonniert-Checkbox oben, Farbe+Aktionen unten), damit
+  lange Quellnamen nicht abgeschnitten werden.
+- **Meine Gremien nach Quellen gruppiert**: `loadDistinctGremien()` liefert distinct
+  `(gremium, source_id)`-Paare; die Checkliste rendert pro Quelle eine Gruppe (Header mit Farbpunkt,
+  Quellname, Ebene-Badge), nicht zuordenbare Gremien landen in „Ohne Quelle". Die Auswahl selbst
+  bleibt gremium-Text-basiert (`user_gremien` unverändert).
+- **ToDo-Board ohne Horizontal-Scroll**: Der Spalten-Container ist ein CSS-Grid
+  (`repeat(auto-fill, minmax(272px, 1fr))`) statt `flex overflow-x-auto` – viele Spalten brechen in
+  weitere Zeilen um, wenige teilen sich die Breite. Drag & Drop über Zeilen hinweg funktioniert, weil
+  dnd-kit rein pointer-basiert droppt.
+
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
    `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte
