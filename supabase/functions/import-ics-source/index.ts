@@ -43,10 +43,34 @@ function toText(value: unknown): string {
 // (siehe docs/KONZEPT.md Abschnitt 11): SUMMARY enthält dort bereits direkt
 // den Gremiumsnamen ohne Zusatz. Für andere Feed-Formate mit
 // "Gremium – Sitzung"-Schema bleibt der Bindestrich-Fallback erhalten.
+//
+// Manche SUMMARYs tragen eine Anmerkung VOR dem Gremiumsnamen
+// ("<Anmerkung> - <Gremium>", z. B. "Verschiebung auf den 12.11.2026 -
+// Aufsichtsrat der Schillerplatz GmbH", "keine relevanten TOP´s -
+// Verwaltungsrat Märkischer Stadtbetrieb Iserlohn/Hemer") - die Anmerkung
+// wird fürs gremium-Feld abgetrennt, der Titel behält den vollen Text.
+// WICHTIG: Änderungen hier auch in scripts/import-ics.mjs nachziehen
+// (Logik bewusst dupliziert, siehe CLAUDE.md).
+const ANMERKUNG_MIT_GREMIUM = [
+  /^verschiebung[^-–—]*[-–—]\s*(.+)$/i,
+  /^verschoben[^-–—]*[-–—]\s*(.+)$/i,
+  /^keine relevanten top[^-–—]*[-–—]\s*(.+)$/i,
+  /^absage[^-–—]*[-–—]\s*(.+)$/i,
+  /^entfällt[^-–—]*[-–—]\s*(.+)$/i,
+]
+
 function extractGremium(summary: string): string | null {
-  const dashMatch = summary.match(/^(.+?)\s*[-–—]\s*.*sitzung/i)
+  let s = summary.trim()
+  for (const re of ANMERKUNG_MIT_GREMIUM) {
+    const m = s.match(re)
+    if (m) {
+      s = m[1].trim()
+      break
+    }
+  }
+  const dashMatch = s.match(/^(.+?)\s*[-–—]\s*.*sitzung/i)
   if (dashMatch) return dashMatch[1].trim()
-  return summary.trim() || null
+  return s || null
 }
 
 interface IcalEntry {

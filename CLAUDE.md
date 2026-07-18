@@ -64,7 +64,17 @@ Vorhanden:
   Läuft auf Node 22 (nicht 20) – supabase-js initialisiert intern einen Realtime-Client, der unter
   Node 20 ohne natives WebSocket sofort crasht. Die Gremium-Extraktion aus `SUMMARY` ist an einem
   echten ALLRIS-Feed-Auszug verifiziert (KONZEPT.md Abschnitt 11): `SUMMARY` enthält dort direkt den
-  Gremiumsnamen, keine „X – Sitzung"-Heuristik nötig. node-ical liefert Properties mit ICS-Parametern
+  Gremiumsnamen, keine „X – Sitzung"-Heuristik nötig. Ausnahme: manche SUMMARYs tragen eine
+  **Anmerkung vor dem Gremiumsnamen** („Verschiebung auf den 12.11.2026 - Aufsichtsrat der
+  Schillerplatz GmbH", „keine relevanten TOP´s - Verwaltungsrat Märkischer Stadtbetrieb
+  Iserlohn/Hemer") – `extractGremium()` trennt solche bekannten Präfixe (Verschiebung/verschoben/
+  keine relevanten TOPs/Absage/entfällt, je gefolgt von `-`) ab, damit daraus keine falschen
+  Gremien-Einträge in der Meine-Gremien-Checkliste entstehen. Der `titel` behält bewusst den vollen
+  SUMMARY-Text (die Anmerkung ist dort nützlich), nur `gremium` wird bereinigt; bereits falsch
+  importierte Zeilen heilt der nächste Import-Lauf über den Upsert per `ics_uid`. Die Präfix-Liste
+  (`ANMERKUNG_MIT_GREMIUM`) ist in `scripts/import-ics.mjs` **und**
+  `supabase/functions/import-ics-source/index.ts` identisch gepflegt (Logik bewusst dupliziert).
+  node-ical liefert Properties mit ICS-Parametern
   (z. B. `SUMMARY;LANGUAGE=de:...`) als `{params, val}`-Objekt statt String – wird über `toText()`
   normalisiert.
 - **Supabase Edge Function** (`supabase/functions/import-ics-source/index.ts`, Deno) für den

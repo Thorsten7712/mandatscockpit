@@ -35,10 +35,36 @@ function toText(value) {
 // den Gremiumsnamen ohne Zusatz (z. B. "Finanzausschuss", "Rat der Stadt
 // Iserlohn"). Für andere Feed-Formate mit "Gremium – Sitzung"-Schema bleibt
 // der Bindestrich-Fallback erhalten.
+//
+// Manche SUMMARYs tragen aber eine Anmerkung VOR dem Gremiumsnamen
+// ("<Anmerkung> - <Gremium>", im echten Feed beobachtet: "Verschiebung auf
+// den 12.11.2026 - Aufsichtsrat der Schillerplatz GmbH", "keine relevanten
+// TOP´s - Verwaltungsrat Märkischer Stadtbetrieb Iserlohn/Hemer"). Ohne
+// Bereinigung entstünde daraus je ein eigener, falscher Gremiums-Eintrag in
+// der Meine-Gremien-Checkliste. Der Titel behält den vollen SUMMARY-Text
+// (die Anmerkung ist dort nützliche Information), nur gremium wird bereinigt.
+// WICHTIG: Änderungen hier auch in supabase/functions/import-ics-source/
+// index.ts nachziehen (Logik bewusst dupliziert, siehe CLAUDE.md).
+const ANMERKUNG_MIT_GREMIUM = [
+  /^verschiebung[^-–—]*[-–—]\s*(.+)$/i, // "Verschiebung auf den <Datum> - X" / "Verschiebung vom ... - X"
+  /^verschoben[^-–—]*[-–—]\s*(.+)$/i,
+  /^keine relevanten top[^-–—]*[-–—]\s*(.+)$/i, // "keine relevanten TOP´s - X" (auch TOPs/TOP's)
+  /^absage[^-–—]*[-–—]\s*(.+)$/i,
+  /^entfällt[^-–—]*[-–—]\s*(.+)$/i,
+]
+
 function extractGremium(summary) {
-  const dashMatch = summary.match(/^(.+?)\s*[-–—]\s*.*sitzung/i)
+  let s = summary.trim()
+  for (const re of ANMERKUNG_MIT_GREMIUM) {
+    const m = s.match(re)
+    if (m) {
+      s = m[1].trim()
+      break
+    }
+  }
+  const dashMatch = s.match(/^(.+?)\s*[-–—]\s*.*sitzung/i)
   if (dashMatch) return dashMatch[1].trim()
-  return summary.trim() || null
+  return s || null
 }
 
 async function importSource(source) {
