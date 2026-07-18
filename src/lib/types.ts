@@ -13,6 +13,7 @@ export interface Profile {
   name: string
   rolle: Rolle
   fraktion: string | null
+  foto_url: string | null
 }
 
 export interface CalendarSource {

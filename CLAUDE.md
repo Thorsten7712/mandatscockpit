@@ -183,6 +183,18 @@ Vorhanden:
   `flex gap-6` mit zwei `flex-1 max-w-md`-Spalten; ausgewählter Eintrag bekommt `ring-2` als
   Selektions-Indikator). Details zu beiden Komponenten siehe „Termindetails" und „ToDo-Board vollständig
   ausgebaut" oben.
+- **Nutzerprofil** (`0013_profile_foto.sql`): `profiles` hatte bereits `name`, dazu kam `foto_url` (Pfad
+  im neuen privaten Storage-Bucket `profilbilder`, gleiches `<user_id>/<dateiname>`-Muster wie
+  `zusammenfassungen`, RLS-Policies analog). Profil-Sektion ganz oben in `Settings.tsx`: Avatar (Foto oder
+  Initialen-Fallback aus dem ersten Buchstaben des Namens), Datei-Upload mit separatem „Foto hochladen"-
+  Button (kein Auto-Upload bei Dateiauswahl), Name-Feld mit eigenem „Speichern". Bei neuem Foto wird die
+  alte Datei aus dem Bucket gelöscht (`storage.remove()`), damit dort nicht mehrere alte Profilbilder
+  liegen bleiben. `Dashboard.tsx` lädt `name`/`foto_url` schreibgeschützt fürs Header („MandatsCockpit -
+  Name" statt nur „MandatsCockpit", kleiner Avatar links daneben) – eigener, unabhängiger Ladeaufruf statt
+  einer gemeinsamen Hook/Komponente, konsistent mit dem Rest der Codebase (jede Komponente lädt ihre
+  Daten selbst). Signed URLs für Fotos laufen mit 3600s Gültigkeit (länger als die 60s bei
+  Dokument-Downloads), weil das Foto dauerhaft als `<img>` im Header/in den Settings sichtbar ist statt
+  nur einmalig angeklickt zu werden.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import type { CalendarSource, Ebene, TodoBoardSettings, TodoColumn } from '../lib/types'
+import type { CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
 
 async function loadDistinctGremien(): Promise<string[]> {
   const { data } = await supabase.from('sessions').select('gremium').not('gremium', 'is', null)
@@ -27,6 +27,15 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profileFotoUrl, setProfileFotoUrl] = useState<string | null>(null)
+  const [profileName, setProfileName] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [newFoto, setNewFoto] = useState<File | null>(null)
+  const [savingFoto, setSavingFoto] = useState(false)
+  const [fotoError, setFotoError] = useState<string | null>(null)
 
   const [gremien, setGremien] = useState<string[]>([])
   const [meineGremien, setMeineGremien] = useState<string[]>([])
@@ -68,9 +77,21 @@ export default function Settings() {
     const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', uid)
     const currentSelection = (mine ?? []).map((g) => g.gremium)
     setMeineGremien(currentSelection)
-    const { data: profile } = await supabase.from('profiles').select('rolle').eq('id', uid).single()
-    setIsAdmin(profile?.rolle === 'admin')
+    const { data: profileRow } = await supabase.from('profiles').select('rolle').eq('id', uid).single()
+    setIsAdmin(profileRow?.rolle === 'admin')
     return currentSelection
+  }
+
+  async function loadProfile(uid: string) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', uid).single()
+    setProfile(data)
+    setProfileName(data?.name ?? '')
+    if (data?.foto_url) {
+      const { data: signed } = await supabase.storage.from('profilbilder').createSignedUrl(data.foto_url, 3600)
+      setProfileFotoUrl(signed?.signedUrl ?? null)
+    } else {
+      setProfileFotoUrl(null)
+    }
   }
 
   async function loadTodoColumns() {
@@ -92,6 +113,7 @@ export default function Settings() {
       setUserId(data.user.id)
       loadUserData(data.user.id)
       loadBoardSettings(data.user.id)
+      loadProfile(data.user.id)
     })
   }, [])
 
@@ -219,6 +241,46 @@ export default function Settings() {
     setSubscribed((prev) => prev.filter((id) => id !== sourceId))
   }
 
+  async function handleSaveName(e: FormEvent) {
+    e.preventDefault()
+    if (!userId) return
+    setSavingName(true)
+    setNameError(null)
+    const { error } = await supabase.from('profiles').update({ name: profileName }).eq('id', userId)
+    if (error) {
+      setNameError(error.message)
+    } else {
+      setProfile((prev) => (prev ? { ...prev, name: profileName } : prev))
+    }
+    setSavingName(false)
+  }
+
+  async function handleUploadFoto() {
+    if (!userId || !newFoto) return
+    setSavingFoto(true)
+    setFotoError(null)
+    const path = `${userId}/${Date.now()}-${newFoto.name}`
+    const { error: uploadError } = await supabase.storage.from('profilbilder').upload(path, newFoto)
+    if (uploadError) {
+      setFotoError(uploadError.message)
+      setSavingFoto(false)
+      return
+    }
+    const oldFotoUrl = profile?.foto_url
+    const { error } = await supabase.from('profiles').update({ foto_url: path }).eq('id', userId)
+    if (error) {
+      setFotoError(error.message)
+      setSavingFoto(false)
+      return
+    }
+    if (oldFotoUrl) {
+      await supabase.storage.from('profilbilder').remove([oldFotoUrl])
+    }
+    setNewFoto(null)
+    await loadProfile(userId)
+    setSavingFoto(false)
+  }
+
   async function handleAddColumn(e: FormEvent) {
     e.preventDefault()
     if (!userId || !newColumnTitel.trim()) return
@@ -282,11 +344,61 @@ export default function Settings() {
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <header className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Kalenderquellen abonnieren</h1>
+        <h1 className="text-xl font-bold">Einstellungen</h1>
         <Link to="/" className="text-sm text-slate-600 underline">
           Zurück zum Dashboard
         </Link>
       </header>
+
+      <h2 className="text-lg font-semibold mb-2">Profil</h2>
+      <div className="max-w-md bg-white border rounded p-4 space-y-3 mb-8">
+        <div className="flex items-center gap-4">
+          {profileFotoUrl ? (
+            <img src={profileFotoUrl} alt="Profilfoto" className="w-16 h-16 rounded-full object-cover" />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-xl">
+              {profileName.charAt(0).toUpperCase() || '?'}
+            </div>
+          )}
+          <div className="flex-1 space-y-1">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setNewFoto(e.target.files?.[0] ?? null)}
+              className="w-full text-sm"
+            />
+            <button
+              type="button"
+              onClick={handleUploadFoto}
+              disabled={!newFoto || savingFoto}
+              className="text-xs text-slate-600 underline disabled:opacity-50"
+            >
+              {savingFoto ? 'Hochladen...' : 'Foto hochladen'}
+            </button>
+          </div>
+        </div>
+        {fotoError && <p className="text-red-600 text-sm">{fotoError}</p>}
+
+        <form onSubmit={handleSaveName} className="flex gap-2">
+          <input
+            type="text"
+            value={profileName}
+            onChange={(e) => setProfileName(e.target.value)}
+            className="flex-1 border rounded px-2 py-1"
+            required
+          />
+          <button
+            type="submit"
+            disabled={savingName}
+            className="bg-slate-900 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
+          >
+            {savingName ? 'Speichern...' : 'Speichern'}
+          </button>
+        </form>
+        {nameError && <p className="text-red-600 text-sm">{nameError}</p>}
+      </div>
+
+      <h2 className="text-lg font-semibold mb-2">Kalenderquellen abonnieren</h2>
       {deleteError && <p className="text-red-600 text-sm mb-2 max-w-md">{deleteError}</p>}
       {staleGremien.length > 0 && (
         <p className="text-amber-600 text-sm mb-2 max-w-md">
