@@ -255,6 +255,29 @@ Vorhanden:
     `ring-primary/40`; „+ Karte hinzufügen" als gestricheltes Ghost-Input.
   - Modal-/Panel-Innensektionen (Formulare, Kommentar-/Dokument-Listen) als `bg-slate-50`-Karten auf
     weißem Grund; Login als zentrierte Card. Alle sechs Themes + neutral im Browser verifiziert.
+- **Settings mit Sidebar-Unternavigation** (`Settings.tsx`): Die Seite ist in Sektionen gegliedert
+  (Profil / Kalenderquellen / Meine Gremien / ToDo-Board / Benutzerverwaltung), die über eine linke
+  Sidebar (Lucide-Icons via `lucide-react`, aktiver Punkt `bg-primary/10 text-primary`; mobil
+  horizontal scrollbar) umgeschaltet werden – reines Conditional-Rendering über ein
+  `activeSection`-State, alle Lade-/Speicherlogik blieb unverändert. „Eigene Quelle hinzufügen" lebt
+  im Kalenderquellen-Tab (zwei getrennte Conditional-Blöcke im JSX, Quellcode-Reihenfolge ist durchs
+  Conditional-Rendering fürs UI egal). „Benutzerverwaltung" erscheint nur bei `profiles.rolle='admin'`.
+- **Admin-Benutzerverwaltung** (`src/components/UserManagement.tsx` + Edge Function
+  `supabase/functions/admin-users/index.ts`): Anlegen/Bearbeiten/Löschen von Benutzern läuft komplett
+  über die Edge Function, weil die Auth-Admin-API den Service-Role-Key braucht (bleibt serverseitig).
+  Die Function verifiziert den Caller-JWT und verlangt `profiles.rolle='admin'` (RLS greift bei
+  Service-Role nicht – dieser Check ist die Zugriffskontrolle). API: action `list` (auth.users +
+  profiles gemerged, inkl. `last_sign_in_at`), `create` (email/password/name, `email_confirm: true`,
+  Profil legt der `handle_new_user`-Trigger an, Rolle/Fraktion/Partei werden nachgezogen), `update`
+  (Profilfelder + optional E-Mail/Passwort via `updateUserById`; der letzte Admin kann sich nicht
+  selbst degradieren), `delete` (verboten für sich selbst; bereinigt vorher
+  `calendar_sources.verwaltet_von` → null und biegt `events.erstellt_von` bei Fraktionsbüro-Terminen
+  auf den Termininhaber um – beide FKs sind NICHT on delete cascade und würden sonst blocken – und
+  löscht die Storage-Dateien des Nutzers aus `profilbilder`/`zusammenfassungen`; Rest cascaded über
+  `profiles`). Der Deploy-Workflow (`deploy-edge-functions.yml`) deployt seitdem **alle** Funktionen
+  (`supabase functions deploy` ohne Namen). UI: Nutzerliste mit Rollen-Badges
+  (Admin=primary-getönt, Fraktionsbüro=amber, Mitglied=slate), Partei-Badge, „Du"-Kennzeichnung,
+  Anlege-/Bearbeiten-Formular (`UserForm`, 2-spaltiges Grid), Selbst-Löschen-Button disabled.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

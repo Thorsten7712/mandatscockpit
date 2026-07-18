@@ -53,7 +53,7 @@ export default function Login() {
           {loading ? 'Anmelden...' : 'Anmelden'}
         </button>
         <p className="text-center text-xs text-slate-400">
-          Accounts werden aktuell vom Ratsbüro über das Supabase-Dashboard angelegt (siehe README).
+          Zugangsdaten bekommst du von einem Admin (Benutzerverwaltung in den Einstellungen).
         </p>
       </form>
     </div>

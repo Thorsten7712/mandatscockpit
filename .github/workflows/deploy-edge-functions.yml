@@ -20,7 +20,9 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - run: supabase functions deploy import-ics-source --project-ref "$SUPABASE_PROJECT_REF"
+      # Ohne Funktionsnamen deployt die CLI alle Funktionen unter
+      # supabase/functions/ (aktuell import-ics-source + admin-users).
+      - run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}

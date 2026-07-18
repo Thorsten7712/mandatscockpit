@@ -1,8 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { CalendarDays, Landmark, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
 import { PARTEI_THEMES, applyTheme } from '../lib/themes'
+import { UserManagement } from '../components/UserManagement'
+
+type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'benutzer'
+
+const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: boolean }[] = [
+  { id: 'profil', label: 'Profil', icon: User },
+  { id: 'kalender', label: 'Kalenderquellen', icon: CalendarDays },
+  { id: 'gremien', label: 'Meine Gremien', icon: Landmark },
+  { id: 'board', label: 'ToDo-Board', icon: SquareKanban },
+  { id: 'benutzer', label: 'Benutzerverwaltung', icon: Users, adminOnly: true },
+]
 
 async function loadDistinctGremien(): Promise<string[]> {
   const { data } = await supabase.from('sessions').select('gremium').not('gremium', 'is', null)
@@ -18,6 +30,7 @@ const EBENEN: { value: Ebene; label: string }[] = [
 ]
 
 export default function Settings() {
+  const [activeSection, setActiveSection] = useState<SectionId>('profil')
   const [sources, setSources] = useState<CalendarSource[]>([])
   const [subscribed, setSubscribed] = useState<string[]>([])
   const [userId, setUserId] = useState<string | null>(null)
@@ -371,7 +384,34 @@ export default function Settings() {
         </div>
       </header>
       <div className="mx-auto max-w-7xl px-6 py-8">
+      <div className="flex flex-col gap-8 md:flex-row">
+      <aside className="shrink-0 md:w-56">
+        <nav className="flex gap-1 overflow-x-auto pb-1 md:sticky md:top-6 md:flex-col md:pb-0">
+          {SECTIONS.filter((s) => !s.adminOnly || isAdmin).map((s) => {
+            const Icon = s.icon
+            const active = activeSection === s.id
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setActiveSection(s.id)}
+                className={`flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-slate-600 hover:bg-slate-200/60 hover:text-slate-900'
+                }`}
+              >
+                <Icon size={16} className="shrink-0" />
+                {s.label}
+              </button>
+            )
+          })}
+        </nav>
+      </aside>
+      <div className="min-w-0 max-w-2xl flex-1">
 
+      {activeSection === 'profil' && (
+      <section className="mc-animate-fade">
       <h2 className="mb-2 text-base font-semibold text-slate-900">Profil</h2>
       <div className="mc-card mb-8 max-w-md space-y-3 p-4">
         <div className="flex items-center gap-4">
@@ -409,11 +449,7 @@ export default function Settings() {
             className="mc-input flex-1"
             required
           />
-          <button
-            type="submit"
-            disabled={savingName}
-            className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-1 text-sm disabled:opacity-50"
-          >
+          <button type="submit" disabled={savingName} className="mc-btn-primary">
             {savingName ? 'Speichern...' : 'Speichern'}
           </button>
         </form>
@@ -439,6 +475,11 @@ export default function Settings() {
         </div>
       </div>
 
+      </section>
+      )}
+
+      {activeSection === 'kalender' && (
+      <section className="mc-animate-fade">
       <h2 className="mb-2 text-base font-semibold text-slate-900">Kalenderquellen abonnieren</h2>
       {deleteError && <p className="text-red-600 text-sm mb-2 max-w-md">{deleteError}</p>}
       {staleGremien.length > 0 && (
@@ -551,7 +592,12 @@ export default function Settings() {
         {sources.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kalenderquellen angelegt.</li>}
       </ul>
 
-      <h2 className="mt-10 mb-2 text-base font-semibold text-slate-900">Meine Gremien</h2>
+      </section>
+      )}
+
+      {activeSection === 'gremien' && (
+      <section className="mc-animate-fade">
+      <h2 className="mb-2 text-base font-semibold text-slate-900">Meine Gremien</h2>
       <p className="text-xs text-slate-400 mb-2 max-w-md">
         Häkchen bei den Gremien, in denen du ein Mandat hast. Das Dashboard zeigt dann nur noch
         Sitzungstermine dieser Gremien an.
@@ -570,6 +616,14 @@ export default function Settings() {
         )}
       </ul>
 
+      </section>
+      )}
+
+      {/* Zweiter kalender-Block: erscheint im Kalenderquellen-Tab unterhalb
+          der Quellenliste (Quellcode-Reihenfolge ist durch das Conditional-
+          Rendering fürs UI egal, so bleiben die Edits minimal). */}
+      {activeSection === 'kalender' && (
+      <section className="mc-animate-fade">
       <h2 className="mt-10 mb-2 text-base font-semibold text-slate-900">Eigene Quelle hinzufügen</h2>
       <form onSubmit={handleAddSource} className="mc-card max-w-md space-y-3 p-4">
         <div>
@@ -631,7 +685,12 @@ export default function Settings() {
         </p>
       </form>
 
-      <h2 className="mt-10 mb-2 text-base font-semibold text-slate-900">ToDo-Board</h2>
+      </section>
+      )}
+
+      {activeSection === 'board' && (
+      <section className="mc-animate-fade">
+      <h2 className="mb-2 text-base font-semibold text-slate-900">ToDo-Board</h2>
       <p className="text-xs text-slate-400 mb-2 max-w-md">Spalten verwalten und sortieren.</p>
       <ul className="space-y-2 max-w-md">
         {[...todoColumns]
@@ -721,6 +780,17 @@ export default function Settings() {
           />
           Zuständigkeit (👤)
         </label>
+      </div>
+      </section>
+      )}
+
+      {activeSection === 'benutzer' && isAdmin && (
+      <section className="mc-animate-fade">
+        <UserManagement currentUserId={userId} />
+      </section>
+      )}
+
+      </div>
       </div>
       </div>
     </div>
