@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckSquare, History } from 'lucide-react'
+import { CheckSquare, FileText, History } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { CalendarSource, SessionRow, TodoColumn, TodoRow } from '../lib/types'
+import type { CalendarSource, SessionRow, SummaryRow, TodoColumn, TodoRow } from '../lib/types'
 import { TerminDetailPanel } from '../components/TerminDetailPanel'
 import { TodoDetailModal } from '../components/TodoDetailModal'
-import { formatDate, formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
+import { DocumentPreviewModal, fileNameFromPath } from '../components/DocumentPreviewModal'
+import { formatDate, formatDateTime, formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
 import { EBENE_LABEL, sourceColorById } from '../lib/sourceColors'
 
-type Tab = 'sitzungen' | 'aufgaben'
+type Tab = 'sitzungen' | 'aufgaben' | 'dokumente'
 
 export default function Archiv() {
   const [tab, setTab] = useState<Tab>('sitzungen')
@@ -21,6 +22,10 @@ export default function Archiv() {
 
   const [completedTodos, setCompletedTodos] = useState<TodoRow[]>([])
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
+
+  const [documents, setDocuments] = useState<SummaryRow[]>([])
+  const [docLabels, setDocLabels] = useState<Map<string, string>>(new Map())
+  const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
   async function loadSessions() {
     const { data: mine } = await supabase.auth.getUser()
@@ -71,10 +76,53 @@ export default function Archiv() {
     setCompletedTodos(data ?? [])
   }
 
+  // Übersicht aller hochgeladenen Dokumente (summaries mit datei_url),
+  // absteigend nach Datum. "Verknüpft mit"-Label kommt aus einer gezielten
+  // Nachladung der referenzierten Sitzungen/Termine/Aufgaben (nur die
+  // tatsächlich vorkommenden IDs, kein Volltabellen-Join nötig).
+  async function loadDocuments() {
+    const { data } = await supabase
+      .from('summaries')
+      .select('*')
+      .not('datei_url', 'is', null)
+      .order('erstellt_am', { ascending: false })
+    const rows = data ?? []
+    setDocuments(rows)
+
+    const sessionIds = Array.from(new Set(rows.filter((r) => r.session_id).map((r) => r.session_id as string)))
+    const eventIds = Array.from(new Set(rows.filter((r) => r.event_id).map((r) => r.event_id as string)))
+    const todoIds = Array.from(new Set(rows.filter((r) => r.todo_id).map((r) => r.todo_id as string)))
+
+    const labels = new Map<string, string>()
+    if (sessionIds.length > 0) {
+      const { data: s } = await supabase.from('sessions').select('id, titel').in('id', sessionIds)
+      const byId = new Map((s ?? []).map((x) => [x.id, x.titel]))
+      rows.forEach((r) => {
+        if (r.session_id && byId.has(r.session_id)) labels.set(r.id, `Sitzung: ${byId.get(r.session_id)}`)
+      })
+    }
+    if (eventIds.length > 0) {
+      const { data: e } = await supabase.from('events').select('id, titel').in('id', eventIds)
+      const byId = new Map((e ?? []).map((x) => [x.id, x.titel]))
+      rows.forEach((r) => {
+        if (r.event_id && byId.has(r.event_id)) labels.set(r.id, `Termin: ${byId.get(r.event_id)}`)
+      })
+    }
+    if (todoIds.length > 0) {
+      const { data: t } = await supabase.from('todos').select('id, titel').in('id', todoIds)
+      const byId = new Map((t ?? []).map((x) => [x.id, x.titel]))
+      rows.forEach((r) => {
+        if (r.todo_id && byId.has(r.todo_id)) labels.set(r.id, `Aufgabe: ${byId.get(r.todo_id)}`)
+      })
+    }
+    setDocLabels(labels)
+  }
+
   useEffect(() => {
     loadSessions()
     loadNotizenFlags()
     loadCompletedTodos()
+    loadDocuments()
     supabase
       .from('calendar_sources')
       .select('*')
@@ -110,6 +158,13 @@ export default function Archiv() {
             className={tab === 'aufgaben' ? 'mc-btn-primary' : 'mc-btn-ghost'}
           >
             <CheckSquare size={16} /> Erledigte Aufgaben
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('dokumente')}
+            className={tab === 'dokumente' ? 'mc-btn-primary' : 'mc-btn-ghost'}
+          >
+            <FileText size={16} /> Dokumente
           </button>
         </div>
 
@@ -239,10 +294,54 @@ export default function Archiv() {
             </ul>
           </section>
         )}
+
+        {tab === 'dokumente' && (
+          <section className="mc-animate-fade max-w-2xl">
+            <ul className="space-y-2">
+              {documents.map((d) => (
+                <li key={d.id}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })
+                    }
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-900">
+                        📎 {fileNameFromPath(d.datei_url!)}
+                      </span>
+                      <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                        {docLabels.get(d.id) && (
+                          <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                            {docLabels.get(d.id)}
+                          </span>
+                        )}
+                        <span className="shrink-0">{formatDateTime(d.erstellt_am)}</span>
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {documents.length === 0 && (
+                <li className="mc-card p-6 text-center text-sm text-slate-400">
+                  Noch keine Dokumente hochgeladen.
+                </li>
+              )}
+            </ul>
+          </section>
+        )}
       </div>
 
       {openTodoId && (
         <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadCompletedTodos} />
+      )}
+      {previewDoc && (
+        <DocumentPreviewModal
+          path={previewDoc.path}
+          fileName={previewDoc.name}
+          onClose={() => setPreviewDoc(null)}
+        />
       )}
     </div>
   )

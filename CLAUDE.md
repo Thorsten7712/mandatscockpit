@@ -343,7 +343,7 @@ Vorhanden:
   Profilfotos). Ersetzt das alte `handleDownload()` (signierte URL + `window.open` in neuem Tab) in
   beiden Komponenten vollständig.
 - **Archiv** (`src/pages/Archiv.tsx`, Route `/archiv`, verlinkt im Dashboard-Header neben
-  „Einstellungen"): Zwei Tabs, kein neues Datenmodell nötig.
+  „Einstellungen"): Drei Tabs, kein neues Datenmodell nötig.
   - **Vergangene Sitzungen**: gleiche Query wie `CalendarView` (Sitzungen der „Meine Gremien"-Auswahl),
     nur mit `lt('datum', startOfTodayIso())` statt `gte()` und absteigend sortiert. Identisches
     Karten-Design (Datums-Chip in Quellfarbe, Ebene-Badge, 📎-Notizen-Flag, Abgesagt-Badge) und
@@ -359,9 +359,19 @@ Vorhanden:
     vor nur per Drag & Drop auf dem Board). `TodoRow` hat dafür ein neues `created_at`-Feld im
     TS-Typ bekommen (Spalte existierte in der DB schon immer, war im Typ nur nicht abgebildet) – zeigt
     in der Archiv-Liste als „Erstellt am".
-  - Bewusst nicht enthalten: eigene vergangene Termine (`events`). Der Wunsch war explizit
-    „zurückliegende Sitzungen und erledigte Tasks"; eigene Termine landen nicht im Archiv, um den Scope
-    nicht stillschweigend zu erweitern.
+  - **Dokumente**: Übersicht aller `summaries`-Zeilen mit gesetztem `datei_url` (also echte
+    Datei-Uploads, keine reinen Text-Notizen), absteigend nach `erstellt_am`. Da `summaries` optional an
+    Sitzung, Termin **oder** Aufgabe hängt (`session_id`/`event_id`/`todo_id`), lädt `loadDocuments()`
+    für jede in der Liste tatsächlich vorkommende Referenz gezielt die Titel nach (drei kleine
+    `.in('id', [...])`-Queries statt eines Joins) und baut daraus ein `docLabels`-Map
+    (`"Sitzung: <Titel>"` / `"Termin: <Titel>"` / `"Aufgabe: <Titel>"`, Dokumente ganz ohne Bezug zeigen
+    kein Badge). Klick auf ein Dokument öffnet dieselbe `DocumentPreviewModal` wie überall sonst im
+    UI. `fileNameFromPath()` ist dafür aus `DocumentPreviewModal.tsx` heraus **exportiert** und wird
+    jetzt dort sowie von `TerminDetailPanel.tsx`/`TodoDetailModal.tsx` importiert statt dreifach
+    dupliziert zu sein (bei zwei Stellen war die Dopplung tolerierbar, bei drei nicht mehr).
+  - Bewusst nicht enthalten: eigene vergangene Termine (`events`) als eigener Tab. Der ursprüngliche
+    Wunsch war explizit „zurückliegende Sitzungen und erledigte Tasks"; eigene Termine landen nicht im
+    Archiv, um den Scope nicht stillschweigend zu erweitern.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

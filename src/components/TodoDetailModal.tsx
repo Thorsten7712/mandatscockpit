@@ -3,13 +3,9 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import type { EventRow, SessionRow, SummaryRow, TodoComment, TodoColumn, TodoRow } from '../lib/types'
 import { formatDate, formatDateTime } from '../lib/format'
-import { DocumentPreviewModal } from './DocumentPreviewModal'
+import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 
 type TerminModus = 'keine' | 'datum' | 'termin' | 'sitzung'
-
-function fileNameFromPath(path: string): string {
-  return path.split('/').pop() ?? path
-}
 
 export function TodoDetailModal({
   id,

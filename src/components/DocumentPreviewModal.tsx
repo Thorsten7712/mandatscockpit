@@ -14,6 +14,11 @@ function fileExtension(path: string): string {
   return path.split('.').pop()?.toLowerCase() ?? ''
 }
 
+/** Dateiname aus dem Storage-Pfad ("<user_id>/<dateiname>") extrahieren. */
+export function fileNameFromPath(path: string): string {
+  return path.split('/').pop() ?? path
+}
+
 export function DocumentPreviewModal({
   path,
   fileName,

@@ -2,17 +2,13 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import type { EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
-import { DocumentPreviewModal } from './DocumentPreviewModal'
+import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDateTime } from '../lib/format'
 
 function toDatetimeLocalValue(iso: string): string {
   const d = new Date(iso)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function fileNameFromPath(path: string): string {
-  return path.split('/').pop() ?? path
 }
 
 export function TerminDetailPanel({
