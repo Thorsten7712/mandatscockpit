@@ -372,6 +372,14 @@ Vorhanden:
   - Bewusst nicht enthalten: eigene vergangene Termine (`events`) als eigener Tab. Der ursprüngliche
     Wunsch war explizit „zurückliegende Sitzungen und erledigte Tasks"; eigene Termine landen nicht im
     Archiv, um den Scope nicht stillschweigend zu erweitern.
+- **GitHub-Pages-Routing-Fix** (`.github/workflows/deploy.yml`): Ein Reload oder Direktaufruf einer
+  Unterroute wie `/settings` oder `/archiv` lieferte 404 – GitHub Pages ist ein statischer Host und
+  sucht nach einer echten Datei an diesem Pfad, bevor die SPA (und damit React Router) überhaupt lädt.
+  Fix: Der Deploy-Workflow kopiert nach dem Build `dist/index.html` nach `dist/404.html` (`cp dist/
+  index.html dist/404.html`, direkt vor dem Artifact-Upload). GitHub Pages liefert `404.html` für jeden
+  unbekannten Pfad aus; da Vite mit `base: '/mandatscockpit/'` baut, sind alle Asset-Pfade in `index.html`
+  absolut und laden unabhängig vom Tiefen-Pfad korrekt – React Router übernimmt danach normal anhand der
+  Browser-URL. Kein `HashRouter`/`basename`-Wechsel nötig, nur dieser eine Build-Schritt.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
