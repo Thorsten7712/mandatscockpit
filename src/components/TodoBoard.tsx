@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -27,9 +28,13 @@ function Card({
   istFertig: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: todo.id })
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-    : undefined
+  // touchAction: 'none' ist auf Touch-Geräten (iPad) nötig, sonst interpretiert
+  // Safari die Berührung sofort als Scroll-Geste, bevor der TouchSensor den
+  // Drag erkennen kann - Karten ließen sich dann mit dem Finger nicht ziehen.
+  const style = {
+    touchAction: 'none',
+    ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
+  }
   const zeigeTermin = (settings?.zeige_termin ?? true) && Boolean(terminLabel)
   const zeigeZustaendig = (settings?.zeige_zustaendig ?? true) && todo.zustaendig
   return (
@@ -135,7 +140,16 @@ export function TodoBoard() {
   const [eventById, setEventById] = useState<Map<string, { titel: string; start: string }>>(new Map())
   const [sessionById, setSessionById] = useState<Map<string, { titel: string; datum: string }>>(new Map())
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  // MouseSensor + TouchSensor statt PointerSensor: Auf iPad/Touch-Geräten
+  // kollidiert ein reiner PointerSensor oft mit Safaris nativer Scroll-
+  // Erkennung, wodurch sich Karten nicht per Finger ziehen lassen. Maus- und
+  // Touch-Events feuern nie für dieselbe Interaktion, daher gibt es hier
+  // keine Doppel-Aktivierung. delay+tolerance beim Touch (statt distance)
+  // gibt Safari kurz Zeit, zwischen Scrollen und Ziehen zu unterscheiden.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  )
 
   async function load() {
     const { data: cols } = await supabase.from('todo_columns').select('*').order('reihenfolge')

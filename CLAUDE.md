@@ -298,6 +298,14 @@ Vorhanden:
   (`repeat(auto-fill, minmax(272px, 1fr))`) statt `flex overflow-x-auto` – viele Spalten brechen in
   weitere Zeilen um, wenige teilen sich die Breite. Drag & Drop über Zeilen hinweg funktioniert, weil
   dnd-kit rein pointer-basiert droppt.
+- **Drag & Drop auf Touch-Geräten (iPad)** (`TodoBoard.tsx`): Karten ließen sich auf dem iPad nicht per
+  Finger ziehen. Zwei Ursachen behoben: (1) `useSensors` nutzte nur `PointerSensor`, der auf iPadOS
+  Safari oft mit der nativen Scroll-Erkennung kollidiert; jetzt `MouseSensor` (Maus, `distance: 8`) +
+  `TouchSensor` (Touch, `delay: 200, tolerance: 8`) – Maus- und Touch-Events feuern nie für dieselbe
+  Interaktion, daher keine Doppel-Aktivierung, und der `delay` gibt Safari kurz Zeit, zwischen Scrollen
+  und Ziehen zu unterscheiden (gleiches Sensor-Paar wie in der offiziellen dnd-kit-Doku für
+  Cross-Device-Support empfohlen). (2) Der Karte fehlte `touch-action: none` – ohne das interpretiert
+  Safari eine Berührung sofort als Scroll-Geste, bevor der Sensor den Drag überhaupt erkennen kann.
 - **Board-Feinschliff** (`TodoBoard.tsx`): Drei Verhaltensänderungen, alle über Titel-Matching der
   Spalten (case-insensitive, gleiches Muster wie der bestehende „Neu"→„Geplant"-Auto-Move in
   `TodoDetailModal.tsx` – greift nicht mehr, falls der Nutzer diese Spalten umbenennt):
