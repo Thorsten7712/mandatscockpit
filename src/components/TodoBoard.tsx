@@ -11,22 +11,26 @@ import {
 import { supabase } from '../lib/supabaseClient'
 import type { TodoBoardSettings, TodoColumn, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
+import { formatDate } from '../lib/format'
 
 function Card({
   todo,
   settings,
   onOpen,
+  terminLabel,
+  istFertig,
 }: {
   todo: TodoRow
   settings: TodoBoardSettings | null
   onOpen: () => void
+  terminLabel: string | null
+  istFertig: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: todo.id })
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined
-  const hasTermin = Boolean(todo.faellig_am || todo.event_id || todo.session_id)
-  const zeigeTermin = (settings?.zeige_termin ?? true) && hasTermin
+  const zeigeTermin = (settings?.zeige_termin ?? true) && Boolean(terminLabel)
   const zeigeZustaendig = (settings?.zeige_zustaendig ?? true) && todo.zustaendig
   return (
     <div
@@ -37,11 +41,15 @@ function Card({
       onClick={onOpen}
       className={`cursor-grab select-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-shadow duration-150 hover:shadow-md active:cursor-grabbing ${isDragging ? 'z-10 shadow-lg ring-2 ring-primary/40' : ''}`}
     >
-      <p className="text-sm font-medium text-slate-900">{todo.titel}</p>
+      <p className={`text-sm font-medium ${istFertig ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+        {todo.titel}
+      </p>
       {(zeigeTermin || zeigeZustaendig) && (
         <p className="mt-1.5 flex flex-wrap gap-1.5 text-xs text-slate-500">
           {zeigeTermin && (
-            <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">📅 Termin</span>
+            <span className="max-w-[14rem] truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+              📅 {terminLabel}
+            </span>
           )}
           {zeigeZustaendig && (
             <span className="rounded bg-slate-100 px-1.5 py-0.5">👤 {todo.zustaendig}</span>
@@ -58,12 +66,18 @@ function Column({
   settings,
   onAddCard,
   onOpenTodo,
+  canAddCard,
+  istFertig,
+  terminLabels,
 }: {
   column: TodoColumn
   todos: TodoRow[]
   settings: TodoBoardSettings | null
   onAddCard: (titel: string) => void
   onOpenTodo: (id: string) => void
+  canAddCard: boolean
+  istFertig: boolean
+  terminLabels: Record<string, string | null>
 }) {
   const { setNodeRef } = useDroppable({ id: column.id })
   const [newCardTitel, setNewCardTitel] = useState('')
@@ -87,18 +101,27 @@ function Column({
       </div>
       <div className="min-h-[40px] space-y-2">
         {todos.map((t) => (
-          <Card key={t.id} todo={t} settings={settings} onOpen={() => onOpenTodo(t.id)} />
+          <Card
+            key={t.id}
+            todo={t}
+            settings={settings}
+            onOpen={() => onOpenTodo(t.id)}
+            terminLabel={terminLabels[t.id] ?? null}
+            istFertig={istFertig}
+          />
         ))}
       </div>
-      <form onSubmit={handleAddCard} className="mt-2">
-        <input
-          type="text"
-          placeholder="+ Karte hinzufügen"
-          value={newCardTitel}
-          onChange={(e) => setNewCardTitel(e.target.value)}
-          className="w-full rounded-lg border border-dashed border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 transition-colors hover:border-slate-400 focus:border-solid focus:bg-white"
-        />
-      </form>
+      {canAddCard && (
+        <form onSubmit={handleAddCard} className="mt-2">
+          <input
+            type="text"
+            placeholder="+ Karte hinzufügen"
+            value={newCardTitel}
+            onChange={(e) => setNewCardTitel(e.target.value)}
+            className="w-full rounded-lg border border-dashed border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 transition-colors hover:border-slate-400 focus:border-solid focus:bg-white"
+          />
+        </form>
+      )}
     </div>
   )
 }
@@ -109,6 +132,8 @@ export function TodoBoard() {
   const [todos, setTodos] = useState<TodoRow[]>([])
   const [settings, setSettings] = useState<TodoBoardSettings | null>(null)
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
+  const [eventById, setEventById] = useState<Map<string, { titel: string; start: string }>>(new Map())
+  const [sessionById, setSessionById] = useState<Map<string, { titel: string; datum: string }>>(new Map())
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -132,6 +157,49 @@ export function TodoBoard() {
       setSettings(settingsRow)
     })
   }, [])
+
+  // Für die Kartenanzeige ("Titel + Datum des Termins" statt nur "Termin")
+  // werden die verknüpften Events/Sitzungen gezielt nachgeladen - nur die
+  // tatsächlich referenzierten IDs, nicht alle.
+  useEffect(() => {
+    const eventIds = Array.from(new Set(todos.filter((t) => t.event_id).map((t) => t.event_id as string)))
+    const sessionIds = Array.from(new Set(todos.filter((t) => t.session_id).map((t) => t.session_id as string)))
+
+    if (eventIds.length === 0) {
+      setEventById(new Map())
+    } else {
+      supabase
+        .from('events')
+        .select('id, titel, start')
+        .in('id', eventIds)
+        .then(({ data }) => setEventById(new Map((data ?? []).map((e) => [e.id, e]))))
+    }
+
+    if (sessionIds.length === 0) {
+      setSessionById(new Map())
+    } else {
+      supabase
+        .from('sessions')
+        .select('id, titel, datum')
+        .in('id', sessionIds)
+        .then(({ data }) => setSessionById(new Map((data ?? []).map((s) => [s.id, s]))))
+    }
+  }, [todos])
+
+  function terminLabelFor(todo: TodoRow): string | null {
+    if (todo.event_id) {
+      const e = eventById.get(todo.event_id)
+      return e ? `${e.titel} · ${formatDate(e.start)}` : null
+    }
+    if (todo.session_id) {
+      const s = sessionById.get(todo.session_id)
+      return s ? `${s.titel} · ${formatDate(s.datum)}` : null
+    }
+    if (todo.faellig_am) {
+      return `Fällig ${formatDate(todo.faellig_am)}`
+    }
+    return null
+  }
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -159,6 +227,15 @@ export function TodoBoard() {
     return <p className="text-slate-500 text-sm">Spalten werden geladen...</p>
   }
 
+  // Neue Karten entstehen nur in der Spalte "Neu" (Titel-Matching,
+  // case-insensitive - greift nicht mehr, falls der Nutzer die Spalte
+  // umbenennt; gleiches Muster wie der Auto-Move nach "Geplant" in
+  // TodoDetailModal). Ohne passenden Namen fällt es auf die erste Spalte
+  // zurück, damit Karten-Erfassung nie ganz verschwindet.
+  const neuColumn = sortedColumns.find((c) => c.titel.trim().toLowerCase() === 'neu') ?? sortedColumns[0]
+  const terminLabels: Record<string, string | null> = {}
+  for (const t of todos) terminLabels[t.id] = terminLabelFor(t)
+
   return (
     <>
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
@@ -175,6 +252,9 @@ export function TodoBoard() {
               settings={settings}
               onAddCard={(titel) => handleAddCard(col.id, titel)}
               onOpenTodo={setOpenTodoId}
+              canAddCard={col.id === neuColumn.id}
+              istFertig={col.titel.trim().toLowerCase() === 'fertig'}
+              terminLabels={terminLabels}
             />
           ))}
         </div>

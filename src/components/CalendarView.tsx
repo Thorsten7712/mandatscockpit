@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import type { CalendarSource, EventRow, SessionRow } from '../lib/types'
+import type { CalendarSource, Ebene, EventRow, SessionRow } from '../lib/types'
 import { TerminDetailPanel } from './TerminDetailPanel'
 import { formatDayMonth, formatTime } from '../lib/format'
 import { EBENE_LABEL, THEME_COLOR, sourceColorById } from '../lib/sourceColors'
@@ -28,6 +28,8 @@ interface AggregatedItem {
   source_id: string | null
 }
 
+type TerminFilter = 'alle' | 'eigene' | Ebene
+
 export function CalendarView() {
   const [events, setEvents] = useState<EventRow[]>([])
   const [sessions, setSessions] = useState<SessionRow[]>([])
@@ -36,6 +38,7 @@ export function CalendarView() {
   const [selected, setSelected] = useState<{ kind: 'event' | 'session'; id: string } | null>(null)
   const [notizenIds, setNotizenIds] = useState<Set<string>>(new Set())
   const [sources, setSources] = useState<CalendarSource[]>([])
+  const [filter, setFilter] = useState<TerminFilter>('alle')
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [newTitel, setNewTitel] = useState('')
@@ -139,9 +142,34 @@ export function CalendarView() {
 
   const sourceById = new Map(sources.map((s) => [s.id, s]))
 
+  // Filter-Chips: "Alle" immer, "Eigene Termine" nur wenn welche existieren,
+  // je eine Ebene nur wenn sie unter den aktuellen Sitzungen vorkommt -
+  // keine leeren/wirkungslosen Filter anzeigen.
+  const ebenenPresent = new Set(
+    sessions
+      .map((s) => sourceById.get(s.source_id ?? '')?.ebene)
+      .filter((e): e is Ebene => Boolean(e)),
+  )
+  const EBENEN_ORDER: Ebene[] = ['kommune', 'kreis', 'land', 'bund']
+  const filterOptions: { value: TerminFilter; label: string }[] = [
+    { value: 'alle', label: 'Alle' },
+    ...(events.length > 0 ? [{ value: 'eigene' as TerminFilter, label: 'Eigene Termine' }] : []),
+    ...EBENEN_ORDER.filter((e) => ebenenPresent.has(e)).map((e) => ({
+      value: e as TerminFilter,
+      label: EBENE_LABEL[e],
+    })),
+  ]
+
+  const filtered = aggregated.filter((item) => {
+    if (filter === 'alle') return true
+    if (filter === 'eigene') return item.kind === 'event'
+    if (item.kind !== 'session') return false
+    return sourceById.get(item.source_id ?? '')?.ebene === filter
+  })
+
   return (
     <section className="flex items-start gap-6">
-      <div className="min-w-0 max-w-lg flex-1">
+      <div className="min-w-0 flex-1">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">Nächste Termine</h2>
           <button
@@ -152,6 +180,25 @@ export function CalendarView() {
             {showAddForm ? 'Abbrechen' : '+ Termin'}
           </button>
         </div>
+
+        {filterOptions.length > 1 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {filterOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setFilter(opt.value)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  filter === opt.value
+                    ? 'bg-primary text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {showAddForm && (
           <form onSubmit={handleAddEvent} className="mc-card mc-animate-pop mb-3 space-y-2.5 p-4">
@@ -194,7 +241,7 @@ export function CalendarView() {
         )}
 
         <ul className="max-h-[26rem] space-y-2 overflow-y-auto pr-1">
-          {aggregated.map((item) => {
+          {filtered.map((item) => {
             const { day, month } = formatDayMonth(item.start)
             const isSelected = selected?.id === item.id
             // Sitzungen tragen die Farbe ihrer Kalenderquelle (Ebene auf
@@ -260,10 +307,13 @@ export function CalendarView() {
           {aggregated.length === 0 && meineGremien !== null && meineGremien.length > 0 && (
             <li className="mc-card p-6 text-center text-sm text-slate-400">Keine anstehenden Termine.</li>
           )}
+          {aggregated.length > 0 && filtered.length === 0 && (
+            <li className="mc-card p-6 text-center text-sm text-slate-400">Keine Termine für diesen Filter.</li>
+          )}
         </ul>
       </div>
 
-      <div className="min-w-0 max-w-lg flex-1">
+      <div className="min-w-0 flex-1">
         {selected ? (
           <div className="mc-card mc-animate-slide p-5" key={`${selected.kind}-${selected.id}`}>
             <div className="mb-3 flex justify-end">

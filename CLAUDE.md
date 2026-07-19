@@ -298,6 +298,29 @@ Vorhanden:
   (`repeat(auto-fill, minmax(272px, 1fr))`) statt `flex overflow-x-auto` – viele Spalten brechen in
   weitere Zeilen um, wenige teilen sich die Breite. Drag & Drop über Zeilen hinweg funktioniert, weil
   dnd-kit rein pointer-basiert droppt.
+- **Board-Feinschliff** (`TodoBoard.tsx`): Drei Verhaltensänderungen, alle über Titel-Matching der
+  Spalten (case-insensitive, gleiches Muster wie der bestehende „Neu"→„Geplant"-Auto-Move in
+  `TodoDetailModal.tsx` – greift nicht mehr, falls der Nutzer diese Spalten umbenennt):
+  - **Neue Karten nur in der Spalte „Neu"**: Das „+ Karte hinzufügen"-Eingabefeld erscheint nur noch in
+    der Spalte, deren Titel „neu" ist (`neuColumn`); ohne passenden Namen fällt es auf die erste Spalte
+    nach `reihenfolge` zurück, damit Karten-Erfassung nie ganz verschwindet. Andere Spalten zeigen kein
+    Eingabefeld mehr.
+  - **Durchgestrichener Titel in „Fertig"**: Jede `Column` weiß über `istFertig` (Titel-Match), ob sie
+    die Fertig-Spalte ist, und reicht das an `Card` durch – der Kartentitel wird dann durchgestrichen
+    und ausgegraut dargestellt (rein visuell, `todos` selbst hat kein „erledigt"-Feld).
+  - **Termin-Label statt „📅 Termin"**: Karten zeigen jetzt Titel + Datum des verknüpften Termins
+    (`Sportausschuss · 10.09.2026`) statt eines nichtssagenden Chips. Dafür lädt `TodoBoard` gezielt nur
+    die von aktuell sichtbaren Karten referenzierten `events`/`sessions` (per `event_id`/`session_id` in
+    einem `useEffect([todos])`, `.in('id', [...])` statt Volltabellen) in `eventById`/`sessionById`-Maps;
+    `terminLabelFor()` liefert je nach Verknüpfung `"<Titel> · <Datum>"` oder bei reinem Freitextdatum
+    (`faellig_am`, keine Verknüpfung) `"Fällig <Datum>"`.
+- **Termin-Filter + Breitenangleich** (`CalendarView.tsx`): Über der „Nächste Termine"-Liste erscheinen
+  Filter-Chips – „Alle" immer, „Eigene Termine" nur wenn eigene Termine existieren, je eine Ebene
+  (Kommune/Kreis/Land/Bund) nur wenn sie unter den aktuell geladenen Sitzungen tatsächlich vorkommt
+  (keine wirkungslosen Filter). Die beiden Spalten (Terminliste + Detail-Panel) haben ihr `max-w-lg`
+  verloren und sind jetzt reines `flex-1 min-w-0` – dadurch spannt die Sektion exakt so breit wie das
+  ToDo-Board darüber, und die rechte Kante des Detail-Panels liegt auf einer Linie mit der letzten
+  Board-Spalte und dem Partei-Logo im Header (gleicher `mx-auto max-w-7xl px-6`-Container).
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
