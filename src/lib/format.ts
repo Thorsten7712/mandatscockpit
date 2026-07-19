@@ -32,3 +32,13 @@ export function formatDayMonth(iso: string): { day: string; month: string } {
     month: d.toLocaleDateString('de-DE', { month: 'short' }),
   }
 }
+
+// Cutoff für "zukünftige/vergangene Termine" ist der Beginn des heutigen
+// Tages (lokale Zeit), nicht der exakte aktuelle Zeitpunkt - sonst fallen
+// bereits vergangene Termine von heute komplett raus bzw. gelten schon
+// laufende Termine von heute fälschlich als "vergangen".
+export function startOfTodayIso(): string {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d.toISOString()
+}

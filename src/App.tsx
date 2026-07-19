@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
+import Archiv from './pages/Archiv'
 import TerminDetail from './pages/TerminDetail'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ThemeLoader } from './components/ThemeLoader'
@@ -25,6 +26,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/archiv"
+          element={
+            <ProtectedRoute>
+              <Archiv />
             </ProtectedRoute>
           }
         />

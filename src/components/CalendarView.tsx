@@ -3,18 +3,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, Ebene, EventRow, SessionRow } from '../lib/types'
 import { TerminDetailPanel } from './TerminDetailPanel'
-import { formatDayMonth, formatTime } from '../lib/format'
+import { formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
 import { EBENE_LABEL, THEME_COLOR, sourceColorById } from '../lib/sourceColors'
-
-// Cutoff für "zukünftige Termine" ist der Beginn des heutigen Tages (lokale
-// Zeit), nicht der exakte aktuelle Zeitpunkt - sonst fallen bereits
-// vergangene Termine von heute komplett raus, auch wenn heute später noch
-// welche anstehen.
-function startOfTodayIso(): string {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString()
-}
 
 interface AggregatedItem {
   key: string

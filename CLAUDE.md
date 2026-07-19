@@ -330,6 +330,26 @@ Vorhanden:
   weil das Dokument während des Lesens länger geöffnet bleiben kann (gleiche Überlegung wie bei
   Profilfotos). Ersetzt das alte `handleDownload()` (signierte URL + `window.open` in neuem Tab) in
   beiden Komponenten vollständig.
+- **Archiv** (`src/pages/Archiv.tsx`, Route `/archiv`, verlinkt im Dashboard-Header neben
+  „Einstellungen"): Zwei Tabs, kein neues Datenmodell nötig.
+  - **Vergangene Sitzungen**: gleiche Query wie `CalendarView` (Sitzungen der „Meine Gremien"-Auswahl),
+    nur mit `lt('datum', startOfTodayIso())` statt `gte()` und absteigend sortiert. Identisches
+    Karten-Design (Datums-Chip in Quellfarbe, Ebene-Badge, 📎-Notizen-Flag, Abgesagt-Badge) und
+    Split-View mit `TerminDetailPanel` (`onDeleted` bewusst weggelassen – im Archiv gibt es keine
+    Lösch-Aktion, `TerminDetailPanel` zeigt für `kind='session'` ohnehin keine Bearbeiten/Löschen-Buttons,
+    nur für `kind='event'`). `startOfTodayIso()` ist dafür von `CalendarView.tsx` nach `lib/format.ts`
+    gewandert (jetzt von beiden importiert, keine Dopplung mehr).
+  - **Erledigte Aufgaben**: `todos`, deren `column_id` zu einer Spalte mit Titel „Fertig" gehört
+    (gleiches Titel-Matching wie die Fertig-Durchstreichung im Board, siehe oben) – funktioniert ohne
+    Migration, weil Karten beim Ziehen auf „Fertig" nicht aus `todos` verschwinden, nur die
+    `column_id` ändert sich. Klick öffnet die normale `TodoDetailModal` (volle Bearbeitung inkl.
+    Termin-Verknüpfung bleibt möglich, nur die Spalte lässt sich dort nicht ändern – das geht nach wie
+    vor nur per Drag & Drop auf dem Board). `TodoRow` hat dafür ein neues `created_at`-Feld im
+    TS-Typ bekommen (Spalte existierte in der DB schon immer, war im Typ nur nicht abgebildet) – zeigt
+    in der Archiv-Liste als „Erstellt am".
+  - Bewusst nicht enthalten: eigene vergangene Termine (`events`). Der Wunsch war explizit
+    „zurückliegende Sitzungen und erledigte Tasks"; eigene Termine landen nicht im Archiv, um den Scope
+    nicht stillschweigend zu erweitern.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

@@ -56,6 +56,12 @@ export default function Dashboard() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Link
+              to="/archiv"
+              className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white"
+            >
+              Archiv
+            </Link>
+            <Link
               to="/settings"
               className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white"
             >

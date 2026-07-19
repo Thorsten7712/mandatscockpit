@@ -110,6 +110,7 @@ export interface TodoRow {
   dokument_id: string | null
   session_id: string | null
   event_id: string | null
+  created_at: string
 }
 
 export interface TodoComment {
