@@ -321,6 +321,15 @@ Vorhanden:
   verloren und sind jetzt reines `flex-1 min-w-0` – dadurch spannt die Sektion exakt so breit wie das
   ToDo-Board darüber, und die rechte Kante des Detail-Panels liegt auf einer Linie mit der letzten
   Board-Spalte und dem Partei-Logo im Header (gleicher `mx-auto max-w-7xl px-6`-Container).
+- **Dokumenten-Vorschau** (`src/components/DocumentPreviewModal.tsx`): Klick auf ein hochgeladenes
+  Dokument (in `TodoDetailModal.tsx` und `TerminDetailPanel.tsx`, beide identisch verdrahtet über ein
+  `previewDoc`-State) öffnet ein Modal statt eines Downloads/neuen Tabs. Bilder (`png/jpg/jpeg/gif/
+  webp/svg`) werden als `<img>` gerendert, PDFs im nativen Browser-PDF-Viewer per `<iframe>`; für alle
+  anderen Dateitypen (docx, xlsx, ...) gibt es keine Inline-Vorschau im Browser, stattdessen ein
+  „Datei öffnen"-Link. Signierte URL mit 3600s Gültigkeit statt der sonst bei Downloads üblichen 60s,
+  weil das Dokument während des Lesens länger geöffnet bleiben kann (gleiche Überlegung wie bei
+  Profilfotos). Ersetzt das alte `handleDownload()` (signierte URL + `window.open` in neuem Tab) in
+  beiden Komponenten vollständig.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

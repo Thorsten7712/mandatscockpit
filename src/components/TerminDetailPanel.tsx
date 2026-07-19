@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import type { EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
+import { DocumentPreviewModal } from './DocumentPreviewModal'
 import { formatDateTime } from '../lib/format'
 
 function toDatetimeLocalValue(iso: string): string {
@@ -45,6 +46,7 @@ export function TerminDetailPanel({
 
   const [linkedTodos, setLinkedTodos] = useState<TodoRow[]>([])
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
   async function loadTermin() {
     setEvent(null)
@@ -187,13 +189,6 @@ export function TerminDetailPanel({
     await loadSummaries()
   }
 
-  async function handleDownload(path: string) {
-    const { data, error } = await supabase.storage.from('zusammenfassungen').createSignedUrl(path, 60)
-    if (!error && data) {
-      window.open(data.signedUrl, '_blank')
-    }
-  }
-
   const titel = event?.titel ?? session?.titel
   const start = event?.start ?? session?.datum
   const ort = event?.ort ?? session?.ort
@@ -318,7 +313,7 @@ export function TerminDetailPanel({
             {s.datei_url && (
               <button
                 type="button"
-                onClick={() => handleDownload(s.datei_url!)}
+                onClick={() => setPreviewDoc({ path: s.datei_url!, name: fileNameFromPath(s.datei_url!) })}
                 className="mc-btn-ghost !px-2 !py-1 !text-xs"
               >
                 📎 {fileNameFromPath(s.datei_url)}
@@ -368,6 +363,13 @@ export function TerminDetailPanel({
 
       {openTodoId && (
         <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadLinkedTodos} />
+      )}
+      {previewDoc && (
+        <DocumentPreviewModal
+          path={previewDoc.path}
+          fileName={previewDoc.name}
+          onClose={() => setPreviewDoc(null)}
+        />
       )}
     </div>
   )

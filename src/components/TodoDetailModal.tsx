@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import type { EventRow, SessionRow, SummaryRow, TodoComment, TodoColumn, TodoRow } from '../lib/types'
 import { formatDate, formatDateTime } from '../lib/format'
+import { DocumentPreviewModal } from './DocumentPreviewModal'
 
 type TerminModus = 'keine' | 'datum' | 'termin' | 'sitzung'
 
@@ -49,6 +50,7 @@ export function TodoDetailModal({
   const [newFile, setNewFile] = useState<File | null>(null)
   const [savingDocument, setSavingDocument] = useState(false)
   const [documentError, setDocumentError] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
   async function loadTodo() {
     const { data, error } = await supabase.from('todos').select('*').eq('id', id).single()
@@ -216,14 +218,9 @@ export function TodoDetailModal({
     await loadDocuments()
   }
 
-  async function handleDownload(path: string) {
-    const { data, error } = await supabase.storage.from('zusammenfassungen').createSignedUrl(path, 60)
-    if (!error && data) {
-      window.open(data.signedUrl, '_blank')
-    }
-  }
 
   return (
+    <>
     <div
       className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]"
       onClick={onClose}
@@ -402,7 +399,7 @@ export function TodoDetailModal({
               {d.datei_url && (
                 <button
                   type="button"
-                  onClick={() => handleDownload(d.datei_url!)}
+                  onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
                   className="mc-btn-ghost !px-2 !py-1 !text-xs"
                 >
                   📎 {fileNameFromPath(d.datei_url)}
@@ -436,5 +433,13 @@ export function TodoDetailModal({
         </form>
       </div>
     </div>
+    {previewDoc && (
+      <DocumentPreviewModal
+        path={previewDoc.path}
+        fileName={previewDoc.name}
+        onClose={() => setPreviewDoc(null)}
+      />
+    )}
+    </>
   )
 }
