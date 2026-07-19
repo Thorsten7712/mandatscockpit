@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { CalendarDays, Landmark, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
-import { PARTEI_THEMES, applyTheme } from '../lib/themes'
+import { themeById } from '../lib/themes'
 import { EBENE_LABEL, SOURCE_COLORS, sourceColorById } from '../lib/sourceColors'
 import { UserManagement } from '../components/UserManagement'
 
@@ -67,7 +67,6 @@ export default function Settings() {
   const [savingFoto, setSavingFoto] = useState(false)
   const [fotoError, setFotoError] = useState<string | null>(null)
   const [partei, setPartei] = useState('')
-  const [parteiError, setParteiError] = useState<string | null>(null)
 
   const [gremien, setGremien] = useState<GremiumEntry[]>([])
   const [meineGremien, setMeineGremien] = useState<string[]>([])
@@ -295,20 +294,6 @@ export default function Settings() {
     setSavingName(false)
   }
 
-  async function handleParteiChange(next: string) {
-    if (!userId) return
-    setParteiError(null)
-    setPartei(next)
-    // Theme sofort anwenden - nicht erst nach dem Roundtrip, damit die
-    // Auswahl direkt sichtbares Feedback gibt.
-    applyTheme(next)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ partei: next || null })
-      .eq('id', userId)
-    if (error) setParteiError(error.message)
-  }
-
   async function handleUploadFoto() {
     if (!userId || !newFoto) return
     setSavingFoto(true)
@@ -479,22 +464,13 @@ export default function Settings() {
         {nameError && <p className="text-red-600 text-sm">{nameError}</p>}
 
         <div>
-          <label className="block text-sm text-slate-600 mb-1" htmlFor="profil-partei">
-            Partei (bestimmt das Farbschema)
-          </label>
-          <select
-            id="profil-partei"
-            value={partei}
-            onChange={(e) => handleParteiChange(e.target.value)}
-            className="mc-input w-full"
-          >
-            {PARTEI_THEMES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          {parteiError && <p className="text-red-600 text-sm mt-1">{parteiError}</p>}
+          <p className="mb-1 block text-sm text-slate-600">Partei (bestimmt das Farbschema)</p>
+          <p className="mc-input flex w-full items-center bg-slate-50 text-slate-700">
+            {themeById(partei).label}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Wird von einem Admin in der Benutzerverwaltung festgelegt.
+          </p>
         </div>
       </div>
 

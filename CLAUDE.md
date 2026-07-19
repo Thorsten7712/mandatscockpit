@@ -209,8 +209,12 @@ Vorhanden:
 - **Partei-Theming** (`0014_profiles_partei.sql`): Das UI lässt sich je nach Partei des Mandatsträgers
   im Partei-CI darstellen (CDU/SPD/FDP/Grüne/Linke/AfD + neutral). Architektur:
   - `profiles.partei` (Text, nullable, bewusst **ohne** CHECK-Constraint und bewusst getrennt von
-    `fraktion`, das RLS-Semantik trägt) speichert die Theme-Id; Auswahl per Dropdown im Profil-Bereich
-    der Settings („Partei (bestimmt das Farbschema)"), Theme wird beim Ändern sofort angewendet.
+    `fraktion`, das RLS-Semantik trägt) speichert die Theme-Id. **Nur Admins setzen sie**, beim Anlegen
+    oder Bearbeiten eines Nutzers in der Benutzerverwaltung (`UserManagement.tsx`/`admin-users`-Function)
+    – Mitglieder sehen ihre Partei im Profil-Bereich der Settings nur noch als reinen Anzeigetext
+    („Wird von einem Admin in der Benutzerverwaltung festgelegt."), ohne Möglichkeit sie selbst zu
+    ändern (bewusste Entscheidung: Partei-Zuordnung ist keine Selbstauskunft). `ThemeLoader.tsx` liest
+    den Wert weiterhin bei jedem Login unverändert aus dem Profil.
   - Farb-Tokens als CSS-Variablen in `src/index.css` (`:root` = neutral, `[data-theme='cdu']` etc.;
     RGB-Tripel wegen Tailwind-Alpha), Tailwind-Farben `primary`/`primary-hover`/`accent`/`topbar` in
     `tailwind.config.js` via `rgb(var(--mc-*) / <alpha-value>)`. Fokus-Ringe und
