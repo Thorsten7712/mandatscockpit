@@ -57,6 +57,8 @@ export function TodoDetailModal({
   const [placementNames, setPlacementNames] = useState<Map<string, string>>(new Map())
   const [candidates, setCandidates] = useState<Profile[]>([])
   const [shareError, setShareError] = useState<string | null>(null)
+  const [shareSearch, setShareSearch] = useState('')
+  const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
 
   const [comments, setComments] = useState<TodoComment[]>([])
   const [newComment, setNewComment] = useState('')
@@ -342,6 +344,13 @@ export function TodoDetailModal({
     await loadDocuments()
   }
 
+  // Kandidatenliste kann bei größeren Fraktionen/Parteien lang werden -
+  // bereits geteilte Kolleg*innen als entfernbare Chips, der Rest über eine
+  // Such-Dropdown statt einer langen Checkbox-Liste hinzufügbar.
+  const geteilteKandidaten = candidates.filter((c) => placements.some((p) => p.user_id === c.id))
+  const ungeteilteKandidatenGefiltert = candidates
+    .filter((c) => !placements.some((p) => p.user_id === c.id))
+    .filter((c) => c.name.toLowerCase().includes(shareSearch.trim().toLowerCase()))
 
   return (
     <>
@@ -515,24 +524,61 @@ export function TodoDetailModal({
                     <p className="mb-1 text-sm text-slate-600">
                       Kolleg*innen (gleiche Partei, Ebene {EBENE_LABEL[todo.ebene]})
                     </p>
-                    <div className="space-y-1">
-                      {candidates.map((c) => {
-                        const geteilt = placements.some((p) => p.user_id === c.id)
-                        return (
-                          <label key={c.id} className="flex items-center gap-1.5 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={geteilt}
-                              onChange={() => handleToggleShare(c.id, geteilt)}
-                            />
-                            {c.name}
-                          </label>
-                        )
-                      })}
-                      {candidates.length === 0 && (
-                        <p className="text-xs text-slate-400">
-                          Keine Kolleg*innen mit gleicher Partei und Ebene gefunden.
-                        </p>
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {geteilteKandidaten.map((c) => (
+                        <span
+                          key={c.id}
+                          className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+                        >
+                          {c.name}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleShare(c.id, true)}
+                            aria-label={`${c.name} entfernen`}
+                            className="text-primary/70 hover:text-primary"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      {geteilteKandidaten.length === 0 && (
+                        <span className="text-xs text-slate-400">Noch mit niemandem geteilt.</span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Kolleg*in suchen..."
+                        value={shareSearch}
+                        onChange={(e) => setShareSearch(e.target.value)}
+                        onFocus={() => setShareDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setShareDropdownOpen(false), 150)}
+                        className="mc-input w-full"
+                      />
+                      {shareDropdownOpen && (
+                        <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                          {ungeteilteKandidatenGefiltert.map((c) => (
+                            <li key={c.id}>
+                              <button
+                                type="button"
+                                onMouseDown={() => {
+                                  handleToggleShare(c.id, false)
+                                  setShareSearch('')
+                                }}
+                                className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                              >
+                                {c.name}
+                              </button>
+                            </li>
+                          ))}
+                          {ungeteilteKandidatenGefiltert.length === 0 && (
+                            <li className="px-3 py-1.5 text-sm text-slate-400">
+                              {candidates.length === 0
+                                ? 'Keine Kolleg*innen mit gleicher Partei und Ebene gefunden.'
+                                : 'Keine Treffer.'}
+                            </li>
+                          )}
+                        </ul>
                       )}
                     </div>
                   </div>
