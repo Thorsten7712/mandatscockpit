@@ -492,7 +492,14 @@ Vorhanden:
        expliziten Preflight-Headern (`Origin`, `Access-Control-Request-Method`,
        `Access-Control-Request-Headers`) gegenverifiziert – bringt aber naturgemäß keine
        Curl-basierte Erfolgsgarantie mehr, da genau diese Prüfung zuvor blind war; die eigentliche
-       Bestätigung muss ein echter Verbindungsversuch in Claude liefern.
+       Bestätigung musste ein echter Verbindungsversuch in Claude liefern. **Bestätigt (2026-07-20):**
+       Nach dem Deploy verband sich der Connector selbstständig neu (kein manuelles Reconnect nötig -
+       das wiederholte `booted`/`shutdown`-Muster in den Supabase-Function-Logs im
+       ~1-Minuten-Abstand deutete auf periodische Reconnect-Versuche von Claude im Hintergrund hin),
+       alle vier Tools erschienen in einer Claude-Code-Session und `list_next_sessions` lieferte über
+       die echte Claude-MCP-Infrastruktur (nicht curl) reale Sitzungsdaten zurück. Der fehlende
+       `Access-Control-Allow-Methods`-Header war damit der tatsächliche Rootcause des gesamten
+       Connector-Problems, nicht die vorherigen (ebenfalls echten, aber unzureichenden) Fixes 1–4.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
