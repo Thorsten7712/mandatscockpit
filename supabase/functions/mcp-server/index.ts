@@ -156,6 +156,60 @@ const TOOLS = [
       required: ['session_id'],
     },
   },
+  {
+    name: 'create_event_note',
+    description:
+      'Speichert eine Notiz zu einem bestimmten eigenen Termin (nicht Sitzung) im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort in der Termindetailsicht, wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument). Nur für Termine, die dem angemeldeten Nutzer gehören. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        event_id: {
+          type: 'string',
+          description: 'UUID des eigenen Termins, zu dem die Notiz gehört.',
+        },
+        inhalt: {
+          type: 'string',
+          description: 'Freitext-Notiz (optional).',
+        },
+        dateiname: {
+          type: 'string',
+          description: 'Dateiname inkl. Endung für einen Datei-Anhang (optional, nur zusammen mit datei_base64).',
+        },
+        datei_base64: {
+          type: 'string',
+          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname).',
+        },
+      },
+      required: ['event_id'],
+    },
+  },
+  {
+    name: 'create_todo_note',
+    description:
+      'Speichert eine Notiz zu einer bestimmten ToDo-Karte im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort im Karten-Detail-Modal, wie ein manuell hochgeladenes Dokument - reiner Freitext ohne Datei landet ebenfalls dort, auch wenn die Web-UI für Karten primär Datei-Uploads zeigt). Nur für ToDo-Karten, die dem angemeldeten Nutzer gehören. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        todo_id: {
+          type: 'string',
+          description: 'UUID der eigenen ToDo-Karte, zu der die Notiz gehört.',
+        },
+        inhalt: {
+          type: 'string',
+          description: 'Freitext-Notiz (optional).',
+        },
+        dateiname: {
+          type: 'string',
+          description: 'Dateiname inkl. Endung für einen Datei-Anhang (optional, nur zusammen mit datei_base64).',
+        },
+        datei_base64: {
+          type: 'string',
+          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname).',
+        },
+      },
+      required: ['todo_id'],
+    },
+  },
 ] as const
 
 function formatDateTime(iso: string): string {
@@ -291,14 +345,34 @@ async function listNextSessions(supabase: SupabaseClient, args: Record<string, u
   return toolTextResult(lines.join('\n'))
 }
 
-async function createSessionNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
-  const sessionId = typeof args.session_id === 'string' ? args.session_id.trim() : ''
+interface NoteTargetConfig {
+  /** Name des Arguments, das die UUID des Ziels trägt (session_id/event_id/todo_id). */
+  idArgName: string
+  /** Tabelle des Ziels. */
+  table: 'sessions' | 'events' | 'todos'
+  /** Spalte in summaries, die auf das Ziel zeigt. */
+  idColumn: 'session_id' | 'event_id' | 'todo_id'
+  /** events/todos gehören einem Nutzer (RLS todos_manage_own/events_select_own) - Service-Role-Client
+   *  umgeht RLS, daher hier manuell auf user_id prüfen. sessions sind dagegen für alle
+   *  eingeloggten Nutzer lesbar (sessions_select_all), keine Ownership-Prüfung nötig. */
+  ownerScoped: boolean
+  /** Für Fehlermeldungen/Bestätigungstext, z. B. "Sitzung", "Termin", "ToDo". */
+  label: string
+}
+
+async function createNote(
+  supabase: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  target: NoteTargetConfig,
+) {
+  const targetId = typeof args[target.idArgName] === 'string' ? (args[target.idArgName] as string).trim() : ''
   const inhalt = typeof args.inhalt === 'string' && args.inhalt.trim() ? args.inhalt.trim() : null
   const dateiname = typeof args.dateiname === 'string' ? args.dateiname.trim() : ''
   const dateiBase64 = typeof args.datei_base64 === 'string' ? args.datei_base64.trim() : ''
   const hasFile = Boolean(dateiname && dateiBase64)
 
-  if (!sessionId) return toolTextResult('Fehler: session_id ist erforderlich.', true)
+  if (!targetId) return toolTextResult(`Fehler: ${target.idArgName} ist erforderlich.`, true)
   if (!inhalt && !hasFile) {
     return toolTextResult('Fehler: entweder inhalt oder dateiname+datei_base64 sind erforderlich.', true)
   }
@@ -306,13 +380,16 @@ async function createSessionNote(supabase: SupabaseClient, userId: string, args:
     return toolTextResult('Fehler: dateiname und datei_base64 müssen zusammen angegeben werden.', true)
   }
 
-  const { data: session, error: sessionError } = await supabase
-    .from('sessions')
-    .select('id, titel')
-    .eq('id', sessionId)
-    .maybeSingle()
-  if (sessionError) return toolTextResult(`Fehler beim Prüfen der Sitzung: ${sessionError.message}`, true)
-  if (!session) return toolTextResult(`Sitzung mit id ${sessionId} wurde nicht gefunden.`, true)
+  let targetQuery = supabase.from(target.table).select('id, titel').eq('id', targetId)
+  if (target.ownerScoped) targetQuery = targetQuery.eq('user_id', userId)
+  const { data: targetRow, error: targetError } = await targetQuery.maybeSingle()
+  if (targetError) return toolTextResult(`Fehler beim Prüfen (${target.label}): ${targetError.message}`, true)
+  if (!targetRow) {
+    return toolTextResult(
+      `${target.label} mit id ${targetId} wurde nicht gefunden${target.ownerScoped ? ' (oder gehört nicht zu diesem Konto)' : ''}.`,
+      true,
+    )
+  }
 
   let dateiUrl: string | null = null
   if (hasFile) {
@@ -330,13 +407,45 @@ async function createSessionNote(supabase: SupabaseClient, userId: string, args:
 
   const { data: note, error } = await supabase
     .from('summaries')
-    .insert({ user_id: userId, session_id: sessionId, inhalt, datei_url: dateiUrl })
+    .insert({ user_id: userId, [target.idColumn]: targetId, inhalt, datei_url: dateiUrl })
     .select('id')
     .single()
   if (error || !note) return toolTextResult(`Fehler beim Speichern der Notiz: ${error?.message}`, true)
 
   const parts = [inhalt ? 'Text' : null, dateiUrl ? `Datei "${dateiname}"` : null].filter(Boolean)
-  return toolTextResult(`Notiz (${parts.join(' + ')}) zu Sitzung "${session.titel}" wurde gespeichert (id: ${note.id}).`)
+  return toolTextResult(
+    `Notiz (${parts.join(' + ')}) zu ${target.label} "${targetRow.titel}" wurde gespeichert (id: ${note.id}).`,
+  )
+}
+
+function createSessionNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  return createNote(supabase, userId, args, {
+    idArgName: 'session_id',
+    table: 'sessions',
+    idColumn: 'session_id',
+    ownerScoped: false,
+    label: 'Sitzung',
+  })
+}
+
+function createEventNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  return createNote(supabase, userId, args, {
+    idArgName: 'event_id',
+    table: 'events',
+    idColumn: 'event_id',
+    ownerScoped: true,
+    label: 'Termin',
+  })
+}
+
+function createTodoNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  return createNote(supabase, userId, args, {
+    idArgName: 'todo_id',
+    table: 'todos',
+    idColumn: 'todo_id',
+    ownerScoped: true,
+    label: 'ToDo',
+  })
 }
 
 Deno.serve(async (req) => {
@@ -459,6 +568,12 @@ Deno.serve(async (req) => {
           break
         case 'create_session_note':
           result = await createSessionNote(supabase, user.id, args)
+          break
+        case 'create_event_note':
+          result = await createEventNote(supabase, user.id, args)
+          break
+        case 'create_todo_note':
+          result = await createTodoNote(supabase, user.id, args)
           break
         default:
           return respond(jsonRpcError(id, -32602, `Unbekanntes Tool: ${name}`))

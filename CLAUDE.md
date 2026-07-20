@@ -402,7 +402,18 @@ Vorhanden:
   angehängten Datei als Base64 überträgt, war zum Zeitpunkt der Implementierung nicht verifizierbar
   (kein Testtoken ohne das aktive Nutzer-Token zu gefährden) - noch nicht live erprobt. Prüft vorher
   per Select, ob die `session_id` existiert, für eine verständliche Fehlermeldung statt eines rohen
-  FK-Constraint-Fehlers.
+  FK-Constraint-Fehlers), sowie `create_event_note`/`create_todo_note` (Nutzerwunsch: dieselbe
+  Notiz-/Datei-Anhang-Funktionalität auch für eigene Termine und ToDo-Karten, nicht nur Sitzungen -
+  spiegelt genau, was `TerminDetailPanel.tsx`/`TodoDetailModal.tsx` in der Web-UI schon können). Die
+  drei Note-Tools teilen sich eine gemeinsame `createNote()`-Hilfsfunktion (`NoteTargetConfig` mit
+  `idArgName`/`table`/`idColumn`/`ownerScoped`/`label`), um die Text-/Datei-Validierung und den
+  Storage-Upload nicht dreifach zu duplizieren. Wichtiger Unterschied zu `create_session_note`:
+  `events`/`todos` gehören einem einzelnen Nutzer (RLS `events_select_own`/`todos_manage_own`), der
+  Service-Role-Client umgeht diese RLS aber komplett - `createNote()` filtert deshalb bei
+  `ownerScoped: true` zusätzlich per `.eq('user_id', userId)` beim Ziel-Lookup, sonst könnte ein Nutzer
+  über eine erratene UUID Notizen an fremde Termine/ToDos hängen. `sessions` bleibt bei
+  `ownerScoped: false`, da Sitzungen laut `sessions_select_all` ohnehin für alle eingeloggten Nutzer
+  lesbar sind.
   - **Auth bewusst nicht global, sondern pro Nutzer**: Ursprünglich als Einzelnutzer-Lösung mit einem
     einzigen `MCP_ACCESS_TOKEN`-Secret geplant, dann auf Nutzerwunsch umgestellt auf **ein persönliches
     Bearer-Token pro Mitglied**, da die Function für alle Mitglieder nutzbar sein soll, nicht nur für
