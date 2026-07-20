@@ -1,0 +1,13 @@
+# Supabase-Projektkonfiguration, aktuell nur für Function-spezifische
+# Einstellungen genutzt (kein `supabase init`/lokaler Dev-Stack im Einsatz).
+#
+# mcp-server bekommt ein eigenes, persönliches Bearer-Token pro Nutzer
+# (Tabelle mcp_tokens, siehe supabase/migrations/0016_mcp_tokens.sql) statt
+# eines echten Supabase-Auth-JWTs. Ohne verify_jwt = false weist das
+# API-Gateway jede Anfrage schon vor Erreichen des Function-Codes mit
+# "UNAUTHORIZED_INVALID_JWT_FORMAT" ab, weil es das Token als Supabase-JWT
+# zu parsen versucht. admin-users und import-ics-source bleiben bewusst
+# beim Default (verify_jwt = true), da sie mit dem echten Supabase-Session-
+# JWT des aufrufenden Nutzers aus dem Frontend aufgerufen werden.
+[functions.mcp-server]
+verify_jwt = false
