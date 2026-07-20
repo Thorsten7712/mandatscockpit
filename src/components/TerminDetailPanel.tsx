@@ -78,7 +78,10 @@ export function TerminDetailPanel({
 
   async function loadLinkedTodos() {
     const column = kind === 'event' ? 'event_id' : 'session_id'
-    const { data } = await supabase.from('todos').select('*').eq(column, id).order('position')
+    // "position" lebt seit dem Teilen-Ausbau in todo_placements statt direkt
+    // auf todos (siehe 0021_todo_erledigt_sharing.sql) - hier reicht die
+    // Erstellungsreihenfolge.
+    const { data } = await supabase.from('todos').select('*').eq(column, id).order('created_at')
     setLinkedTodos(data ?? [])
   }
 
