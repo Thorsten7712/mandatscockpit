@@ -7,6 +7,14 @@ export type EventHerkunft = 'privat' | 'uebernommene_sitzung' | 'fraktionsbuero'
 export type SessionStatus = 'geplant' | 'aktiv' | 'abgeschlossen' | 'abgesagt'
 export type EventStatus = 'geplant' | 'abgesagt'
 export type Sichtbarkeit = 'privat' | 'geteilt'
+export type AntragStatus =
+  | 'entwurf'
+  | 'eingereicht'
+  | 'in_beratung'
+  | 'vertagt'
+  | 'beschlossen'
+  | 'abgelehnt'
+  | 'zurueckgezogen'
 
 export interface Profile {
   id: string
@@ -67,6 +75,7 @@ export interface SummaryRow {
   session_id: string | null
   event_id: string | null
   todo_id: string | null
+  antrag_id: string | null
   inhalt: string | null
   datei_url: string | null
   sichtbarkeit: Sichtbarkeit
@@ -125,4 +134,25 @@ export interface McpToken {
   user_id: string
   token_hash: string
   created_at: string
+}
+
+export interface AntragRow {
+  id: string
+  user_id: string
+  titel: string
+  inhalt: string | null
+  status: AntragStatus
+  ausschuss: string | null
+  session_id: string | null
+  mitantragsteller: string | null
+  eingereicht_am: string | null
+  created_at: string
+}
+
+export interface AntragComment {
+  id: string
+  antrag_id: string
+  user_id: string
+  inhalt: string
+  erstellt_am: string
 }

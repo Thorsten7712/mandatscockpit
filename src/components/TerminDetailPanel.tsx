@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import type { EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
+import type { AntragRow, EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
+import { AntragDetailModal } from './AntragDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDateTime } from '../lib/format'
+import { ANTRAG_STATUS_BADGE, ANTRAG_STATUS_LABEL } from '../lib/antragStatus'
 
 function toDatetimeLocalValue(iso: string): string {
   const d = new Date(iso)
@@ -44,6 +46,9 @@ export function TerminDetailPanel({
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
+  const [linkedAntraege, setLinkedAntraege] = useState<AntragRow[]>([])
+  const [openAntragId, setOpenAntragId] = useState<string | null>(null)
+
   async function loadTermin() {
     setEvent(null)
     setSession(null)
@@ -77,12 +82,23 @@ export function TerminDetailPanel({
     setLinkedTodos(data ?? [])
   }
 
+  async function loadLinkedAntraege() {
+    if (kind !== 'session') {
+      setLinkedAntraege([])
+      return
+    }
+    const { data } = await supabase.from('antraege').select('*').eq('session_id', id).order('created_at')
+    setLinkedAntraege(data ?? [])
+  }
+
   useEffect(() => {
     setEditing(false)
     setOpenTodoId(null)
+    setOpenAntragId(null)
     loadTermin()
     loadSummaries()
     loadLinkedTodos()
+    loadLinkedAntraege()
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id)
     })
@@ -301,6 +317,33 @@ export function TerminDetailPanel({
         )}
       </ul>
 
+      {kind === 'session' && (
+        <>
+          <h3 className="mb-2 text-sm font-semibold text-slate-900">Verknüpfte Anträge</h3>
+          <ul className="mb-6 space-y-2">
+            {linkedAntraege.map((a) => (
+              <li key={a.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenAntragId(a.id)}
+                  className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                >
+                  <span
+                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${ANTRAG_STATUS_BADGE[a.status]}`}
+                  >
+                    {ANTRAG_STATUS_LABEL[a.status]}
+                  </span>
+                  <span className="truncate text-sm font-medium text-slate-800">{a.titel}</span>
+                </button>
+              </li>
+            ))}
+            {linkedAntraege.length === 0 && (
+              <li className="text-slate-400 text-sm">Keine verknüpften Anträge.</li>
+            )}
+          </ul>
+        </>
+      )}
+
       <h3 className="mb-2 text-sm font-semibold text-slate-900">Notizen &amp; Dokumente</h3>
       <ul className="mb-3 space-y-2">
         {summaries.map((s) => (
@@ -359,6 +402,9 @@ export function TerminDetailPanel({
 
       {openTodoId && (
         <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadLinkedTodos} />
+      )}
+      {openAntragId && (
+        <AntragDetailModal id={openAntragId} onClose={() => setOpenAntragId(null)} onChanged={loadLinkedAntraege} />
       )}
       {previewDoc && (
         <DocumentPreviewModal

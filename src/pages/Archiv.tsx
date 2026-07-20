@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckSquare, FileText, History } from 'lucide-react'
+import { CheckSquare, FileText, Gavel, History } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { CalendarSource, SessionRow, SummaryRow, TodoColumn, TodoRow } from '../lib/types'
+import type { AntragRow, CalendarSource, SessionRow, SummaryRow, TodoColumn, TodoRow } from '../lib/types'
 import { TerminDetailPanel } from '../components/TerminDetailPanel'
 import { TodoDetailModal } from '../components/TodoDetailModal'
+import { AntragDetailModal } from '../components/AntragDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from '../components/DocumentPreviewModal'
 import { formatDate, formatDateTime, formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
 import { EBENE_LABEL, sourceColorById } from '../lib/sourceColors'
+import { ANTRAG_STATUS_ABGESCHLOSSEN, ANTRAG_STATUS_BADGE, ANTRAG_STATUS_LABEL } from '../lib/antragStatus'
 
-type Tab = 'sitzungen' | 'aufgaben' | 'dokumente'
+type Tab = 'sitzungen' | 'aufgaben' | 'dokumente' | 'antraege'
 
 export default function Archiv() {
   const [tab, setTab] = useState<Tab>('sitzungen')
@@ -26,6 +28,18 @@ export default function Archiv() {
   const [documents, setDocuments] = useState<SummaryRow[]>([])
   const [docLabels, setDocLabels] = useState<Map<string, string>>(new Map())
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
+
+  const [entschiedeneAntraege, setEntschiedeneAntraege] = useState<AntragRow[]>([])
+  const [openAntragId, setOpenAntragId] = useState<string | null>(null)
+
+  async function loadEntschiedeneAntraege() {
+    const { data } = await supabase
+      .from('antraege')
+      .select('*')
+      .in('status', ANTRAG_STATUS_ABGESCHLOSSEN)
+      .order('created_at', { ascending: false })
+    setEntschiedeneAntraege(data ?? [])
+  }
 
   async function loadSessions() {
     const { data: mine } = await supabase.auth.getUser()
@@ -123,6 +137,7 @@ export default function Archiv() {
     loadNotizenFlags()
     loadCompletedTodos()
     loadDocuments()
+    loadEntschiedeneAntraege()
     supabase
       .from('calendar_sources')
       .select('*')
@@ -165,6 +180,13 @@ export default function Archiv() {
             className={tab === 'dokumente' ? 'mc-btn-primary' : 'mc-btn-ghost'}
           >
             <FileText size={16} /> Dokumente
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('antraege')}
+            className={tab === 'antraege' ? 'mc-btn-primary' : 'mc-btn-ghost'}
+          >
+            <Gavel size={16} /> Anträge
           </button>
         </div>
 
@@ -331,10 +353,56 @@ export default function Archiv() {
             </ul>
           </section>
         )}
+
+        {tab === 'antraege' && (
+          <section className="mc-animate-fade max-w-2xl">
+            <ul className="space-y-2">
+              {entschiedeneAntraege.map((a) => (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenAntragId(a.id)}
+                    className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                  >
+                    <span
+                      className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${ANTRAG_STATUS_BADGE[a.status]}`}
+                    >
+                      {ANTRAG_STATUS_LABEL[a.status]}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>
+                      <span className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-slate-500">
+                        {a.ausschuss && (
+                          <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                            {a.ausschuss}
+                          </span>
+                        )}
+                        {a.eingereicht_am && <span>Eingereicht {formatDate(a.eingereicht_am)}</span>}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {entschiedeneAntraege.length === 0 && (
+                <li className="mc-card p-6 text-center text-sm text-slate-400">
+                  Noch keine entschiedenen Anträge. Landen hier, sobald ein Antrag als beschlossen, abgelehnt oder
+                  zurückgezogen markiert wird.
+                </li>
+              )}
+            </ul>
+          </section>
+        )}
       </div>
 
       {openTodoId && (
         <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadCompletedTodos} />
+      )}
+      {openAntragId && (
+        <AntragDetailModal
+          id={openAntragId}
+          onClose={() => setOpenAntragId(null)}
+          onChanged={loadEntschiedeneAntraege}
+        />
       )}
       {previewDoc && (
         <DocumentPreviewModal

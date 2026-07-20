@@ -512,6 +512,43 @@ Vorhanden:
        `Access-Control-Allow-Methods`-Header war damit der tatsächliche Rootcause des gesamten
        Connector-Problems, nicht die vorherigen (ebenfalls echten, aber unzureichenden) Fixes 1–4.
 
+- **Eigene Anträge** (`0017_antraege.sql`, seit 2026-07-20): Neue Sektion "Meine Anträge" für selbst
+  verfasste/eingebrachte Anträge – bewusst getrennt vom `documents`-Konzept aus KONZEPT.md Abschnitt 5.1
+  (dort geht es um extern importierte Vorlagen/Anträge aus dem Ratsinformationssystem, hier um eigene,
+  noch unveröffentlichte Anträge mit Workflow-Status). Rein privat (`antraege_manage_own`, gleiches
+  RLS-Muster wie `todos_manage_own`) – bewusste Nutzerentscheidung, keine Fraktions-Sichtbarkeit für den
+  ersten Wurf.
+  - Felder: `titel`, `status` (`entwurf`→`eingereicht`→`in_beratung`→`vertagt`|`beschlossen`|
+    `abgelehnt`|`zurueckgezogen`, zentrales Vokabular in `src/lib/antragStatus.ts` – Label + Badge-Farbe
+    + welche Werte als "aktiv" vs. "abgeschlossen" gelten), `ausschuss` (Freitext mit Autovervollständigung
+    aus den "Meine Gremien"-Einträgen des Nutzers via `<datalist>`, keine feste Werteliste), `inhalt`
+    (Antragstext/Begründung), `mitantragsteller` (Freitext), `session_id` (optionale Verknüpfung zu der
+    Sitzung, in der der Antrag behandelt wird – analog zur Sitzungs-Verknüpfung bei `todos`),
+    `eingereicht_am`.
+  - Kommentare (`antrag_comments`) und Dokumenten-Upload (`summaries.antrag_id`, Storage-Bucket
+    `zusammenfassungen`) sind 1:1 nach dem `todo_comments`/`summaries.todo_id`-Muster aus `0011`
+    dupliziert (bewusst, gleiche Begründung wie bei den anderen dokumentierten Dopplungen in diesem
+    Projekt: kein gemeinsames Backend, das eine Abstraktion rechtfertigen würde).
+  - **Dashboard** (`AntraegeSection.tsx`, zwischen ToDo-Board und "Nächste Termine"): Schnellerfassung
+    per Titel (legt mit Status `entwurf` an, Rest wird im Detail-Modal ergänzt – gleiches Zweistufen-
+    Muster wie beim ToDo-Board), Status-Filter-Chips (nur die im Bestand tatsächlich vorkommenden,
+    gleiches Muster wie die Ebene-Filter in `CalendarView`), zeigt nur "aktive" Anträge. Ein Link
+    ("N entschiedene im Archiv") verweist auf die abgeschlossenen.
+  - **Archiv** bekommt einen vierten Tab "Anträge" (Icon `Gavel`) für `beschlossen`/`abgelehnt`/
+    `zurueckgezogen` – gleiches Modal (`AntragDetailModal`), damit auch entschiedene Anträge weiterhin
+    vollständig einsehbar/nachträglich korrigierbar bleiben (kein separater Read-only-Modus, analog zu
+    "Erledigte Aufgaben").
+  - **Sitzungsdetailsicht** (`TerminDetailPanel`, nur `kind='session'`): neue Sektion "Verknüpfte
+    Anträge" neben "Verknüpfte Aufgaben" – Klick auf eine Sitzung zeigt damit ToDos *und* Anträge dazu
+    auf einen Blick, ohne dass die Sitzungsdetailsicht selbst etwas von `antraege` wissen muss (rein
+    lesende `.eq('session_id', id)`-Query).
+  - Migration wurde direkt gegen das Live-Supabase-Projekt gepusht (`supabase db push`, additiv: neue
+    Tabellen + eine neue Spalte, keine Drops) und per REST-Smoke-Test verifiziert. **Wichtig:** Der
+    Code-Push nach GitHub triggert den Deploy erst separat – ohne `git push` bleibt die Produktivseite
+    auf dem alten Stand, auch wenn die DB-Migration schon lokal getestet wurde (genau das ist beim
+    ersten Rollout dieser Sektion passiert: DB war fertig, GitHub Pages zeigte trotzdem noch die alte
+    Version, bis Code committed und gepusht wurde).
+
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
    `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte

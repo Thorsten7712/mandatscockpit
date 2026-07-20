@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { CalendarView } from '../components/CalendarView'
 import { TodoBoard } from '../components/TodoBoard'
+import { AntraegeSection } from '../components/AntraegeSection'
 import { logoUrl, themeById } from '../lib/themes'
 
 export default function Dashboard() {
@@ -86,6 +87,7 @@ export default function Dashboard() {
           <h2 className="mb-3 text-base font-semibold text-slate-900">ToDo-Board</h2>
           <TodoBoard />
         </section>
+        <AntraegeSection />
         <CalendarView />
       </main>
     </div>
