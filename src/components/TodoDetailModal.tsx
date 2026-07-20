@@ -266,10 +266,17 @@ export function TodoDetailModal({
   }
 
   async function handleSaveEbene(value: string) {
-    if (!todo) return
+    if (!todo || !userId) return
     const ebene = (value || null) as Ebene | null
     setTodo({ ...todo, ebene })
     await supabase.from('todos').update({ ebene }).eq('id', todo.id)
+    if (!ebene) {
+      // "– keine –" heißt "nicht mehr geteilt": bestehende Freigaben mit
+      // entfernen, sonst bliebe die Karte für bereits geteilte Kolleg*innen
+      // weiterhin sichtbar, obwohl die Ebene-Auswahl das Gegenteil suggeriert.
+      await supabase.from('todo_placements').delete().eq('todo_id', todo.id).neq('user_id', userId)
+      await loadSharing()
+    }
     onChanged()
   }
 
@@ -344,10 +351,16 @@ export function TodoDetailModal({
     await loadDocuments()
   }
 
-  // Kandidatenliste kann bei größeren Fraktionen/Parteien lang werden -
-  // bereits geteilte Kolleg*innen als entfernbare Chips, der Rest über eine
-  // Such-Dropdown statt einer langen Checkbox-Liste hinzufügbar.
-  const geteilteKandidaten = candidates.filter((c) => placements.some((p) => p.user_id === c.id))
+  // Bereits geteilt = tatsächliche todo_placements-Zeilen (unabhängig von der
+  // aktuell gewählten Ebene!) - candidates ist nach der gewählten Ebene
+  // gefiltert und wäre leer, sobald die Ebene z. B. wieder auf "keine"
+  // gesetzt wird, obwohl noch Freigaben bestehen können (Bugreport: Ebene
+  // stand auf "keine", ein Kollege hatte die Karte aber weiterhin auf seinem
+  // Board - die Chips müssen also von placements/placementNames kommen,
+  // nicht von candidates). Kandidatenliste kann bei größeren Fraktionen/
+  // Parteien lang werden - der Rest über eine Such-Dropdown statt einer
+  // langen Checkbox-Liste hinzufügbar.
+  const geteiltePlatzierungen = placements.filter((p) => p.user_id !== userId)
   const ungeteilteKandidatenGefiltert = candidates
     .filter((c) => !placements.some((p) => p.user_id === c.id))
     .filter((c) => c.name.toLowerCase().includes(shareSearch.trim().toLowerCase()))
@@ -519,32 +532,33 @@ export function TodoDetailModal({
                     </p>
                   )}
                 </div>
-                {todo.ebene && (
+                {(geteiltePlatzierungen.length > 0 || todo.ebene) && (
                   <div>
                     <p className="mb-1 text-sm text-slate-600">
-                      Kolleg*innen (gleiche Partei, Ebene {EBENE_LABEL[todo.ebene]})
+                      {todo.ebene ? `Kolleg*innen (gleiche Partei, Ebene ${EBENE_LABEL[todo.ebene]})` : 'Geteilt mit'}
                     </p>
                     <div className="mb-2 flex flex-wrap gap-1.5">
-                      {geteilteKandidaten.map((c) => (
+                      {geteiltePlatzierungen.map((p) => (
                         <span
-                          key={c.id}
+                          key={p.user_id}
                           className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
                         >
-                          {c.name}
+                          {placementNames.get(p.user_id) ?? '…'}
                           <button
                             type="button"
-                            onClick={() => handleToggleShare(c.id, true)}
-                            aria-label={`${c.name} entfernen`}
+                            onClick={() => handleToggleShare(p.user_id, true)}
+                            aria-label={`${placementNames.get(p.user_id) ?? 'Kolleg*in'} entfernen`}
                             className="text-primary/70 hover:text-primary"
                           >
                             ×
                           </button>
                         </span>
                       ))}
-                      {geteilteKandidaten.length === 0 && (
+                      {geteiltePlatzierungen.length === 0 && (
                         <span className="text-xs text-slate-400">Noch mit niemandem geteilt.</span>
                       )}
                     </div>
+                    {todo.ebene && (
                     <div className="relative">
                       <input
                         type="text"
@@ -581,14 +595,15 @@ export function TodoDetailModal({
                         </ul>
                       )}
                     </div>
+                    )}
                   </div>
                 )}
                 {shareError && <p className="text-red-600 text-sm">{shareError}</p>}
               </>
             ) : (
-              todo.ebene && (
+              placements.length > 1 && (
                 <p className="text-sm text-slate-600">
-                  Geteilt für Ebene {EBENE_LABEL[todo.ebene]} · Mitglieder:{' '}
+                  {todo.ebene ? `Geteilt für Ebene ${EBENE_LABEL[todo.ebene]}` : 'Geteilt'} · Mitglieder:{' '}
                   {placements.map((p) => placementNames.get(p.user_id) ?? '…').join(', ')}
                 </p>
               )
