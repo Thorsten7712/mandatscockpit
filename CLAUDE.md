@@ -397,7 +397,8 @@ Vorhanden:
     Bearer-Token identisch (`crypto.subtle.digest`) und schlägt damit den Nutzer nach; alle
     DB-Operationen laufen danach über `SUPABASE_SERVICE_ROLE_KEY` im Namen dieses einen Nutzers (RLS
     wird hier also bewusst durch den Token-Lookup ersetzt, gleiches Muster wie `admin-users`).
-  - **Selbstbedienung in Settings** (`Settings.tsx`, neue Sidebar-Sektion „Claude-Integration“, Icon
+  - **Selbstbedienung in Settings** (`Settings.tsx`, Sidebar-Sektion „MCP Connection“ (ursprünglich
+    „Claude-Integration“, auf Nutzerwunsch umbenannt), Icon
     `Bot`): Jedes Mitglied erzeugt/erneuert sein Token selbst (`crypto.getRandomValues` → `mck_`-Präfix
     + Base64url, gleiche `sha256Hex()`-Funktion wie in der Edge Function dupliziert – bewusst wie bei
     der ICS-Parsing-Logik, da Browser- und Deno-Crypto-API zwar ähnlich, aber unterschiedliche Module

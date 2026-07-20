@@ -14,7 +14,7 @@ const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: b
   { id: 'kalender', label: 'Kalenderquellen', icon: CalendarDays },
   { id: 'gremien', label: 'Meine Gremien', icon: Landmark },
   { id: 'board', label: 'ToDo-Board', icon: SquareKanban },
-  { id: 'mcp', label: 'Claude-Integration', icon: Bot },
+  { id: 'mcp', label: 'MCP Connection', icon: Bot },
   { id: 'benutzer', label: 'Benutzerverwaltung', icon: Users, adminOnly: true },
 ]
 
@@ -934,7 +934,7 @@ export default function Settings() {
 
       {activeSection === 'mcp' && (
       <section className="mc-animate-fade">
-      <h2 className="mb-2 text-base font-semibold text-slate-900">Claude-Integration (MCP)</h2>
+      <h2 className="mb-2 text-base font-semibold text-slate-900">MCP Connection</h2>
       <p className="text-xs text-slate-400 mb-2 max-w-md">
         Mit einer persönlichen Zugangs-URL kannst du MandatsCockpit direkt aus Claude heraus per Chat
         steuern (z. B. „Leg mir ein ToDo an: XY im nächsten Verkehrsausschuss fragen"). Richte dazu in

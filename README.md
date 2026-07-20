@@ -151,7 +151,7 @@ MCP-Client das unterstützt). Zwei weitere Stolpersteine, die dabei aufgetreten 
 
 1. **Migration einspielen:** `supabase/migrations/0016_mcp_tokens.sql` wie in Abschnitt 3, Schritt 3
    beschrieben im SQL Editor ausführen (oder `supabase db push`).
-2. **Zugangs-URL erzeugen:** In der App unter **Einstellungen → Claude-Integration** auf
+2. **Zugangs-URL erzeugen:** In der App unter **Einstellungen → MCP Connection** auf
    „Zugangs-URL erzeugen“ klicken. Die komplette URL (inkl. `?token=...`) wird nur **einmalig** im
    Klartext angezeigt – sofort kopieren und sicher aufbewahren (z. B. im Passwort-Manager). Ein neues
    Token zu erzeugen macht das alte ungültig.
