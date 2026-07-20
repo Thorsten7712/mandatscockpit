@@ -382,11 +382,18 @@ Vorhanden:
   Browser-URL. Kein `HashRouter`/`basename`-Wechsel nötig, nur dieser eine Build-Schritt.
 - **MCP-Server für Claude-Steuerung** (`supabase/functions/mcp-server/index.ts`, Route 9 in README.md):
   Dritte Edge Function, implementiert das MCP-JSON-RPC-Protokoll (`initialize`/`tools/list`/
-  `tools/call`) von Hand über einen einzigen HTTP-POST-Endpunkt (kein SSE-Streaming nötig, da alle drei
+  `tools/call`) von Hand über einen einzigen HTTP-POST-Endpunkt (kein SSE-Streaming nötig, da alle
   Tools synchron antworten) – es gibt kein fertiges Supabase/Deno-MCP-Template dafür. Tools:
   `create_todo` (sucht/legt `todo_columns` per Titel case-insensitive an, hängt hinten in der Spalte
   an), `create_event` (`herkunft = 'privat'`), `list_next_sessions` (zukünftige Sitzungen, optional
-  `gremium`-Teilstring-Filter per `ilike`).
+  `gremium`-Teilstring-Filter per `ilike`), `create_session_summary` (Nutzerwunsch: „ein Sammeldokument
+  analysieren und zusammenfassen lassen und dann hochladen zu einer bestimmten Sitzung“ – die
+  eigentliche Analyse macht Claude direkt im Chat als LLM, das Tool speichert nur das fertige
+  Ergebnis; Insert in `summaries.inhalt` mit `session_id`, kein Datei-Upload/`datei_url` – bewusst
+  Freitext statt Storage-Bucket, weil MCP-Tool-Argumente Text sind und der bestehende
+  `TerminDetailPanel`-Notizen-Bereich `inhalt` ohnehin gleichwertig zu einer manuell eingetragenen
+  Notiz anzeigt; prüft vorher per Select, ob die `session_id` existiert, für eine verständliche
+  Fehlermeldung statt eines rohen FK-Constraint-Fehlers).
   - **Auth bewusst nicht global, sondern pro Nutzer**: Ursprünglich als Einzelnutzer-Lösung mit einem
     einzigen `MCP_ACCESS_TOKEN`-Secret geplant, dann auf Nutzerwunsch umgestellt auf **ein persönliches
     Bearer-Token pro Mitglied**, da die Function für alle Mitglieder nutzbar sein soll, nicht nur für

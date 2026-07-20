@@ -123,8 +123,11 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt und stellt drei Tools bereit: `create_todo`,
-`create_event`, `list_next_sessions`.
+`tools/call`) über einen einzigen HTTP-Endpunkt und stellt vier Tools bereit: `create_todo`,
+`create_event`, `list_next_sessions`, `create_session_summary` (speichert einen im Chat erstellten
+Analyse-/Zusammenfassungstext – z. B. zu einem eingefügten Sammeldokument – als Notiz zu einer
+bestimmten Sitzung; taucht danach in der Termindetailsicht der Sitzung wie eine manuell eingetragene
+Notiz auf).
 
 **Auth-Modell:** Kein OAuth, sondern ein **persönliches Token pro Mitglied** – jeder Nutzer erzeugt es
 sich selbst, die Function agiert dann über den `SUPABASE_SERVICE_ROLE_KEY` im Namen genau dieses

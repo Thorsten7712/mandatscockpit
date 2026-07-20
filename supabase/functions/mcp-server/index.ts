@@ -118,6 +118,25 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'create_session_summary',
+    description:
+      'Speichert einen Analyse-/Zusammenfassungstext als Notiz zu einer bestimmten Sitzung im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort wie eine manuell eingetragene Notiz in der Termindetailsicht der Sitzung). Der Analysetext selbst wird vorher direkt im Chat erstellt, z. B. auf Basis eines vom Nutzer eingefügten Sammeldokuments - dieses Tool speichert nur das fertige Ergebnis.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: {
+          type: 'string',
+          description: 'UUID der Sitzung (z. B. aus list_next_sessions), zu der die Zusammenfassung gehört.',
+        },
+        inhalt: {
+          type: 'string',
+          description: 'Der fertige Analyse-/Zusammenfassungstext.',
+        },
+      },
+      required: ['session_id', 'inhalt'],
+    },
+  },
 ] as const
 
 function formatDateTime(iso: string): string {
@@ -253,6 +272,31 @@ async function listNextSessions(supabase: SupabaseClient, args: Record<string, u
   return toolTextResult(lines.join('\n'))
 }
 
+async function createSessionSummary(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const sessionId = typeof args.session_id === 'string' ? args.session_id.trim() : ''
+  const inhalt = typeof args.inhalt === 'string' ? args.inhalt.trim() : ''
+  if (!sessionId || !inhalt) {
+    return toolTextResult('Fehler: session_id und inhalt sind erforderlich.', true)
+  }
+
+  const { data: session, error: sessionError } = await supabase
+    .from('sessions')
+    .select('id, titel')
+    .eq('id', sessionId)
+    .maybeSingle()
+  if (sessionError) return toolTextResult(`Fehler beim Prüfen der Sitzung: ${sessionError.message}`, true)
+  if (!session) return toolTextResult(`Sitzung mit id ${sessionId} wurde nicht gefunden.`, true)
+
+  const { data: summary, error } = await supabase
+    .from('summaries')
+    .insert({ user_id: userId, session_id: sessionId, inhalt })
+    .select('id')
+    .single()
+  if (error || !summary) return toolTextResult(`Fehler beim Speichern der Zusammenfassung: ${error?.message}`, true)
+
+  return toolTextResult(`Zusammenfassung zu Sitzung "${session.titel}" wurde gespeichert (id: ${summary.id}).`)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -360,6 +404,9 @@ Deno.serve(async (req) => {
           break
         case 'list_next_sessions':
           result = await listNextSessions(supabase, args)
+          break
+        case 'create_session_summary':
+          result = await createSessionSummary(supabase, user.id, args)
           break
         default:
           return respond(jsonRpcError(id, -32602, `Unbekanntes Tool: ${name}`), 400)
