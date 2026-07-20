@@ -119,22 +119,30 @@ const TOOLS = [
     },
   },
   {
-    name: 'create_session_summary',
+    name: 'create_session_note',
     description:
-      'Speichert einen Analyse-/Zusammenfassungstext als Notiz zu einer bestimmten Sitzung im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort wie eine manuell eingetragene Notiz in der Termindetailsicht der Sitzung). Der Analysetext selbst wird vorher direkt im Chat erstellt, z. B. auf Basis eines vom Nutzer eingefügten Sammeldokuments - dieses Tool speichert nur das fertige Ergebnis.',
+      'Speichert eine Notiz zu einer bestimmten Sitzung im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort in der Termindetailsicht der Sitzung, wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument). Unterstützt Freitext (z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten Sammeldokuments), einen Datei-Anhang (Base64-kodiert, z. B. das Sammeldokument selbst) oder beides zusammen. Mindestens eins von beidem ist erforderlich. Für den Datei-Anhang gilt ein praktisches Limit von einigen MB (Base64 vergrößert die Originaldatei um ca. 33%, das Edge-Function-Request-Limit greift zuerst).',
     inputSchema: {
       type: 'object',
       properties: {
         session_id: {
           type: 'string',
-          description: 'UUID der Sitzung (z. B. aus list_next_sessions), zu der die Zusammenfassung gehört.',
+          description: 'UUID der Sitzung (z. B. aus list_next_sessions), zu der die Notiz gehört.',
         },
         inhalt: {
           type: 'string',
-          description: 'Der fertige Analyse-/Zusammenfassungstext.',
+          description: 'Freitext-Notiz, z. B. eine im Chat erstellte Analyse/Zusammenfassung (optional).',
+        },
+        dateiname: {
+          type: 'string',
+          description: 'Dateiname inkl. Endung für einen Datei-Anhang, z. B. "sammeldokument.pdf" (optional, nur zusammen mit datei_base64).',
+        },
+        datei_base64: {
+          type: 'string',
+          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname).',
         },
       },
-      required: ['session_id', 'inhalt'],
+      required: ['session_id'],
     },
   },
 ] as const
@@ -272,11 +280,19 @@ async function listNextSessions(supabase: SupabaseClient, args: Record<string, u
   return toolTextResult(lines.join('\n'))
 }
 
-async function createSessionSummary(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+async function createSessionNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const sessionId = typeof args.session_id === 'string' ? args.session_id.trim() : ''
-  const inhalt = typeof args.inhalt === 'string' ? args.inhalt.trim() : ''
-  if (!sessionId || !inhalt) {
-    return toolTextResult('Fehler: session_id und inhalt sind erforderlich.', true)
+  const inhalt = typeof args.inhalt === 'string' && args.inhalt.trim() ? args.inhalt.trim() : null
+  const dateiname = typeof args.dateiname === 'string' ? args.dateiname.trim() : ''
+  const dateiBase64 = typeof args.datei_base64 === 'string' ? args.datei_base64.trim() : ''
+  const hasFile = Boolean(dateiname && dateiBase64)
+
+  if (!sessionId) return toolTextResult('Fehler: session_id ist erforderlich.', true)
+  if (!inhalt && !hasFile) {
+    return toolTextResult('Fehler: entweder inhalt oder dateiname+datei_base64 sind erforderlich.', true)
+  }
+  if ((dateiname && !dateiBase64) || (!dateiname && dateiBase64)) {
+    return toolTextResult('Fehler: dateiname und datei_base64 müssen zusammen angegeben werden.', true)
   }
 
   const { data: session, error: sessionError } = await supabase
@@ -287,14 +303,29 @@ async function createSessionSummary(supabase: SupabaseClient, userId: string, ar
   if (sessionError) return toolTextResult(`Fehler beim Prüfen der Sitzung: ${sessionError.message}`, true)
   if (!session) return toolTextResult(`Sitzung mit id ${sessionId} wurde nicht gefunden.`, true)
 
-  const { data: summary, error } = await supabase
+  let dateiUrl: string | null = null
+  if (hasFile) {
+    let bytes: Uint8Array
+    try {
+      bytes = Uint8Array.from(atob(dateiBase64), (c) => c.charCodeAt(0))
+    } catch {
+      return toolTextResult('Fehler: datei_base64 ist kein gültiges Base64.', true)
+    }
+    const path = `${userId}/${Date.now()}-${dateiname}`
+    const { error: uploadError } = await supabase.storage.from('zusammenfassungen').upload(path, bytes)
+    if (uploadError) return toolTextResult(`Fehler beim Hochladen der Datei: ${uploadError.message}`, true)
+    dateiUrl = path
+  }
+
+  const { data: note, error } = await supabase
     .from('summaries')
-    .insert({ user_id: userId, session_id: sessionId, inhalt })
+    .insert({ user_id: userId, session_id: sessionId, inhalt, datei_url: dateiUrl })
     .select('id')
     .single()
-  if (error || !summary) return toolTextResult(`Fehler beim Speichern der Zusammenfassung: ${error?.message}`, true)
+  if (error || !note) return toolTextResult(`Fehler beim Speichern der Notiz: ${error?.message}`, true)
 
-  return toolTextResult(`Zusammenfassung zu Sitzung "${session.titel}" wurde gespeichert (id: ${summary.id}).`)
+  const parts = [inhalt ? 'Text' : null, dateiUrl ? `Datei "${dateiname}"` : null].filter(Boolean)
+  return toolTextResult(`Notiz (${parts.join(' + ')}) zu Sitzung "${session.titel}" wurde gespeichert (id: ${note.id}).`)
 }
 
 Deno.serve(async (req) => {
@@ -405,8 +436,8 @@ Deno.serve(async (req) => {
         case 'list_next_sessions':
           result = await listNextSessions(supabase, args)
           break
-        case 'create_session_summary':
-          result = await createSessionSummary(supabase, user.id, args)
+        case 'create_session_note':
+          result = await createSessionNote(supabase, user.id, args)
           break
         default:
           return respond(jsonRpcError(id, -32602, `Unbekanntes Tool: ${name}`), 400)

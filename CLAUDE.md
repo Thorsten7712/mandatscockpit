@@ -386,14 +386,23 @@ Vorhanden:
   Tools synchron antworten) – es gibt kein fertiges Supabase/Deno-MCP-Template dafür. Tools:
   `create_todo` (sucht/legt `todo_columns` per Titel case-insensitive an, hängt hinten in der Spalte
   an), `create_event` (`herkunft = 'privat'`), `list_next_sessions` (zukünftige Sitzungen, optional
-  `gremium`-Teilstring-Filter per `ilike`), `create_session_summary` (Nutzerwunsch: „ein Sammeldokument
+  `gremium`-Teilstring-Filter per `ilike`), `create_session_note` (Nutzerwunsch: „ein Sammeldokument
   analysieren und zusammenfassen lassen und dann hochladen zu einer bestimmten Sitzung“ – die
   eigentliche Analyse macht Claude direkt im Chat als LLM, das Tool speichert nur das fertige
-  Ergebnis; Insert in `summaries.inhalt` mit `session_id`, kein Datei-Upload/`datei_url` – bewusst
-  Freitext statt Storage-Bucket, weil MCP-Tool-Argumente Text sind und der bestehende
-  `TerminDetailPanel`-Notizen-Bereich `inhalt` ohnehin gleichwertig zu einer manuell eingetragenen
-  Notiz anzeigt; prüft vorher per Select, ob die `session_id` existiert, für eine verständliche
-  Fehlermeldung statt eines rohen FK-Constraint-Fehlers).
+  Ergebnis; ursprünglich `create_session_summary` und reiner Freitext, auf Nutzerwunsch umbenannt und
+  um Datei-Anhänge erweitert). Insert in `summaries` mit `session_id` + `inhalt` und/oder `datei_url`
+  (mindestens eins von beidem erforderlich, gleiche Kombinierbarkeit wie im „Notizen & Dokumente“-
+  Formular in `TerminDetailPanel.tsx`). Datei-Anhänge kommen als `dateiname` + `datei_base64`
+  (Base64-String) im Tool-Argument an, werden per `atob()` zu `Uint8Array` dekodiert und wie bei den
+  Upload-Flows im Frontend unter `<user_id>/<Date.now()>-<dateiname>` in den privaten Storage-Bucket
+  `zusammenfassungen` hochgeladen (Service-Role-Client umgeht die Storage-RLS-Policies dabei bewusst,
+  gleiches Muster wie überall sonst in dieser Function). Praktisches Limit durch das
+  Edge-Function-Request-Limit plus ca. 33 % Base64-Overhead - nicht separat validiert, nur in der
+  Tool-Beschreibung erwähnt. Ob Claude beim Chat-Aufruf tatsächlich die Rohbytes einer im Chat
+  angehängten Datei als Base64 überträgt, war zum Zeitpunkt der Implementierung nicht verifizierbar
+  (kein Testtoken ohne das aktive Nutzer-Token zu gefährden) - noch nicht live erprobt. Prüft vorher
+  per Select, ob die `session_id` existiert, für eine verständliche Fehlermeldung statt eines rohen
+  FK-Constraint-Fehlers.
   - **Auth bewusst nicht global, sondern pro Nutzer**: Ursprünglich als Einzelnutzer-Lösung mit einem
     einzigen `MCP_ACCESS_TOKEN`-Secret geplant, dann auf Nutzerwunsch umgestellt auf **ein persönliches
     Bearer-Token pro Mitglied**, da die Function für alle Mitglieder nutzbar sein soll, nicht nur für
