@@ -426,8 +426,8 @@ Vorhanden:
     Anpassung über den bestehenden `deploy-edge-functions.yml`-Workflow mit (deployt alle Functions
     unter `supabase/functions/` ohne Namen) – bewusst **keine** zweite Workflow-Datei angelegt, das
     hätte nur doppelte Deploy-Läufe erzeugt.
-  - **Drei Produktivfehler nach dem ersten Rollout entdeckt und behoben (2026-07-20), alle beim ersten
-    echten Connector-Versuch aufgefallen:**
+  - **Vier Produktivfehler nach dem ersten Rollout entdeckt und behoben (2026-07-20), alle beim ersten
+    echten Connector-Versuch bzw. bei erneutem Verbinden aufgefallen:**
     1. Supabase prüft den `Authorization`-Header von Edge Functions standardmäßig selbst als
        Supabase-Auth-JWT, bevor die Function überhaupt läuft (`verify_jwt`, Default `true`) – jedes
        eigene Token wurde dadurch schon vom API-Gateway mit `UNAUTHORIZED_INVALID_JWT_FORMAT`
@@ -459,6 +459,19 @@ Vorhanden:
        Auth-Check (wird für die `id` im Fehlerobjekt gebraucht). Per curl gegenverifiziert: alle
        Antworten (fehlendes Token, ungültiges Token, GET-Probe) liefern seitdem keinen 401/
        `WWW-Authenticate` mehr.
+    4. Nach Hinzufügen von `create_session_note` funktionierte das erneute Verbinden trotz nachweislich
+       korrektem Server wieder nicht (per curl mit dem echten Nutzer-Token direkt gegen die deployte
+       Function verifiziert: `initialize`/`tools/list` liefen einwandfrei). Ursache diesmal:
+       `resources/list`, `prompts/list` und andere von uns nicht unterstützte JSON-RPC-Methoden (die
+       Claude beim Verbinden offenbar unabhängig von den in `initialize` deklarierten `capabilities`
+       abfragt) gaben **HTTP 404** zurück – derselbe Fehlerklassen-Bug wie bei Punkt 3 (HTTP-Statuscode
+       an der falschen Stelle bricht die Connector-Verbindung ab, obwohl der JSON-RPC-Fehler im Body
+       korrekt war), nur an einer anderen Stelle im Code. Fix: **jede** Antwort nach erfolgreichem
+       JSON-Parsing liefert jetzt HTTP 200, auch „Invalid Request“, „unbekanntes Tool“ und „Methode
+       nicht gefunden“ – Non-200 bleibt nur für echte Transport-Fehler (falsche HTTP-Methode, kaputtes
+       JSON) reserviert. Per curl mit allen denkbaren Discovery-Methoden (`resources/list`,
+       `prompts/list`, `completion/complete`, `logging/setLevel`) gegenverifiziert: alle liefern jetzt
+       HTTP 200.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

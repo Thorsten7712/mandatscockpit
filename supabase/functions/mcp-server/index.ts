@@ -392,8 +392,18 @@ Deno.serve(async (req) => {
     return respond(jsonRpcError(id, -32001, 'Unauthorized: ungültiges oder unbekanntes Token.'))
   }
 
+  // Ab hier läuft jede Antwort bewusst über HTTP 200, auch JSON-RPC-Fehler
+  // (falsche/fehlende method, unbekanntes Tool, nicht unterstützte
+  // Methode wie resources/list oder prompts/list, die Claude beim Verbinden
+  // offenbar unabhängig von den in initialize deklarierten capabilities
+  // abfragt). Ein Nicht-200-Status an dieser Stelle hat bereits einmal die
+  // komplette Connector-Verbindung in Claude abbrechen lassen, obwohl der
+  // JSON-RPC-Fehler im Body für sich genommen korrekt war - siehe
+  // CLAUDE.md für die Historie. Non-200 bleibt nur für echte
+  // Transport-Fehler (kaputtes JSON, falsche HTTP-Methode, fehlendes
+  // Token) reserviert.
   if (!body.method) {
-    return respond(jsonRpcError(id, -32600, 'Invalid Request'), 400)
+    return respond(jsonRpcError(id, -32600, 'Invalid Request'))
   }
 
   switch (body.method) {
@@ -440,13 +450,13 @@ Deno.serve(async (req) => {
           result = await createSessionNote(supabase, user.id, args)
           break
         default:
-          return respond(jsonRpcError(id, -32602, `Unbekanntes Tool: ${name}`), 400)
+          return respond(jsonRpcError(id, -32602, `Unbekanntes Tool: ${name}`))
       }
       return respond(jsonRpcResult(id, result))
     }
 
     default:
       if (isNotification) return new Response(null, { status: 202, headers: corsHeaders })
-      return respond(jsonRpcError(id, -32601, `Methode nicht gefunden: ${body.method}`), 404)
+      return respond(jsonRpcError(id, -32601, `Methode nicht gefunden: ${body.method}`))
   }
 })
