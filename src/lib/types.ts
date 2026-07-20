@@ -156,7 +156,6 @@ export interface AntragRow {
   /** Dient dem Fristen-Nachschlag UND dem Teilen-Kandidatenfilter (analog todos.ebene) */
   ebene: Ebene | null
   session_id: string | null
-  mitantragsteller: string | null
   eingereicht_am: string | null
   created_at: string
 }

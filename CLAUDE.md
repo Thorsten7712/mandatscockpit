@@ -603,6 +603,16 @@ Vorhanden:
     (die eigenen Settings des gerade eingeloggten Nutzers, nicht die des Ersteller) - bei geteilten
     Anträgen kann die angezeigte Frist deshalb je nach Person leicht abweichen, das ist beabsichtigt
     (jede*r hat ggf. andere interne Vorlaufzeiten).
+  - **UI-Feinschliff nach dem Rollout** (`0024_antraege_drop_mitantragsteller.sql`, noch 2026-07-20):
+    Nutzerentscheidung, das Freitext-Feld `mitantragsteller` und das jetzt redundante, manuell
+    editierbare Ausschuss-Textfeld aus dem Formular zu entfernen. Begründung: die Teilen-Funktion
+    (`antrag_shares`) deckt "Mitantragsteller" jetzt strukturiert ab statt als Freitext - der
+    "Teilen"-Bereich im Modal heißt deshalb konsequent "Mitantragsteller" (nicht mehr "Teilen"),
+    Wording durchgängig angepasst ("Du bist Mitantragsteller*in..." statt "wurde mit dir geteilt").
+    Die Spalte wurde komplett gedroppt statt nur im Frontend ausgeblendet (kein totes DB-Feld). Das
+    Ausschuss-Feld (`antraege.ausschuss`) bleibt als Spalte bestehen (weiterhin für Badges/Filter in
+    `AntraegeSection`/Archiv genutzt) - nur das manuelle Text-Eingabefeld im Formular ist weg, da der
+    Wert inzwischen zuverlässig aus der verknüpften Sitzung übernommen wird (`handleSessionChange`).
 
 - **Kalenderquellen nach Nutzern getrennt** (`0018_calendar_sources_privat.sql`, seit 2026-07-20): Bug
   behoben, der KONZEPT.md Abschnitt 5.1/7 widersprach ("gemeinsame Grundausstattung vom Ratsbüro" +

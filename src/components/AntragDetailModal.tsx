@@ -32,7 +32,6 @@ export function AntragDetailModal({
   const [antrag, setAntrag] = useState<AntragRow | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const [gremienVorschlaege, setGremienVorschlaege] = useState<string[]>([])
   const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
   const [linkedSession, setLinkedSession] = useState<SessionRow | null>(null)
   const [tageByEbene, setTageByEbene] = useState<Map<Ebene, number>>(new Map())
@@ -43,7 +42,6 @@ export function AntragDetailModal({
   const [editAusschuss, setEditAusschuss] = useState('')
   const [editEbene, setEditEbene] = useState<Ebene | ''>('')
   const [editInhalt, setEditInhalt] = useState('')
-  const [editMitantragsteller, setEditMitantragsteller] = useState('')
   const [editSessionId, setEditSessionId] = useState('')
   const [editEingereichtAm, setEditEingereichtAm] = useState('')
   const [editSaving, setEditSaving] = useState(false)
@@ -85,7 +83,6 @@ export function AntragDetailModal({
     setEditAusschuss(data.ausschuss ?? '')
     setEditEbene(data.ebene ?? '')
     setEditInhalt(data.inhalt ?? '')
-    setEditMitantragsteller(data.mitantragsteller ?? '')
     setEditSessionId(data.session_id ?? '')
     setEditEingereichtAm(data.eingereicht_am ?? '')
     setLinkedSession(null)
@@ -148,7 +145,6 @@ export function AntragDetailModal({
       setUserId(data.user.id)
       const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
       const gremien = (mine ?? []).map((g) => g.gremium)
-      setGremienVorschlaege(gremien)
       if (gremien.length > 0) {
         const { data: sessions } = await supabase
           .from('sessions')
@@ -223,7 +219,6 @@ export function AntragDetailModal({
         ausschuss: editAusschuss || null,
         ebene: editEbene || null,
         inhalt: editInhalt || null,
-        mitantragsteller: editMitantragsteller || null,
         session_id: editSessionId || null,
         eingereicht_am: eingereichtAm,
       })
@@ -407,34 +402,12 @@ export function AntragDetailModal({
                 </div>
               )}
 
-              <input
-                type="text"
-                placeholder="Vorgesehener Ausschuss"
-                value={editAusschuss}
-                onChange={(e) => setEditAusschuss(e.target.value)}
-                list="antrag-ausschuss-vorschlaege"
-                className="mc-input w-full"
-              />
-              <datalist id="antrag-ausschuss-vorschlaege">
-                {gremienVorschlaege.map((g) => (
-                  <option key={g} value={g} />
-                ))}
-              </datalist>
-
               <textarea
                 placeholder="Antragstext / Begründung (optional)"
                 value={editInhalt}
                 onChange={(e) => setEditInhalt(e.target.value)}
                 className="mc-input w-full"
                 rows={5}
-              />
-
-              <input
-                type="text"
-                placeholder="Mitantragsteller (optional)"
-                value={editMitantragsteller}
-                onChange={(e) => setEditMitantragsteller(e.target.value)}
-                className="mc-input w-full"
               />
 
               <div className="space-y-1">
@@ -467,7 +440,7 @@ export function AntragDetailModal({
                   {editSaving ? 'Speichern...' : 'Speichern'}
                 </button>
                 <button type="button" onClick={handleDelete} className="mc-btn-danger">
-                  {istErsteller ? 'Löschen' : 'Freigabe für mich entfernen'}
+                  {istErsteller ? 'Löschen' : 'Nicht mehr Mitantragsteller*in'}
                 </button>
               </div>
               {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
@@ -476,11 +449,11 @@ export function AntragDetailModal({
 
           {antrag && (
             <div className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-700">Teilen</p>
+              <p className="text-sm font-semibold text-slate-700">Mitantragsteller</p>
               {istErsteller ? (
                 <>
                   <div>
-                    <label className="mb-1 block text-sm text-slate-600">Ebene (für Teilen &amp; Frist)</label>
+                    <label className="mb-1 block text-sm text-slate-600">Ebene (für Mitantragsteller &amp; Frist)</label>
                     <select
                       value={editEbene}
                       onChange={(e) => setEditEbene(e.target.value as Ebene | '')}
@@ -496,13 +469,13 @@ export function AntragDetailModal({
                     <p className="mt-1 text-xs text-slate-400">
                       Änderung wird erst mit „Speichern" oben übernommen.
                       {(myProfile?.ebenen ?? []).length === 0 &&
-                        ' Trage zuerst in den Einstellungen unter „Profil" deine eigenen Ebenen ein, um Anträge teilen zu können.'}
+                        ' Trage zuerst in den Einstellungen unter „Profil" deine eigenen Ebenen ein, um Mitantragsteller hinzuzufügen.'}
                     </p>
                   </div>
                   {(geteilteFreigaben.length > 0 || antrag.ebene) && (
                     <div>
                       <p className="mb-1 text-sm text-slate-600">
-                        {antrag.ebene ? `Kolleg*innen (gleiche Partei, Ebene ${EBENE_LABEL[antrag.ebene]})` : 'Geteilt mit'}
+                        {antrag.ebene ? `Kolleg*innen (gleiche Partei, Ebene ${EBENE_LABEL[antrag.ebene]})` : 'Mitantragsteller'}
                       </p>
                       <div className="mb-2 flex flex-wrap gap-1.5">
                         {geteilteFreigaben.map((s) => (
@@ -522,14 +495,14 @@ export function AntragDetailModal({
                           </span>
                         ))}
                         {geteilteFreigaben.length === 0 && (
-                          <span className="text-xs text-slate-400">Noch mit niemandem geteilt.</span>
+                          <span className="text-xs text-slate-400">Noch keine Mitantragsteller.</span>
                         )}
                       </div>
                       {antrag.ebene && (
                         <div className="relative">
                           <input
                             type="text"
-                            placeholder="Kolleg*in suchen..."
+                            placeholder="Mitantragsteller suchen..."
                             value={shareSearch}
                             onChange={(e) => setShareSearch(e.target.value)}
                             onFocus={() => setShareDropdownOpen(true)}
@@ -569,7 +542,7 @@ export function AntragDetailModal({
                 </>
               ) : (
                 <p className="text-sm text-slate-600">
-                  Dieser Antrag wurde mit dir geteilt
+                  Du bist Mitantragsteller*in dieses Antrags
                   {antrag.ebene ? ` (Ebene ${EBENE_LABEL[antrag.ebene]})` : ''}.
                   {geteilteFreigaben.length > 0 &&
                     ` Weitere: ${geteilteFreigaben.map((s) => shareNames.get(s.user_id) ?? '…').join(', ')}`}
