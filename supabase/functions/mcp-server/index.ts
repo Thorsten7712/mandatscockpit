@@ -273,8 +273,13 @@ async function createTodo(supabase: SupabaseClient, userId: string, args: Record
     column = created
   }
 
+  // Board-Platzierung (Spalte/Position) lebt seit dem Erledigt/Teilen-Ausbau
+  // in einer eigenen todo_placements-Zeile statt direkt auf todos, damit eine
+  // Karte auf mehreren Boards unterschiedlich einsortiert sein kann (siehe
+  // 0021_todo_erledigt_sharing.sql). Teilen selbst bleibt über MCP nicht
+  // möglich, nur die eigene Platzierung wird hier angelegt.
   const { data: last } = await supabase
-    .from('todos')
+    .from('todo_placements')
     .select('position')
     .eq('column_id', column.id)
     .order('position', { ascending: false })
@@ -285,8 +290,6 @@ async function createTodo(supabase: SupabaseClient, userId: string, args: Record
     .from('todos')
     .insert({
       user_id: userId,
-      column_id: column.id,
-      position,
       titel,
       faellig_am: faelligAm,
       session_id: sessionId,
@@ -294,6 +297,13 @@ async function createTodo(supabase: SupabaseClient, userId: string, args: Record
     .select('id')
     .single()
   if (todoError || !todo) return toolTextResult(`Fehler beim Anlegen des ToDos: ${todoError?.message}`, true)
+
+  const { error: placementError } = await supabase
+    .from('todo_placements')
+    .insert({ todo_id: todo.id, user_id: userId, column_id: column.id, position })
+  if (placementError) {
+    return toolTextResult(`ToDo angelegt, aber Platzierung auf dem Board fehlgeschlagen: ${placementError.message}`, true)
+  }
 
   return toolTextResult(`ToDo "${titel}" wurde in Spalte "${column.titel}" angelegt (id: ${todo.id}).`)
 }

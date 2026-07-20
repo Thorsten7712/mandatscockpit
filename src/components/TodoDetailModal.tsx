@@ -1,8 +1,19 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import type { EventRow, SessionRow, SummaryRow, TodoComment, TodoColumn, TodoRow } from '../lib/types'
+import type {
+  Ebene,
+  EventRow,
+  Profile,
+  SessionRow,
+  SummaryRow,
+  TodoComment,
+  TodoColumn,
+  TodoPlacement,
+  TodoRow,
+} from '../lib/types'
 import { formatDate, formatDateTime } from '../lib/format'
+import { EBENE_LABEL } from '../lib/sourceColors'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 
 type TerminModus = 'keine' | 'datum' | 'termin' | 'sitzung'
@@ -27,6 +38,7 @@ export function TodoDetailModal({
   const [editTitel, setEditTitel] = useState('')
   const [editBeschreibung, setEditBeschreibung] = useState('')
   const [editZustaendig, setEditZustaendig] = useState('')
+  const [editErledigt, setEditErledigt] = useState(false)
   const [terminModus, setTerminModus] = useState<TerminModus>('keine')
   const [editDatum, setEditDatum] = useState('')
   const [editEventId, setEditEventId] = useState('')
@@ -37,6 +49,14 @@ export function TodoDetailModal({
 
   const [ownEvents, setOwnEvents] = useState<EventRow[]>([])
   const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
+
+  // Teilen mit Kolleg*innen gleicher Partei+Ebene (volle Gleichberechtigung,
+  // siehe CLAUDE.md/Plan): nur der Ersteller verwaltet Ebene + Freigabeliste.
+  const [myProfile, setMyProfile] = useState<Profile | null>(null)
+  const [placements, setPlacements] = useState<TodoPlacement[]>([])
+  const [placementNames, setPlacementNames] = useState<Map<string, string>>(new Map())
+  const [candidates, setCandidates] = useState<Profile[]>([])
+  const [shareError, setShareError] = useState<string | null>(null)
 
   const [comments, setComments] = useState<TodoComment[]>([])
   const [newComment, setNewComment] = useState('')
@@ -58,6 +78,7 @@ export function TodoDetailModal({
     setEditTitel(data.titel)
     setEditBeschreibung(data.beschreibung ?? '')
     setEditZustaendig(data.zustaendig ?? '')
+    setEditErledigt(data.erledigt)
     if (data.event_id) {
       setTerminModus('termin')
       setEditEventId(data.event_id)
@@ -92,10 +113,45 @@ export function TodoDetailModal({
     setDocuments(data ?? [])
   }
 
+  // Volle Platzierungsliste dieser Karte (alle Personen, für die sie auf dem
+  // Board erscheint) - für den Ersteller der Checkbox-Zustand in der
+  // Kandidatenliste, für alle anderen die read-only "Geteilt mit"-Anzeige.
+  // RLS erlaubt jeder platzierten Person, alle Platzierungen derselben Karte
+  // zu lesen (todo_placements_select, siehe Migration 0021).
+  async function loadSharing() {
+    const { data: pl } = await supabase.from('todo_placements').select('*').eq('todo_id', id)
+    setPlacements(pl ?? [])
+    const ids = Array.from(new Set((pl ?? []).map((p) => p.user_id)))
+    if (ids.length === 0) {
+      setPlacementNames(new Map())
+      return
+    }
+    const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
+    setPlacementNames(new Map((profs ?? []).map((p) => [p.id, p.name])))
+  }
+
+  // Kandidat*innen fürs Teilen: gleiche Partei UND die auf der Karte gewählte
+  // Ebene in den eigenen Ebenen der Kolleg*in. RLS (profiles_select_same_
+  // partei_ebene) scoped bereits grob auf "gleiche Partei + irgendeine
+  // Ebenen-Überschneidung mit mir" - hier wird zusätzlich exakt auf die
+  // gewählte Karten-Ebene gefiltert.
+  async function loadCandidates(ebene: Ebene) {
+    if (!myProfile?.partei || !userId) {
+      setCandidates([])
+      return
+    }
+    const { data } = await supabase.from('profiles').select('*').neq('id', userId)
+    const filtered = (data ?? []).filter(
+      (p) => p.partei === myProfile.partei && (p.ebenen ?? []).includes(ebene),
+    )
+    setCandidates(filtered)
+  }
+
   useEffect(() => {
     loadTodo()
     loadComments()
     loadDocuments()
+    loadSharing()
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
@@ -113,9 +169,22 @@ export function TodoDetailModal({
           .order('datum')
         setOwnSessions(sessions ?? [])
       }
+      const { data: profileRow } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
+      setMyProfile(profileRow)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // Kandidatenliste neu laden, sobald die Karten-Ebene oder das eigene Profil
+  // bekannt ist bzw. sich ändert (nur relevant für den Ersteller).
+  useEffect(() => {
+    if (todo?.user_id === userId && todo?.ebene) {
+      loadCandidates(todo.ebene)
+    } else {
+      setCandidates([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todo?.ebene, todo?.user_id, userId, myProfile])
 
   async function handleSaveEdit(e: FormEvent) {
     e.preventDefault()
@@ -123,6 +192,10 @@ export function TodoDetailModal({
     setEditSaving(true)
     setEditError(null)
 
+    // erledigt_am nur beim ÜBERGANG false->true neu setzen, damit ein
+    // erneutes Speichern ohne Statuswechsel den 5-Tage-Countdown (siehe
+    // TodoBoard.tsx) nicht zurücksetzt.
+    const erledigtWurdeGesetzt = editErledigt && !todo.erledigt
     const update: Partial<TodoRow> = {
       titel: editTitel,
       beschreibung: editBeschreibung || null,
@@ -130,6 +203,8 @@ export function TodoDetailModal({
       faellig_am: terminModus === 'datum' ? editDatum || null : null,
       event_id: terminModus === 'termin' ? editEventId || null : null,
       session_id: terminModus === 'sitzung' ? editSessionId || null : null,
+      erledigt: editErledigt,
+      erledigt_am: editErledigt ? (erledigtWurdeGesetzt ? new Date().toISOString() : todo.erledigt_am) : null,
     }
 
     const { error } = await supabase.from('todos').update(update).eq('id', todo.id)
@@ -139,15 +214,27 @@ export function TodoDetailModal({
       return
     }
 
-    // Auto-Verschieben nach "Geplant": nur wenn die Karte gerade in einer
-    // Spalte namens "Neu" liegt, ein Termin/Datum neu verknüpft wurde und
-    // eine Spalte "Geplant" existiert. Spaltennamen sind frei änderbar -
-    // greift also nur, solange die Standardnamen noch stimmen.
-    if (terminModus !== 'keine') {
-      const currentColumn = columns.find((c) => c.id === todo.column_id)
+    // Auto-Verschieben nach "Geplant": nur wenn die Karte auf dem EIGENEN
+    // Board gerade in einer Spalte namens "Neu" liegt, ein Termin/Datum neu
+    // verknüpft wurde und eine Spalte "Geplant" existiert. Spaltennamen sind
+    // frei änderbar - greift also nur, solange die Standardnamen noch
+    // stimmen. Bewegt nur die eigene Platzierung (siehe TodoBoard.tsx:
+    // fremde Platzierungen dürfen per RLS nicht angefasst werden).
+    if (terminModus !== 'keine' && userId) {
+      const { data: myPlacement } = await supabase
+        .from('todo_placements')
+        .select('*')
+        .eq('todo_id', todo.id)
+        .eq('user_id', userId)
+        .single()
+      const currentColumn = columns.find((c) => c.id === myPlacement?.column_id)
       const geplantColumn = columns.find((c) => c.titel.toLowerCase() === 'geplant')
       if (currentColumn?.titel.toLowerCase() === 'neu' && geplantColumn) {
-        await supabase.from('todos').update({ column_id: geplantColumn.id }).eq('id', todo.id)
+        await supabase
+          .from('todo_placements')
+          .update({ column_id: geplantColumn.id })
+          .eq('todo_id', todo.id)
+          .eq('user_id', userId)
       }
     }
 
@@ -156,16 +243,57 @@ export function TodoDetailModal({
     onChanged()
   }
 
+  // Nur der Ersteller löscht die Karte komplett (für alle Platzierten). Wer
+  // nur mitgeteilt wurde, trägt sich stattdessen selbst aus - entfernt die
+  // Karte vom eigenen Board, ohne sie für andere zu löschen (volle
+  // Gleichberechtigung heißt nicht, dass jeder für alle löschen darf).
+  const istErsteller = todo?.user_id === userId
+
   async function handleDelete() {
-    if (!todo) return
+    if (!todo || !userId) return
     setDeleteError(null)
-    const { error } = await supabase.from('todos').delete().eq('id', todo.id)
+    const { error } = istErsteller
+      ? await supabase.from('todos').delete().eq('id', todo.id)
+      : await supabase.from('todo_placements').delete().eq('todo_id', todo.id).eq('user_id', userId)
     if (error) {
       setDeleteError(error.message)
       return
     }
     onChanged()
     onClose()
+  }
+
+  async function handleSaveEbene(value: string) {
+    if (!todo) return
+    const ebene = (value || null) as Ebene | null
+    setTodo({ ...todo, ebene })
+    await supabase.from('todos').update({ ebene }).eq('id', todo.id)
+    onChanged()
+  }
+
+  async function handleToggleShare(targetUserId: string, aktuellGeteilt: boolean) {
+    setShareError(null)
+    if (aktuellGeteilt) {
+      const { error } = await supabase
+        .from('todo_placements')
+        .delete()
+        .eq('todo_id', id)
+        .eq('user_id', targetUserId)
+      if (error) {
+        setShareError(error.message)
+        return
+      }
+    } else {
+      const { error } = await supabase.functions.invoke('share-todo', {
+        body: { action: 'share', todo_id: id, target_user_id: targetUserId },
+      })
+      if (error) {
+        setShareError(error.message)
+        return
+      }
+    }
+    await loadSharing()
+    onChanged()
   }
 
   async function handleAddComment(e: FormEvent) {
@@ -258,6 +386,15 @@ export function TodoDetailModal({
               className="mc-input w-full"
             />
 
+            <label className="flex items-center gap-1.5 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={editErledigt}
+                onChange={(e) => setEditErledigt(e.target.checked)}
+              />
+              Erledigt
+            </label>
+
             <div className="space-y-1">
               <p className="text-sm text-slate-600">Termin-Verknüpfung</p>
               <div className="flex flex-wrap gap-3 text-sm">
@@ -340,11 +477,77 @@ export function TodoDetailModal({
                 {editSaving ? 'Speichern...' : 'Speichern'}
               </button>
               <button type="button" onClick={handleDelete} className="mc-btn-danger">
-                Löschen
+                {istErsteller ? 'Löschen' : 'Von meinem Board entfernen'}
               </button>
             </div>
             {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
           </form>
+        )}
+
+        {todo && (
+          <div className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-700">Teilen</p>
+            {istErsteller ? (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">Ebene</label>
+                  <select
+                    value={todo.ebene ?? ''}
+                    onChange={(e) => handleSaveEbene(e.target.value)}
+                    className="mc-input w-full"
+                  >
+                    <option value="">– keine –</option>
+                    {(myProfile?.ebenen ?? []).map((e) => (
+                      <option key={e} value={e}>
+                        {EBENE_LABEL[e]}
+                      </option>
+                    ))}
+                  </select>
+                  {(myProfile?.ebenen ?? []).length === 0 && (
+                    <p className="mt-1 text-xs text-slate-400">
+                      Trage zuerst in den Einstellungen unter „Profil" deine eigenen Ebenen ein, um Karten
+                      teilen zu können.
+                    </p>
+                  )}
+                </div>
+                {todo.ebene && (
+                  <div>
+                    <p className="mb-1 text-sm text-slate-600">
+                      Kolleg*innen (gleiche Partei, Ebene {EBENE_LABEL[todo.ebene]})
+                    </p>
+                    <div className="space-y-1">
+                      {candidates.map((c) => {
+                        const geteilt = placements.some((p) => p.user_id === c.id)
+                        return (
+                          <label key={c.id} className="flex items-center gap-1.5 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={geteilt}
+                              onChange={() => handleToggleShare(c.id, geteilt)}
+                            />
+                            {c.name}
+                          </label>
+                        )
+                      })}
+                      {candidates.length === 0 && (
+                        <p className="text-xs text-slate-400">
+                          Keine Kolleg*innen mit gleicher Partei und Ebene gefunden.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {shareError && <p className="text-red-600 text-sm">{shareError}</p>}
+              </>
+            ) : (
+              todo.ebene && (
+                <p className="text-sm text-slate-600">
+                  Geteilt für Ebene {EBENE_LABEL[todo.ebene]} · Mitglieder:{' '}
+                  {placements.map((p) => placementNames.get(p.user_id) ?? '…').join(', ')}
+                </p>
+              )
+            )}
+          </div>
         )}
 
         <h2 className="font-semibold mb-2">Kommentare</h2>
@@ -354,15 +557,13 @@ export function TodoDetailModal({
               <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
               <div className="flex items-center justify-between mt-1">
                 <span className="text-xs text-slate-400">{formatDateTime(c.erstellt_am)}</span>
-                {c.user_id === userId && (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteComment(c.id)}
-                    className="mc-btn-danger !px-2 !py-1 !text-xs"
-                  >
-                    Löschen
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => handleDeleteComment(c.id)}
+                  className="mc-btn-danger !px-2 !py-1 !text-xs"
+                >
+                  Löschen
+                </button>
               </div>
             </li>
           ))}

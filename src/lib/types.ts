@@ -24,6 +24,8 @@ export interface Profile {
   foto_url: string | null
   /** Theme-Id aus src/lib/themes.ts (cdu/spd/fdp/...), null = neutral */
   partei: string | null
+  /** Eigene Mandate/Ebenen, selbst gepflegt in Settings (mehrere gleichzeitig möglich) */
+  ebenen: Ebene[]
 }
 
 export interface CalendarSource {
@@ -110,8 +112,6 @@ export interface TodoBoardSettings {
 export interface TodoRow {
   id: string
   user_id: string
-  column_id: string
-  position: number
   titel: string
   beschreibung: string | null
   zustaendig: string | null
@@ -119,7 +119,22 @@ export interface TodoRow {
   dokument_id: string | null
   session_id: string | null
   event_id: string | null
+  erledigt: boolean
+  erledigt_am: string | null
+  /** Ebene, für die diese Karte ggf. geteilt wurde (vom Ersteller gewählt) */
+  ebene: Ebene | null
   created_at: string
+}
+
+/** Board-Platzierung einer Karte für eine bestimmte Person - je Karte+Nutzer
+ * eine Zeile, damit geteilte Karten auf mehreren Boards unterschiedlich
+ * einsortiert sein können. */
+export interface TodoPlacement {
+  id: string
+  todo_id: string
+  user_id: string
+  column_id: string
+  position: number
 }
 
 export interface TodoComment {

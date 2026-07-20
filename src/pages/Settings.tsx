@@ -278,6 +278,18 @@ export default function Settings() {
     }
   }
 
+  // Anders als Partei (admin-verwaltet, siehe UserManagement) trägt jeder
+  // Nutzer seine eigenen Mandats-Ebenen selbst ein - bestimmt, mit wem
+  // ToDo-Karten geteilt werden können (siehe TodoDetailModal.tsx).
+  async function toggleMyEbene(value: Ebene) {
+    if (!userId || !profile) return
+    const aktuell = profile.ebenen ?? []
+    const neu = aktuell.includes(value) ? aktuell.filter((e) => e !== value) : [...aktuell, value]
+    setProfile((prev) => (prev ? { ...prev, ebenen: neu } : prev))
+    const { error } = await supabase.from('profiles').update({ ebenen: neu }).eq('id', userId)
+    if (error) await loadProfile(userId)
+  }
+
   async function toggle(sourceId: string) {
     if (!userId) return
     if (subscribed.includes(sourceId)) {
@@ -544,6 +556,26 @@ export default function Settings() {
           </p>
           <p className="mt-1 text-xs text-slate-400">
             Wird von einem Admin in der Benutzerverwaltung festgelegt.
+          </p>
+        </div>
+
+        <div>
+          <p className="mb-1 block text-sm text-slate-600">Meine Ebenen (Mandate)</p>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {EBENEN.map((e) => (
+              <label key={e.value} className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={(profile?.ebenen ?? []).includes(e.value)}
+                  onChange={() => toggleMyEbene(e.value)}
+                />
+                {e.label}
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            Wird von dir selbst gepflegt (anders als die Partei) - mehrere Ebenen gleichzeitig möglich,
+            z. B. Stadtrat und Kreistag. Bestimmt, mit wem du ToDo-Karten teilen kannst.
           </p>
         </div>
       </div>

@@ -10,22 +10,30 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
-import type { TodoBoardSettings, TodoColumn, TodoRow } from '../lib/types'
+import type { TodoBoardSettings, TodoColumn, TodoPlacement, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
 import { formatDate } from '../lib/format'
+
+const FUENF_TAGE_MS = 5 * 24 * 60 * 60 * 1000
+
+// Erledigte Karten bleiben noch 5 Tage nach dem Abhaken auf dem Board
+// sichtbar, danach nur noch im Archiv (siehe Archiv.tsx) - rein clientseitig
+// gefiltert, kein Cronjob nötig.
+function istAufBoardSichtbar(todo: TodoRow): boolean {
+  if (!todo.erledigt || !todo.erledigt_am) return true
+  return Date.now() - new Date(todo.erledigt_am).getTime() <= FUENF_TAGE_MS
+}
 
 function Card({
   todo,
   settings,
   onOpen,
   terminLabel,
-  istFertig,
 }: {
   todo: TodoRow
   settings: TodoBoardSettings | null
   onOpen: () => void
   terminLabel: string | null
-  istFertig: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: todo.id })
   // touchAction: 'none' ist auf Touch-Geräten (iPad) nötig, sonst interpretiert
@@ -46,7 +54,8 @@ function Card({
       onClick={onOpen}
       className={`cursor-grab select-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-shadow duration-150 hover:shadow-md active:cursor-grabbing ${isDragging ? 'z-10 shadow-lg ring-2 ring-primary/40' : ''}`}
     >
-      <p className={`text-sm font-medium ${istFertig ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+      <p className={`text-sm font-medium ${todo.erledigt ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+        {todo.ebene && <span title="Für Kolleg*innen freigebbar/geteilt">🔗 </span>}
         {todo.titel}
       </p>
       {(zeigeTermin || zeigeZustaendig) && (
@@ -67,21 +76,19 @@ function Card({
 
 function Column({
   column,
-  todos,
+  entries,
   settings,
   onAddCard,
   onOpenTodo,
   canAddCard,
-  istFertig,
   terminLabels,
 }: {
   column: TodoColumn
-  todos: TodoRow[]
+  entries: TodoRow[]
   settings: TodoBoardSettings | null
   onAddCard: (titel: string) => void
   onOpenTodo: (id: string) => void
   canAddCard: boolean
-  istFertig: boolean
   terminLabels: Record<string, string | null>
 }) {
   const { setNodeRef } = useDroppable({ id: column.id })
@@ -98,21 +105,20 @@ function Column({
     <div ref={setNodeRef} className="rounded-xl bg-slate-200/50 p-3">
       <div className="mb-2.5 flex items-center justify-between px-1">
         <h3 className="text-sm font-semibold text-slate-700">{column.titel}</h3>
-        {todos.length > 0 && (
+        {entries.length > 0 && (
           <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
-            {todos.length}
+            {entries.length}
           </span>
         )}
       </div>
       <div className="min-h-[40px] space-y-2">
-        {todos.map((t) => (
+        {entries.map((t) => (
           <Card
             key={t.id}
             todo={t}
             settings={settings}
             onOpen={() => onOpenTodo(t.id)}
             terminLabel={terminLabels[t.id] ?? null}
-            istFertig={istFertig}
           />
         ))}
       </div>
@@ -135,6 +141,7 @@ export function TodoBoard() {
   const [userId, setUserId] = useState<string | null>(null)
   const [columns, setColumns] = useState<TodoColumn[]>([])
   const [todos, setTodos] = useState<TodoRow[]>([])
+  const [placements, setPlacements] = useState<TodoPlacement[]>([])
   const [settings, setSettings] = useState<TodoBoardSettings | null>(null)
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
   const [eventById, setEventById] = useState<Map<string, { titel: string; start: string }>>(new Map())
@@ -151,18 +158,29 @@ export function TodoBoard() {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   )
 
-  async function load() {
-    const { data: cols } = await supabase.from('todo_columns').select('*').order('reihenfolge')
-    const { data: items } = await supabase.from('todos').select('*').order('position')
+  // Lädt nur die EIGENE Board-Platzierung (todo_placements.user_id = self) -
+  // RLS würde für den Karten-Ersteller zusätzlich fremde Platzierungen
+  // durchlassen (siehe 0021_todo_erledigt_sharing.sql), die gehören aber
+  // nicht auf dieses Board.
+  async function load(uid: string) {
+    const { data: cols } = await supabase.from('todo_columns').select('*').eq('user_id', uid).order('reihenfolge')
+    const { data: myPlacements } = await supabase.from('todo_placements').select('*').eq('user_id', uid)
     setColumns(cols ?? [])
+    setPlacements(myPlacements ?? [])
+    const todoIds = (myPlacements ?? []).map((p) => p.todo_id)
+    if (todoIds.length === 0) {
+      setTodos([])
+      return
+    }
+    const { data: items } = await supabase.from('todos').select('*').in('id', todoIds)
     setTodos(items ?? [])
   }
 
   useEffect(() => {
-    load()
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
+      await load(data.user.id)
       const { data: settingsRow } = await supabase
         .from('todo_board_settings')
         .select('*')
@@ -215,27 +233,55 @@ export function TodoBoard() {
     return null
   }
 
+  const sortedColumns = [...columns].sort((a, b) => a.reihenfolge - b.reihenfolge)
+  const fertigColumn = sortedColumns.find((c) => c.titel.trim().toLowerCase() === 'fertig')
+  const placementByTodoId = new Map(placements.map((p) => [p.todo_id, p]))
+
+  // Virtuelles Gruppieren statt Platzierungs-Schreiben bei Erledigt-Toggle:
+  // erledigt=true gruppiert eine Karte für JEDEN Betrachter in dessen eigene
+  // Fertig-Spalte, ohne dass fremde todo_placements-Zeilen angefasst werden
+  // müssten (dafür fehlt per RLS die Berechtigung - siehe Migration 0021).
+  function displayColumnId(todo: TodoRow, placement: TodoPlacement): string {
+    return todo.erledigt && fertigColumn ? fertigColumn.id : placement.column_id
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
-    if (!over) return
+    if (!over || !userId) return
     const todoId = active.id as string
     const newColumnId = over.id as string
-    setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, column_id: newColumnId } : t)))
-    await supabase.from('todos').update({ column_id: newColumnId }).eq('id', todoId)
+    const targetColumn = columns.find((c) => c.id === newColumnId)
+    const wirdErledigt = targetColumn?.titel.trim().toLowerCase() === 'fertig'
+    const erledigtAm = wirdErledigt ? new Date().toISOString() : null
+
+    setPlacements((prev) =>
+      prev.map((p) => (p.todo_id === todoId && p.user_id === userId ? { ...p, column_id: newColumnId } : p)),
+    )
+    setTodos((prev) =>
+      prev.map((t) => (t.id === todoId ? { ...t, erledigt: wirdErledigt, erledigt_am: erledigtAm } : t)),
+    )
+
+    await supabase.from('todo_placements').update({ column_id: newColumnId }).eq('todo_id', todoId).eq('user_id', userId)
+    await supabase.from('todos').update({ erledigt: wirdErledigt, erledigt_am: erledigtAm }).eq('id', todoId)
   }
 
   async function handleAddCard(columnId: string, titel: string) {
     if (!userId) return
-    const maxPosition = Math.max(0, ...todos.filter((t) => t.column_id === columnId).map((t) => t.position))
-    const { data } = await supabase
+    const maxPosition = Math.max(0, ...placements.filter((p) => p.column_id === columnId).map((p) => p.position))
+    const { data: newTodo, error: todoError } = await supabase
       .from('todos')
-      .insert({ user_id: userId, column_id: columnId, titel, position: maxPosition + 1 })
+      .insert({ user_id: userId, titel })
       .select()
       .single()
-    if (data) setTodos((prev) => [...prev, data])
+    if (todoError || !newTodo) return
+    const { data: placement } = await supabase
+      .from('todo_placements')
+      .insert({ todo_id: newTodo.id, user_id: userId, column_id: columnId, position: maxPosition + 1 })
+      .select()
+      .single()
+    setTodos((prev) => [...prev, newTodo])
+    if (placement) setPlacements((prev) => [...prev, placement])
   }
-
-  const sortedColumns = [...columns].sort((a, b) => a.reihenfolge - b.reihenfolge)
 
   if (columns.length === 0) {
     return <p className="text-slate-500 text-sm">Spalten werden geladen...</p>
@@ -250,6 +296,19 @@ export function TodoBoard() {
   const terminLabels: Record<string, string | null> = {}
   for (const t of todos) terminLabels[t.id] = terminLabelFor(t)
 
+  const sichtbareTodos = todos.filter((t) => placementByTodoId.has(t.id) && istAufBoardSichtbar(t))
+  const entriesByColumn = new Map<string, TodoRow[]>()
+  for (const t of sichtbareTodos) {
+    const placement = placementByTodoId.get(t.id)!
+    const colId = displayColumnId(t, placement)
+    const list = entriesByColumn.get(colId) ?? []
+    list.push(t)
+    entriesByColumn.set(colId, list)
+  }
+  for (const list of entriesByColumn.values()) {
+    list.sort((a, b) => (placementByTodoId.get(a.id)?.position ?? 0) - (placementByTodoId.get(b.id)?.position ?? 0))
+  }
+
   return (
     <>
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
@@ -262,19 +321,22 @@ export function TodoBoard() {
             <Column
               key={col.id}
               column={col}
-              todos={todos.filter((t) => t.column_id === col.id)}
+              entries={entriesByColumn.get(col.id) ?? []}
               settings={settings}
               onAddCard={(titel) => handleAddCard(col.id, titel)}
               onOpenTodo={setOpenTodoId}
               canAddCard={col.id === neuColumn.id}
-              istFertig={col.titel.trim().toLowerCase() === 'fertig'}
               terminLabels={terminLabels}
             />
           ))}
         </div>
       </DndContext>
-      {openTodoId && (
-        <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={load} />
+      {openTodoId && userId && (
+        <TodoDetailModal
+          id={openTodoId}
+          onClose={() => setOpenTodoId(null)}
+          onChanged={() => load(userId)}
+        />
       )}
     </>
   )

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckSquare, FileText, Gavel, History } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, CalendarSource, SessionRow, SummaryRow, TodoColumn, TodoRow } from '../lib/types'
+import type { AntragRow, CalendarSource, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TerminDetailPanel } from '../components/TerminDetailPanel'
 import { TodoDetailModal } from '../components/TodoDetailModal'
 import { AntragDetailModal } from '../components/AntragDetailModal'
@@ -88,19 +88,11 @@ export default function Archiv() {
   }
 
   async function loadCompletedTodos() {
-    const { data: cols } = await supabase.from('todo_columns').select('*')
-    const fertigIds = (cols ?? [])
-      .filter((c: TodoColumn) => c.titel.trim().toLowerCase() === 'fertig')
-      .map((c) => c.id)
-    if (fertigIds.length === 0) {
-      setCompletedTodos([])
-      return
-    }
     const { data } = await supabase
       .from('todos')
       .select('*')
-      .in('column_id', fertigIds)
-      .order('created_at', { ascending: false })
+      .eq('erledigt', true)
+      .order('erledigt_am', { ascending: false })
     setCompletedTodos(data ?? [])
   }
 
@@ -315,6 +307,7 @@ export default function Archiv() {
                         {t.zustaendig && (
                           <span className="rounded bg-slate-100 px-1.5 py-0.5">👤 {t.zustaendig}</span>
                         )}
+                        {t.erledigt_am && <span>Erledigt am {formatDate(t.erledigt_am)}</span>}
                         <span>Erstellt am {formatDate(t.created_at)}</span>
                       </span>
                     </span>
@@ -323,8 +316,8 @@ export default function Archiv() {
               ))}
               {completedTodos.length === 0 && (
                 <li className="mc-card p-6 text-center text-sm text-slate-400">
-                  Noch keine erledigten Aufgaben. Karten landen hier, sobald du sie auf eine Spalte namens
-                  „Fertig" ziehst.
+                  Noch keine erledigten Aufgaben. Karten landen hier, sobald du sie als „Erledigt" markierst
+                  oder auf eine Spalte namens „Fertig" ziehst.
                 </li>
               )}
             </ul>
