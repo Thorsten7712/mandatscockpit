@@ -120,3 +120,9 @@ export interface TodoComment {
   inhalt: string
   erstellt_am: string
 }
+
+export interface McpToken {
+  user_id: string
+  token_hash: string
+  created_at: string
+}

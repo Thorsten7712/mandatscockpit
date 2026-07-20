@@ -380,6 +380,35 @@ Vorhanden:
   unbekannten Pfad aus; da Vite mit `base: '/mandatscockpit/'` baut, sind alle Asset-Pfade in `index.html`
   absolut und laden unabhängig vom Tiefen-Pfad korrekt – React Router übernimmt danach normal anhand der
   Browser-URL. Kein `HashRouter`/`basename`-Wechsel nötig, nur dieser eine Build-Schritt.
+- **MCP-Server für Claude-Steuerung** (`supabase/functions/mcp-server/index.ts`, Route 9 in README.md):
+  Dritte Edge Function, implementiert das MCP-JSON-RPC-Protokoll (`initialize`/`tools/list`/
+  `tools/call`) von Hand über einen einzigen HTTP-POST-Endpunkt (kein SSE-Streaming nötig, da alle drei
+  Tools synchron antworten) – es gibt kein fertiges Supabase/Deno-MCP-Template dafür. Tools:
+  `create_todo` (sucht/legt `todo_columns` per Titel case-insensitive an, hängt hinten in der Spalte
+  an), `create_event` (`herkunft = 'privat'`), `list_next_sessions` (zukünftige Sitzungen, optional
+  `gremium`-Teilstring-Filter per `ilike`).
+  - **Auth bewusst nicht global, sondern pro Nutzer**: Ursprünglich als Einzelnutzer-Lösung mit einem
+    einzigen `MCP_ACCESS_TOKEN`-Secret geplant, dann auf Nutzerwunsch umgestellt auf **ein persönliches
+    Bearer-Token pro Mitglied**, da die Function für alle Mitglieder nutzbar sein soll, nicht nur für
+    den Repo-Owner. Neue Tabelle `mcp_tokens` (`0016_mcp_tokens.sql`, `user_id` Primary Key, RLS
+    `user_id = auth.uid()` **ohne** die Fraktions-Ausnahme von `profiles_select_own_or_same_fraktion` –
+    ein Fraktionsbüro darf zwar Termine für Kolleg*innen anlegen, aber nicht deren MCP-Token einsehen).
+    Gespeichert wird nur `token_hash` (SHA-256), nie der Klartext – die Function hasht das eingehende
+    Bearer-Token identisch (`crypto.subtle.digest`) und schlägt damit den Nutzer nach; alle
+    DB-Operationen laufen danach über `SUPABASE_SERVICE_ROLE_KEY` im Namen dieses einen Nutzers (RLS
+    wird hier also bewusst durch den Token-Lookup ersetzt, gleiches Muster wie `admin-users`).
+  - **Selbstbedienung in Settings** (`Settings.tsx`, neue Sidebar-Sektion „Claude-Integration“, Icon
+    `Bot`): Jedes Mitglied erzeugt/erneuert sein Token selbst (`crypto.getRandomValues` → `mck_`-Präfix
+    + Base64url, gleiche `sha256Hex()`-Funktion wie in der Edge Function dupliziert – bewusst wie bei
+    der ICS-Parsing-Logik, da Browser- und Deno-Crypto-API zwar ähnlich, aber unterschiedliche Module
+    sind). Der Klartext-Token wird nur direkt nach dem Erzeugen einmalig angezeigt (State
+    `mcpGeneratedToken`, nicht persistiert) – ein Neuladen der Seite zeigt ihn nicht erneut, nur noch
+    das Erzeugungsdatum. Ein neues Token zu erzeugen macht das alte sofort ungültig (Primary Key
+    `user_id`, `upsert` überschreibt den Hash).
+  - Setup/Custom-Connector-Anleitung für Nutzer in README.md Abschnitt 9. Deploy läuft ohne weitere
+    Anpassung über den bestehenden `deploy-edge-functions.yml`-Workflow mit (deployt alle Functions
+    unter `supabase/functions/` ohne Namen) – bewusst **keine** zweite Workflow-Datei angelegt, das
+    hätte nur doppelte Deploy-Läufe erzeugt.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

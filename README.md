@@ -118,7 +118,41 @@ Quelle** sofort neu importiert (statt auf den nächsten täglichen Job zu warten
 
 Lokal testen (Deno muss installiert sein): `deno check --config supabase/functions/import-ics-source/deno.json supabase/functions/import-ics-source/index.ts`.
 
-## 9. Weiterentwicklung mit Claude Code
+## 9. MandatsCockpit per Chat aus Claude steuern (MCP-Server)
+
+Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
+direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
+Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
+`tools/call`) über einen einzigen HTTP-Endpunkt und stellt drei Tools bereit: `create_todo`,
+`create_event`, `list_next_sessions`.
+
+**Auth-Modell:** Kein OAuth, sondern ein **persönliches Bearer-Token pro Mitglied** – jeder Nutzer
+erzeugt es sich selbst, die Function agiert dann über den `SUPABASE_SERVICE_ROLE_KEY` im Namen genau
+dieses Kontos. Gespeichert wird dabei nur der SHA-256-Hash des Tokens (Tabelle `mcp_tokens`,
+`supabase/migrations/0016_mcp_tokens.sql`), nie der Klartext.
+
+1. **Migration einspielen:** `supabase/migrations/0016_mcp_tokens.sql` wie in Abschnitt 3, Schritt 3
+   beschrieben im SQL Editor ausführen (oder `supabase db push`).
+2. **Token erzeugen:** In der App unter **Einstellungen → Claude-Integration** auf „Token erzeugen“
+   klicken. Der Klartext-Token (Format `mck_...`) wird nur **einmalig** angezeigt – sofort kopieren und
+   sicher aufbewahren (z. B. im Passwort-Manager). Ein neues Token zu erzeugen macht das alte ungültig.
+3. **Deploy:** Läuft automatisch mit, sobald `supabase/functions/**` gepusht wird (siehe Abschnitt 8,
+   `deploy-edge-functions.yml` deployt alle Functions inkl. `mcp-server` ohne weitere Anpassung).
+4. **In Claude als Custom Connector eintragen:**
+   - In Claude unter **Connectors** (bzw. **Settings → Connectors**, je nach Claude-Version) einen
+     **Custom Connector** hinzufügen.
+   - Als **Server-URL** die Funktions-URL eintragen:
+     `https://<SUPABASE_PROJECT_REF>.supabase.co/functions/v1/mcp-server`
+   - Als **Bearer-Token** das in Schritt 2 erzeugte persönliche Token eintragen (nicht der Supabase
+     `anon`/`service_role`-Key!). Die genaue Bezeichnung des Eingabefelds kann je nach Claude-Version
+     variieren (z. B. „API Key“/„Authorization Header“).
+   - Danach stehen die drei Tools in Claude-Chats zur Verfügung.
+
+Jedes Mitglied verwaltet sein eigenes Token selbst; es gibt keine globale, gemeinsam genutzte
+Zugangskennung. Lokal typprüfbar mit `deno check --config supabase/functions/mcp-server/deno.json
+supabase/functions/mcp-server/index.ts`.
+
+## 10. Weiterentwicklung mit Claude Code
 
 Im Projektordner einfach `claude` starten – die Datei `CLAUDE.md` gibt Claude Code den vollen
 Projektkontext (Architektur, aktueller Stand, nächste Schritte, offene Design-Fragen). Guter

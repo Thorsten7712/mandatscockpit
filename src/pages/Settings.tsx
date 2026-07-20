@@ -1,21 +1,43 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarDays, Landmark, SquareKanban, User, Users } from 'lucide-react'
+import { Bot, CalendarDays, Landmark, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
 import { themeById } from '../lib/themes'
 import { EBENE_LABEL, SOURCE_COLORS, sourceColorById } from '../lib/sourceColors'
 import { UserManagement } from '../components/UserManagement'
 
-type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'benutzer'
+type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'mcp' | 'benutzer'
 
 const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: boolean }[] = [
   { id: 'profil', label: 'Profil', icon: User },
   { id: 'kalender', label: 'Kalenderquellen', icon: CalendarDays },
   { id: 'gremien', label: 'Meine Gremien', icon: Landmark },
   { id: 'board', label: 'ToDo-Board', icon: SquareKanban },
+  { id: 'mcp', label: 'Claude-Integration', icon: Bot },
   { id: 'benutzer', label: 'Benutzerverwaltung', icon: Users, adminOnly: true },
 ]
+
+// Erzeugt ein zufälliges Bearer-Token client-seitig (nie an den Server
+// übertragen) und dessen SHA-256-Hash zum Speichern. Muss mit der
+// Hash-Berechnung in supabase/functions/mcp-server/index.ts identisch
+// bleiben, sonst schlägt der Token-Lookup dort fehl.
+function randomMcpToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  const base64url = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+  return `mck_${base64url}`
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
 
 interface GremiumEntry {
   gremium: string
@@ -94,6 +116,12 @@ export default function Settings() {
   const [editColumnTitel, setEditColumnTitel] = useState('')
   const [boardSettings, setBoardSettings] = useState<TodoBoardSettings | null>(null)
 
+  const [mcpTokenCreatedAt, setMcpTokenCreatedAt] = useState<string | null>(null)
+  const [mcpGeneratedToken, setMcpGeneratedToken] = useState<string | null>(null)
+  const [mcpGenerating, setMcpGenerating] = useState(false)
+  const [mcpError, setMcpError] = useState<string | null>(null)
+  const [mcpCopied, setMcpCopied] = useState(false)
+
   async function loadSources() {
     const { data } = await supabase.from('calendar_sources').select('*').order('name')
     setSources(data ?? [])
@@ -136,6 +164,11 @@ export default function Settings() {
     setBoardSettings(data)
   }
 
+  async function loadMcpTokenStatus(uid: string) {
+    const { data } = await supabase.from('mcp_tokens').select('created_at').eq('user_id', uid).maybeSingle()
+    setMcpTokenCreatedAt(data?.created_at ?? null)
+  }
+
   useEffect(() => {
     loadSources()
     loadDistinctGremien().then(setGremien)
@@ -146,6 +179,7 @@ export default function Settings() {
       loadUserData(data.user.id)
       loadBoardSettings(data.user.id)
       loadProfile(data.user.id)
+      loadMcpTokenStatus(data.user.id)
     })
   }, [])
 
@@ -378,6 +412,37 @@ export default function Settings() {
     const updated = { ...current, [field]: !current[field] }
     setBoardSettings(updated)
     await supabase.from('todo_board_settings').upsert(updated)
+  }
+
+  async function handleGenerateMcpToken() {
+    if (!userId) return
+    if (mcpTokenCreatedAt) {
+      const ok = window.confirm(
+        'Neues Token erzeugen? Das bisherige Token funktioniert danach nicht mehr und muss in Claude ersetzt werden.',
+      )
+      if (!ok) return
+    }
+    setMcpGenerating(true)
+    setMcpError(null)
+    setMcpCopied(false)
+    const token = randomMcpToken()
+    const tokenHash = await sha256Hex(token)
+    const { error } = await supabase
+      .from('mcp_tokens')
+      .upsert({ user_id: userId, token_hash: tokenHash, created_at: new Date().toISOString() })
+    if (error) {
+      setMcpError(error.message)
+    } else {
+      setMcpGeneratedToken(token)
+      await loadMcpTokenStatus(userId)
+    }
+    setMcpGenerating(false)
+  }
+
+  async function handleCopyMcpToken() {
+    if (!mcpGeneratedToken) return
+    await navigator.clipboard.writeText(mcpGeneratedToken)
+    setMcpCopied(true)
   }
 
   return (
@@ -854,6 +919,48 @@ export default function Settings() {
           />
           Zuständigkeit (👤)
         </label>
+      </div>
+      </section>
+      )}
+
+      {activeSection === 'mcp' && (
+      <section className="mc-animate-fade">
+      <h2 className="mb-2 text-base font-semibold text-slate-900">Claude-Integration (MCP)</h2>
+      <p className="text-xs text-slate-400 mb-2 max-w-md">
+        Mit einem persönlichen Zugangs-Token kannst du MandatsCockpit direkt aus Claude heraus per Chat
+        steuern (z. B. „Leg mir ein ToDo an: XY im nächsten Verkehrsausschuss fragen"). Richte dazu in
+        Claude unter Connectors einen Custom Connector mit der Funktions-URL der mcp-server-Edge-Function
+        und diesem Token als Bearer-Token ein (siehe README.md).
+      </p>
+      <div className="mc-card max-w-md space-y-3 p-4">
+        <p className="text-sm text-slate-600">
+          {mcpTokenCreatedAt
+            ? `Aktives Token erzeugt am ${new Date(mcpTokenCreatedAt).toLocaleString('de-DE')}.`
+            : 'Noch kein Token erzeugt.'}
+        </p>
+        <button
+          type="button"
+          onClick={handleGenerateMcpToken}
+          disabled={mcpGenerating || !userId}
+          className="mc-btn-primary"
+        >
+          {mcpGenerating ? 'Erzeuge...' : mcpTokenCreatedAt ? 'Neues Token erzeugen' : 'Token erzeugen'}
+        </button>
+        {mcpError && <p className="text-red-600 text-sm">{mcpError}</p>}
+        {mcpGeneratedToken && (
+          <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+            <p className="text-xs text-amber-800">
+              Dieses Token wird nur jetzt im Klartext angezeigt (es wird nur gehasht gespeichert) – jetzt
+              kopieren und sicher aufbewahren.
+            </p>
+            <code className="block break-all rounded bg-white px-2 py-1.5 text-xs text-slate-800">
+              {mcpGeneratedToken}
+            </code>
+            <button type="button" onClick={handleCopyMcpToken} className="mc-btn-ghost !px-2 !py-1 !text-xs">
+              {mcpCopied ? 'Kopiert ✓' : 'In Zwischenablage kopieren'}
+            </button>
+          </div>
+        )}
       </div>
       </section>
       )}

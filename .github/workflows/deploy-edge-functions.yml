@@ -21,7 +21,9 @@ jobs:
         with:
           version: latest
       # Ohne Funktionsnamen deployt die CLI alle Funktionen unter
-      # supabase/functions/ (aktuell import-ics-source + admin-users).
+      # supabase/functions/ (aktuell import-ics-source, admin-users,
+      # mcp-server) - für eine neue Function reicht es also, sie unter
+      # supabase/functions/<name>/ anzulegen, ohne diese Datei anzufassen.
       - run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
