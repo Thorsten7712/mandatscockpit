@@ -588,6 +588,17 @@ Vorhanden:
     `calendar_sources_select_shared_or_own`, per `.or('source_id.is.null,source_id.in.(...)')`
     nachgebildet) – sonst hätte `list_next_sessions` per Claude-Chat weiterhin private Sitzungen
     fremder Mitglieder ausgegeben, obwohl das Web-UI sie längst korrekt versteckt.
+  - **Nachgebessert (noch 2026-07-20, `0019_calendar_sources_strict_privat.sql`):** 0018 hatte für
+    Admins noch eine Sichtbarkeits-Ausnahme auf fremde private Quellen (konsistent mit den
+    bestehenden update/delete-Policies aus 0006). Live-Test durch den admin-Account (Thorsten Kois)
+    zeigte, dass das nicht gewünscht war – die Trennung soll **strikt** sein, auch für Admins. Fix:
+    SELECT-Policies verlieren die Admin-Ausnahme komplett; die update/delete-Policies aus 0006 behalten
+    eine Admin-Ausnahme **nur noch für die gemeinsam verwaltete Quelle** (`verwaltet_von is null`, z. B.
+    "Stadtrat Iserlohn" – die kann sonst niemand bearbeiten), nicht mehr für fremde private Quellen
+    anderer Mitglieder. Grund für die Mitänderung der write-Policies: nach der strengeren SELECT-Regel
+    wäre die alte "Admin darf jede fremde Quelle bearbeiten/löschen"-Berechtigung nur noch unsichtbar,
+    aber technisch weiterhin nutzbar gewesen (Schreibzugriff per bekannter/erratener UUID, obwohl die
+    Quelle in der UI nicht mehr auftaucht) – das wäre eine stille Sicherheitslücke geblieben.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
