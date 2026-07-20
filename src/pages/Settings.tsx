@@ -39,6 +39,15 @@ async function sha256Hex(input: string): Promise<string> {
     .join('')
 }
 
+// Claudes "Custom Connector"-Dialog hat nur ein einzelnes URL-Feld (kein
+// separates Bearer-Token-Feld, nur eine optionale OAuth-Client-ID für
+// echte OAuth-Server) - das Token muss deshalb direkt in der URL stecken.
+// mcp-server/index.ts liest es dort per ?token=-Query-Parameter aus.
+function mcpConnectorUrl(token: string): string {
+  const functionsBase = `${import.meta.env.VITE_SUPABASE_URL as string}/functions/v1/mcp-server`
+  return `${functionsBase}?token=${token}`
+}
+
 interface GremiumEntry {
   gremium: string
   source_id: string | null
@@ -441,7 +450,7 @@ export default function Settings() {
 
   async function handleCopyMcpToken() {
     if (!mcpGeneratedToken) return
-    await navigator.clipboard.writeText(mcpGeneratedToken)
+    await navigator.clipboard.writeText(mcpConnectorUrl(mcpGeneratedToken))
     setMcpCopied(true)
   }
 
@@ -927,16 +936,17 @@ export default function Settings() {
       <section className="mc-animate-fade">
       <h2 className="mb-2 text-base font-semibold text-slate-900">Claude-Integration (MCP)</h2>
       <p className="text-xs text-slate-400 mb-2 max-w-md">
-        Mit einem persönlichen Zugangs-Token kannst du MandatsCockpit direkt aus Claude heraus per Chat
+        Mit einer persönlichen Zugangs-URL kannst du MandatsCockpit direkt aus Claude heraus per Chat
         steuern (z. B. „Leg mir ein ToDo an: XY im nächsten Verkehrsausschuss fragen"). Richte dazu in
-        Claude unter Connectors einen Custom Connector mit der Funktions-URL der mcp-server-Edge-Function
-        und diesem Token als Bearer-Token ein (siehe README.md).
+        Claude unter Connectors einen Custom Connector ein und trage dort diese URL **komplett** in das
+        einzige URL-Feld ein (Claude bietet aktuell kein separates Token-/API-Key-Feld an, siehe
+        README.md) – nicht nur den Teil vor dem „?".
       </p>
       <div className="mc-card max-w-md space-y-3 p-4">
         <p className="text-sm text-slate-600">
           {mcpTokenCreatedAt
             ? `Aktives Token erzeugt am ${new Date(mcpTokenCreatedAt).toLocaleString('de-DE')}.`
-            : 'Noch kein Token erzeugt.'}
+            : 'Noch keine Zugangs-URL erzeugt.'}
         </p>
         <button
           type="button"
@@ -944,17 +954,17 @@ export default function Settings() {
           disabled={mcpGenerating || !userId}
           className="mc-btn-primary"
         >
-          {mcpGenerating ? 'Erzeuge...' : mcpTokenCreatedAt ? 'Neues Token erzeugen' : 'Token erzeugen'}
+          {mcpGenerating ? 'Erzeuge...' : mcpTokenCreatedAt ? 'Neue Zugangs-URL erzeugen' : 'Zugangs-URL erzeugen'}
         </button>
         {mcpError && <p className="text-red-600 text-sm">{mcpError}</p>}
         {mcpGeneratedToken && (
           <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
             <p className="text-xs text-amber-800">
-              Dieses Token wird nur jetzt im Klartext angezeigt (es wird nur gehasht gespeichert) – jetzt
-              kopieren und sicher aufbewahren.
+              Diese komplette URL wird nur jetzt im Klartext angezeigt (gespeichert wird nur ein Hash) –
+              jetzt kopieren und als Server-URL im Custom Connector eintragen.
             </p>
             <code className="block break-all rounded bg-white px-2 py-1.5 text-xs text-slate-800">
-              {mcpGeneratedToken}
+              {mcpConnectorUrl(mcpGeneratedToken)}
             </code>
             <button type="button" onClick={handleCopyMcpToken} className="mc-btn-ghost !px-2 !py-1 !text-xs">
               {mcpCopied ? 'Kopiert ✓' : 'In Zwischenablage kopieren'}

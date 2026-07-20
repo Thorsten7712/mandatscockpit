@@ -126,29 +126,39 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 `tools/call`) über einen einzigen HTTP-Endpunkt und stellt drei Tools bereit: `create_todo`,
 `create_event`, `list_next_sessions`.
 
-**Auth-Modell:** Kein OAuth, sondern ein **persönliches Bearer-Token pro Mitglied** – jeder Nutzer
-erzeugt es sich selbst, die Function agiert dann über den `SUPABASE_SERVICE_ROLE_KEY` im Namen genau
-dieses Kontos. Gespeichert wird dabei nur der SHA-256-Hash des Tokens (Tabelle `mcp_tokens`,
+**Auth-Modell:** Kein OAuth, sondern ein **persönliches Token pro Mitglied** – jeder Nutzer erzeugt es
+sich selbst, die Function agiert dann über den `SUPABASE_SERVICE_ROLE_KEY` im Namen genau dieses
+Kontos. Gespeichert wird dabei nur der SHA-256-Hash des Tokens (Tabelle `mcp_tokens`,
 `supabase/migrations/0016_mcp_tokens.sql`), nie der Klartext.
+
+⚠️ Claudes „Custom Connector“-Dialog bietet (Stand jetzt) **nur ein einzelnes URL-Feld** an, kein
+separates Bearer-Token-/API-Key-Feld (nur eine optionale OAuth-Client-ID für Server, die echtes
+OAuth sprechen). Das Token wird deshalb direkt **als Teil der URL** übergeben
+(`...?token=<token>`) – die Edge Function liest es dort per Query-Parameter aus (zusätzlich wird,
+falls vorhanden, weiterhin auch ein `Authorization: Bearer`-Header akzeptiert, falls ein anderer
+MCP-Client das unterstützt). Außerdem muss die Function mit `verify_jwt = false` deployt sein
+(siehe `supabase/config.toml`), sonst weist Supabases eigenes API-Gateway jede Anfrage schon vor
+Erreichen der Function mit `UNAUTHORIZED_INVALID_JWT_FORMAT` ab, weil es den Token-String als
+Supabase-Auth-JWT zu parsen versucht.
 
 1. **Migration einspielen:** `supabase/migrations/0016_mcp_tokens.sql` wie in Abschnitt 3, Schritt 3
    beschrieben im SQL Editor ausführen (oder `supabase db push`).
-2. **Token erzeugen:** In der App unter **Einstellungen → Claude-Integration** auf „Token erzeugen“
-   klicken. Der Klartext-Token (Format `mck_...`) wird nur **einmalig** angezeigt – sofort kopieren und
-   sicher aufbewahren (z. B. im Passwort-Manager). Ein neues Token zu erzeugen macht das alte ungültig.
+2. **Zugangs-URL erzeugen:** In der App unter **Einstellungen → Claude-Integration** auf
+   „Zugangs-URL erzeugen“ klicken. Die komplette URL (inkl. `?token=...`) wird nur **einmalig** im
+   Klartext angezeigt – sofort kopieren und sicher aufbewahren (z. B. im Passwort-Manager). Ein neues
+   Token zu erzeugen macht das alte ungültig.
 3. **Deploy:** Läuft automatisch mit, sobald `supabase/functions/**` gepusht wird (siehe Abschnitt 8,
-   `deploy-edge-functions.yml` deployt alle Functions inkl. `mcp-server` ohne weitere Anpassung).
+   `deploy-edge-functions.yml` deployt alle Functions inkl. `mcp-server` ohne weitere Anpassung) –
+   `supabase/config.toml` (`verify_jwt = false` für `mcp-server`) wird dabei automatisch mit
+   berücksichtigt.
 4. **In Claude als Custom Connector eintragen:**
    - In Claude unter **Connectors** (bzw. **Settings → Connectors**, je nach Claude-Version) einen
      **Custom Connector** hinzufügen.
-   - Als **Server-URL** die Funktions-URL eintragen:
-     `https://<SUPABASE_PROJECT_REF>.supabase.co/functions/v1/mcp-server`
-   - Als **Bearer-Token** das in Schritt 2 erzeugte persönliche Token eintragen (nicht der Supabase
-     `anon`/`service_role`-Key!). Die genaue Bezeichnung des Eingabefelds kann je nach Claude-Version
-     variieren (z. B. „API Key“/„Authorization Header“).
+   - Die in Schritt 2 kopierte **komplette URL** (inklusive `?token=...`) in das eine URL-Feld
+     einfügen – nicht nur den Teil vor dem `?`.
    - Danach stehen die drei Tools in Claude-Chats zur Verfügung.
 
-Jedes Mitglied verwaltet sein eigenes Token selbst; es gibt keine globale, gemeinsam genutzte
+Jedes Mitglied verwaltet seine eigene Zugangs-URL selbst; es gibt keine globale, gemeinsam genutzte
 Zugangskennung. Lokal typprüfbar mit `deno check --config supabase/functions/mcp-server/deno.json
 supabase/functions/mcp-server/index.ts`.
 

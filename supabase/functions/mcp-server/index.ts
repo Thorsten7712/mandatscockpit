@@ -274,9 +274,18 @@ Deno.serve(async (req) => {
   }
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
-  const bearerToken = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  // Claudes "Custom Connector"-UI bietet aktuell nur ein einzelnes URL-Feld
+  // an (kein separates Bearer-Token-Feld, nur OAuth-Client-Konfiguration für
+  // echte OAuth-Server) - das Token wird deshalb direkt in der Connector-URL
+  // als Query-Parameter mitgegeben (?token=...), siehe Settings.tsx und
+  // README.md Abschnitt 9. Der Authorization-Header wird zusätzlich
+  // unterstützt (falls ein anderer MCP-Client ihn doch setzen kann), Header
+  // hat Vorrang vor dem Query-Parameter.
+  const headerToken = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  const queryToken = new URL(req.url).searchParams.get('token') ?? ''
+  const bearerToken = headerToken || queryToken
   if (!bearerToken) {
-    return new Response(JSON.stringify({ error: 'Bearer-Token fehlt.' }), {
+    return new Response(JSON.stringify({ error: 'Token fehlt (weder Authorization-Header noch ?token=).' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer' },
     })

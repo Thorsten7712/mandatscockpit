@@ -409,6 +409,26 @@ Vorhanden:
     Anpassung über den bestehenden `deploy-edge-functions.yml`-Workflow mit (deployt alle Functions
     unter `supabase/functions/` ohne Namen) – bewusst **keine** zweite Workflow-Datei angelegt, das
     hätte nur doppelte Deploy-Läufe erzeugt.
+  - **Zwei Produktivfehler nach dem ersten Rollout entdeckt und behoben (2026-07-20), beide beim ersten
+    echten Connector-Versuch aufgefallen:**
+    1. Supabase prüft den `Authorization`-Header von Edge Functions standardmäßig selbst als
+       Supabase-Auth-JWT, bevor die Function überhaupt läuft (`verify_jwt`, Default `true`) – jedes
+       eigene Token wurde dadurch schon vom API-Gateway mit `UNAUTHORIZED_INVALID_JWT_FORMAT`
+       abgewiesen. Fix: `supabase/config.toml` mit `[functions.mcp-server] verify_jwt = false` (nur für
+       diese eine Function – `admin-users`/`import-ics-source` bleiben beim Default, da sie mit dem
+       echten Nutzer-JWT aus dem Frontend aufgerufen werden). Per curl gegen die deployte Function
+       verifiziert (`UNAUTHORIZED_INVALID_JWT_FORMAT` vom Gateway davor vs. eigene Fehlermeldung der
+       Function danach).
+    2. **Falsche Annahme im ursprünglichen Auftrag** („Connectors → Custom Connector → Funktions-URL +
+       Bearer-Token“) stimmte nicht mit der echten Claude-UI überein: Der Custom-Connector-Dialog hat
+       nur ein **einzelnes URL-Feld**, kein separates Token-/API-Key-Feld (nur eine optionale
+       OAuth-Client-ID für Server, die echtes OAuth 2.1 mit Dynamic Client Registration sprechen – ein
+       voller OAuth-Server ist für den Scope hier bewusst nicht gebaut worden). Fix: Das Token wird
+       jetzt als `?token=...`-Query-Parameter direkt in die URL codiert; `mcp-server/index.ts` liest es
+       dort aus (Header bleibt zusätzlich als Fallback unterstützt, falls ein anderer MCP-Client ihn
+       setzen kann – Header hat Vorrang). `Settings.tsx` zeigt entsprechend die **komplette Connector-URL
+       mit eingebettetem Token** an (`mcpConnectorUrl()`), nicht mehr den nackten Token – Nutzer fügen
+       diese eine URL 1:1 in das URL-Feld des Custom Connectors ein.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
