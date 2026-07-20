@@ -409,7 +409,7 @@ Vorhanden:
     Anpassung über den bestehenden `deploy-edge-functions.yml`-Workflow mit (deployt alle Functions
     unter `supabase/functions/` ohne Namen) – bewusst **keine** zweite Workflow-Datei angelegt, das
     hätte nur doppelte Deploy-Läufe erzeugt.
-  - **Zwei Produktivfehler nach dem ersten Rollout entdeckt und behoben (2026-07-20), beide beim ersten
+  - **Drei Produktivfehler nach dem ersten Rollout entdeckt und behoben (2026-07-20), alle beim ersten
     echten Connector-Versuch aufgefallen:**
     1. Supabase prüft den `Authorization`-Header von Edge Functions standardmäßig selbst als
        Supabase-Auth-JWT, bevor die Function überhaupt läuft (`verify_jwt`, Default `true`) – jedes
@@ -429,6 +429,19 @@ Vorhanden:
        setzen kann – Header hat Vorrang). `Settings.tsx` zeigt entsprechend die **komplette Connector-URL
        mit eingebettetem Token** an (`mcpConnectorUrl()`), nicht mehr den nackten Token – Nutzer fügen
        diese eine URL 1:1 in das URL-Feld des Custom Connectors ein.
+    3. Trotz korrekter URL+Token weiterhin derselbe Fehler in Claude: „Registrierung beim Anmeldedienst
+       von MandatsCockpit fehlgeschlagen“. Ursache: Claudes MCP-Client startet einen
+       OAuth-Registrierungsversuch, sobald der Server **irgendwann** mit HTTP 401 antwortet (Standard-
+       verhalten laut MCP-Authorization-Spezifikation, unabhängig davon, ob ein späterer Aufruf mit
+       gültigem Token funktioniert hätte) – vermutlich bei einem initialen Capability-Check, der die
+       Query-String-URL nicht wie erwartet weiterreicht. Die Function gab bei fehlendem/ungültigem
+       Token bis dahin `401` + `WWW-Authenticate: Bearer` zurück, was genau dieses OAuth-Discovery
+       auslöst; ein eigener OAuth-Server ist für diesen Scope bewusst nicht gebaut. Fix: `mcp-server`
+       gibt bei Auth-Fehlern jetzt **nie mehr HTTP 401**, sondern immer HTTP 200 mit einem
+       JSON-RPC-Fehler (`code: -32001`) im Body – Body-Parsing läuft daher jetzt **vor** dem
+       Auth-Check (wird für die `id` im Fehlerobjekt gebraucht). Per curl gegenverifiziert: alle
+       Antworten (fehlendes Token, ungültiges Token, GET-Probe) liefern seitdem keinen 401/
+       `WWW-Authenticate` mehr.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

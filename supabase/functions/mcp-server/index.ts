@@ -274,30 +274,6 @@ Deno.serve(async (req) => {
   }
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
-  // Claudes "Custom Connector"-UI bietet aktuell nur ein einzelnes URL-Feld
-  // an (kein separates Bearer-Token-Feld, nur OAuth-Client-Konfiguration für
-  // echte OAuth-Server) - das Token wird deshalb direkt in der Connector-URL
-  // als Query-Parameter mitgegeben (?token=...), siehe Settings.tsx und
-  // README.md Abschnitt 9. Der Authorization-Header wird zusätzlich
-  // unterstützt (falls ein anderer MCP-Client ihn doch setzen kann), Header
-  // hat Vorrang vor dem Query-Parameter.
-  const headerToken = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
-  const queryToken = new URL(req.url).searchParams.get('token') ?? ''
-  const bearerToken = headerToken || queryToken
-  if (!bearerToken) {
-    return new Response(JSON.stringify({ error: 'Token fehlt (weder Authorization-Header noch ?token=).' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer' },
-    })
-  }
-  const user = await resolveUser(supabase, bearerToken)
-  if (!user) {
-    return new Response(JSON.stringify({ error: 'Ungültiges oder unbekanntes Token.' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer' },
-    })
-  }
-
   let body: JsonRpcRequest
   try {
     body = await req.json()
@@ -313,6 +289,33 @@ Deno.serve(async (req) => {
 
   const respond = (payload: unknown, status = 200) =>
     new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+  // Auth-Fehler werden bewusst NIE als HTTP 401 zurückgegeben: Claudes
+  // MCP-Client startet einen OAuth-Registrierungsversuch, sobald der Server
+  // irgendwann mit 401 antwortet (Standardverhalten laut MCP-Authorization-
+  // Spezifikation) - das schlägt bei uns immer fehl, da diese Function kein
+  // OAuth implementiert. Da Claudes "Custom Connector"-Dialog ohnehin kein
+  // separates Token-Feld hat (nur die Connector-URL), reicht ein simpler
+  // JSON-RPC-Fehler mit HTTP 200 völlig aus - das Ergebnis ist für den
+  // aufrufenden Client identisch (Tool-Aufruf schlägt sichtbar fehl), löst
+  // aber keine OAuth-Discovery aus.
+  //
+  // Claudes "Custom Connector"-UI bietet aktuell nur ein einzelnes URL-Feld
+  // an - das Token wird deshalb direkt in der Connector-URL als
+  // Query-Parameter mitgegeben (?token=...), siehe Settings.tsx und
+  // README.md Abschnitt 9. Der Authorization-Header wird zusätzlich
+  // unterstützt (falls ein anderer MCP-Client ihn doch setzen kann), Header
+  // hat Vorrang vor dem Query-Parameter.
+  const headerToken = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  const queryToken = new URL(req.url).searchParams.get('token') ?? ''
+  const bearerToken = headerToken || queryToken
+  if (!bearerToken) {
+    return respond(jsonRpcError(id, -32001, 'Unauthorized: Token fehlt (weder Authorization-Header noch ?token=).'))
+  }
+  const user = await resolveUser(supabase, bearerToken)
+  if (!user) {
+    return respond(jsonRpcError(id, -32001, 'Unauthorized: ungültiges oder unbekanntes Token.'))
+  }
 
   if (!body.method) {
     return respond(jsonRpcError(id, -32600, 'Invalid Request'), 400)

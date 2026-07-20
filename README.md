@@ -136,10 +136,18 @@ separates Bearer-Token-/API-Key-Feld (nur eine optionale OAuth-Client-ID für Se
 OAuth sprechen). Das Token wird deshalb direkt **als Teil der URL** übergeben
 (`...?token=<token>`) – die Edge Function liest es dort per Query-Parameter aus (zusätzlich wird,
 falls vorhanden, weiterhin auch ein `Authorization: Bearer`-Header akzeptiert, falls ein anderer
-MCP-Client das unterstützt). Außerdem muss die Function mit `verify_jwt = false` deployt sein
-(siehe `supabase/config.toml`), sonst weist Supabases eigenes API-Gateway jede Anfrage schon vor
-Erreichen der Function mit `UNAUTHORIZED_INVALID_JWT_FORMAT` ab, weil es den Token-String als
-Supabase-Auth-JWT zu parsen versucht.
+MCP-Client das unterstützt). Zwei weitere Stolpersteine, die dabei aufgetreten sind:
+
+- Die Function muss mit `verify_jwt = false` deployt sein (siehe `supabase/config.toml`), sonst weist
+  Supabases eigenes API-Gateway jede Anfrage schon vor Erreichen der Function mit
+  `UNAUTHORIZED_INVALID_JWT_FORMAT` ab, weil es den Token-String als Supabase-Auth-JWT zu parsen
+  versucht.
+- `mcp-server` gibt bei fehlendem/ungültigem Token **nie HTTP 401** zurück, sondern immer HTTP 200 mit
+  einem JSON-RPC-Fehler im Body. Grund: Claudes MCP-Client startet einen OAuth-Registrierungsversuch
+  („Registrierung beim Anmeldedienst … fehlgeschlagen“), sobald der Server irgendwann mit 401
+  antwortet (Standardverhalten laut MCP-Authorization-Spezifikation) – das schlägt hier immer fehl, da
+  diese Function kein OAuth implementiert. Mit HTTP 200 + JSON-RPC-Fehler bleibt der Connector nutzbar,
+  ohne dass Claude eine OAuth-Registrierung versucht.
 
 1. **Migration einspielen:** `supabase/migrations/0016_mcp_tokens.sql` wie in Abschnitt 3, Schritt 3
    beschrieben im SQL Editor ausführen (oder `supabase db push`).
