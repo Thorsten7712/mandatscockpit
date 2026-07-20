@@ -30,6 +30,7 @@ export default function Archiv() {
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
   const [entschiedeneAntraege, setEntschiedeneAntraege] = useState<AntragRow[]>([])
+  const [antragDocsById, setAntragDocsById] = useState<Map<string, SummaryRow>>(new Map())
   const [openAntragId, setOpenAntragId] = useState<string | null>(null)
 
   async function loadEntschiedeneAntraege() {
@@ -38,7 +39,20 @@ export default function Archiv() {
       .select('*')
       .in('status', ANTRAG_STATUS_ABGESCHLOSSEN)
       .order('created_at', { ascending: false })
-    setEntschiedeneAntraege(data ?? [])
+    const rows = data ?? []
+    setEntschiedeneAntraege(rows)
+
+    const antragIds = rows.map((a) => a.id)
+    if (antragIds.length === 0) {
+      setAntragDocsById(new Map())
+    } else {
+      const { data: docs } = await supabase.from('summaries').select('*').in('antrag_id', antragIds).order('erstellt_am')
+      const byId = new Map<string, SummaryRow>()
+      for (const d of docs ?? []) {
+        if (!byId.has(d.antrag_id as string)) byId.set(d.antrag_id as string, d)
+      }
+      setAntragDocsById(byId)
+    }
   }
 
   async function loadSessions() {
@@ -357,32 +371,48 @@ export default function Archiv() {
         {tab === 'antraege' && (
           <section className="mc-animate-fade max-w-2xl">
             <ul className="space-y-2">
-              {entschiedeneAntraege.map((a) => (
-                <li key={a.id}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenAntragId(a.id)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
-                  >
-                    <span
-                      className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${ANTRAG_STATUS_BADGE[a.status]}`}
+              {entschiedeneAntraege.map((a) => {
+                const doc = antragDocsById.get(a.id)
+                return (
+                  <li key={a.id}>
+                    <div
+                      onClick={() => setOpenAntragId(a.id)}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
                     >
-                      {ANTRAG_STATUS_LABEL[a.status]}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>
-                      <span className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-slate-500">
-                        {a.ausschuss && (
-                          <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-                            {a.ausschuss}
-                          </span>
-                        )}
-                        {a.eingereicht_am && <span>Eingereicht {formatDate(a.eingereicht_am)}</span>}
+                      <span
+                        className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${ANTRAG_STATUS_BADGE[a.status]}`}
+                      >
+                        {ANTRAG_STATUS_LABEL[a.status]}
                       </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                          {a.ausschuss && (
+                            <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                              {a.ausschuss}
+                            </span>
+                          )}
+                          {doc?.datei_url ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewDoc({ path: doc.datei_url!, name: fileNameFromPath(doc.datei_url!) })
+                              }}
+                              className="mc-btn-ghost !px-1.5 !py-0.5 !text-xs"
+                            >
+                              📎 {fileNameFromPath(doc.datei_url)}
+                            </button>
+                          ) : (
+                            <span className="italic text-slate-400">Kein Dokument hochgeladen</span>
+                          )}
+                          {a.eingereicht_am && <span>Eingereicht {formatDate(a.eingereicht_am)}</span>}
+                        </span>
+                      </span>
+                    </div>
+                  </li>
+                )
+              })}
               {entschiedeneAntraege.length === 0 && (
                 <li className="mc-card p-6 text-center text-sm text-slate-400">
                   Noch keine entschiedenen Anträge. Landen hier, sobald ein Antrag als beschlossen, abgelehnt oder

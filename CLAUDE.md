@@ -529,11 +529,22 @@ Vorhanden:
     `zusammenfassungen`) sind 1:1 nach dem `todo_comments`/`summaries.todo_id`-Muster aus `0011`
     dupliziert (bewusst, gleiche Begründung wie bei den anderen dokumentierten Dopplungen in diesem
     Projekt: kein gemeinsames Backend, das eine Abstraktion rechtfertigen würde).
-  - **Dashboard** (`AntraegeSection.tsx`, zwischen ToDo-Board und "Nächste Termine"): Schnellerfassung
-    per Titel (legt mit Status `entwurf` an, Rest wird im Detail-Modal ergänzt – gleiches Zweistufen-
-    Muster wie beim ToDo-Board), Status-Filter-Chips (nur die im Bestand tatsächlich vorkommenden,
-    gleiches Muster wie die Ebene-Filter in `CalendarView`), zeigt nur "aktive" Anträge. Ein Link
-    ("N entschiedene im Archiv") verweist auf die abgeschlossenen.
+  - **Dashboard** (`AntraegeSection.tsx`, zwischen ToDo-Board und "Nächste Termine"): Status-Filter-Chips
+    (nur die im Bestand tatsächlich vorkommenden, gleiches Muster wie die Ebene-Filter in
+    `CalendarView`), zeigt nur "aktive" Anträge. Ein Link ("N entschiedene im Archiv") verweist auf die
+    abgeschlossenen.
+  - **Nachträgliche Klarstellung (noch 2026-07-20):** "Meine Anträge" ist bewusst eine
+    *dokumentenzentrierte* Übersicht – Kernobjekt ist das hochgeladene Antragsdokument (Word/PDF/...),
+    getaggt mit Metadaten wie dem Ausschuss, nicht ein Text-Datensatz mit optional angehängtem Dokument.
+    Deshalb: Titel, Ausschuss **und** Datei sind in der Schnellerfassung Pflichtfelder (kein reines
+    Zweistufen-Muster wie beim ToDo-Board mehr); jede Kachel in der Liste zeigt das erste hochgeladene
+    Dokument direkt als anklickbaren Chip (öffnet `DocumentPreviewModal` sofort, per `stopPropagation`
+    getrennt vom Klick auf die restliche Kachel, der weiterhin das volle `AntragDetailModal` öffnet) statt
+    nur ein 📎-Vorhanden-Flag. Zusätzlich zum Status-Filter gibt es jetzt einen zweiten Filter nach
+    Ausschuss (ebenfalls nur tatsächlich vorkommende Werte) – macht die Übersicht faktisch zu einem
+    privaten Pendant des in KONZEPT.md Abschnitt 5.1 beschriebenen, nie gebauten Dokumenten-Hubs
+    ("filterbar nach Ausschuss"), nur für eigene statt extern importierte Dokumente. Der Archiv-Tab
+    "Anträge" zeigt das erste Dokument je entschiedenem Antrag nach demselben Muster.
   - **Archiv** bekommt einen vierten Tab "Anträge" (Icon `Gavel`) für `beschlossen`/`abgelehnt`/
     `zurueckgezogen` – gleiches Modal (`AntragDetailModal`), damit auch entschiedene Anträge weiterhin
     vollständig einsehbar/nachträglich korrigierbar bleiben (kein separater Read-only-Modus, analog zu
