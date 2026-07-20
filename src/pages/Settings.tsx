@@ -1,19 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Bot, CalendarDays, Landmark, SquareKanban, User, Users } from 'lucide-react'
+import { Bot, CalendarClock, CalendarDays, Landmark, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
+import type { AntragDeadlineSetting, CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
 import { themeById } from '../lib/themes'
 import { EBENE_LABEL, SOURCE_COLORS, sourceColorById } from '../lib/sourceColors'
 import { UserManagement } from '../components/UserManagement'
 
-type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'mcp' | 'benutzer'
+type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'fristen' | 'mcp' | 'benutzer'
 
 const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: boolean }[] = [
   { id: 'profil', label: 'Profil', icon: User },
   { id: 'kalender', label: 'Kalenderquellen', icon: CalendarDays },
   { id: 'gremien', label: 'Meine Gremien', icon: Landmark },
   { id: 'board', label: 'ToDo-Board', icon: SquareKanban },
+  { id: 'fristen', label: 'Antrags-Fristen', icon: CalendarClock },
   { id: 'mcp', label: 'MCP Connection', icon: Bot },
   { id: 'benutzer', label: 'Benutzerverwaltung', icon: Users, adminOnly: true },
 ]
@@ -125,6 +126,15 @@ export default function Settings() {
   const [editColumnTitel, setEditColumnTitel] = useState('')
   const [boardSettings, setBoardSettings] = useState<TodoBoardSettings | null>(null)
 
+  const [fristenTage, setFristenTage] = useState<Record<Ebene, string>>({
+    kommune: '',
+    kreis: '',
+    land: '',
+    bund: '',
+  })
+  const [savingFristen, setSavingFristen] = useState(false)
+  const [fristenError, setFristenError] = useState<string | null>(null)
+
   const [mcpTokenCreatedAt, setMcpTokenCreatedAt] = useState<string | null>(null)
   const [mcpGeneratedToken, setMcpGeneratedToken] = useState<string | null>(null)
   const [mcpGenerating, setMcpGenerating] = useState(false)
@@ -178,6 +188,15 @@ export default function Settings() {
     setMcpTokenCreatedAt(data?.created_at ?? null)
   }
 
+  async function loadFristen(uid: string) {
+    const { data } = await supabase.from('antrag_deadline_settings').select('*').eq('user_id', uid)
+    const byEbene: Record<Ebene, string> = { kommune: '', kreis: '', land: '', bund: '' }
+    for (const row of (data ?? []) as AntragDeadlineSetting[]) {
+      byEbene[row.ebene] = String(row.tage_vor_sitzung)
+    }
+    setFristenTage(byEbene)
+  }
+
   useEffect(() => {
     loadSources()
     loadDistinctGremien().then(setGremien)
@@ -189,8 +208,37 @@ export default function Settings() {
       loadBoardSettings(data.user.id)
       loadProfile(data.user.id)
       loadMcpTokenStatus(data.user.id)
+      loadFristen(data.user.id)
     })
   }, [])
+
+  // Pro Ebene entweder upserten (Wert gesetzt) oder löschen (Feld geleert) -
+  // eine konfigurierte Frist pro Ebene "Tage vor der Sitzung" (z. B. Kommune
+  // = 14), aus der AntraegeSection/AntragDetailModal die Einreichungsfrist
+  // berechnen (siehe src/lib/antragDeadline.ts).
+  async function handleSaveFristen(e: FormEvent) {
+    e.preventDefault()
+    if (!userId) return
+    setSavingFristen(true)
+    setFristenError(null)
+    for (const e2 of EBENEN) {
+      const wert = fristenTage[e2.value].trim()
+      if (wert === '') {
+        const { error } = await supabase
+          .from('antrag_deadline_settings')
+          .delete()
+          .eq('user_id', userId)
+          .eq('ebene', e2.value)
+        if (error) setFristenError(error.message)
+      } else {
+        const { error } = await supabase
+          .from('antrag_deadline_settings')
+          .upsert({ user_id: userId, ebene: e2.value, tage_vor_sitzung: Number(wert) })
+        if (error) setFristenError(error.message)
+      }
+    }
+    setSavingFristen(false)
+  }
 
   async function handleRefreshSource(sourceId: string) {
     setRefreshingSourceId(sourceId)
@@ -961,6 +1009,42 @@ export default function Settings() {
           Zuständigkeit (👤)
         </label>
       </div>
+      </section>
+      )}
+
+      {activeSection === 'fristen' && (
+      <section className="mc-animate-fade">
+      <h2 className="mb-2 text-base font-semibold text-slate-900">Antrags-Fristen</h2>
+      <p className="mb-3 max-w-md text-sm text-slate-500">
+        Wie viele Tage vor der Sitzung muss ein Antrag auf dieser Ebene spätestens gestellt sein? Wird bei
+        Anträgen mit verknüpfter Sitzung automatisch zur Einreichungsfrist verrechnet (z. B. Kommune = 14
+        Tage). Leer lassen, um für eine Ebene keine Frist anzuzeigen.
+      </p>
+      <form onSubmit={handleSaveFristen} className="mc-card max-w-md space-y-3 p-4">
+        {EBENEN.map((e) => (
+          <div key={e.value} className="flex items-center justify-between gap-3">
+            <label htmlFor={`frist-${e.value}`} className="text-sm text-slate-700">
+              {e.label}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id={`frist-${e.value}`}
+                type="number"
+                min={0}
+                placeholder="z. B. 14"
+                value={fristenTage[e.value]}
+                onChange={(ev) => setFristenTage((prev) => ({ ...prev, [e.value]: ev.target.value }))}
+                className="mc-input w-24"
+              />
+              <span className="text-sm text-slate-500">Tage vorher</span>
+            </div>
+          </div>
+        ))}
+        {fristenError && <p className="text-red-600 text-sm">{fristenError}</p>}
+        <button type="submit" disabled={savingFristen} className="mc-btn-primary">
+          {savingFristen ? 'Speichern...' : 'Speichern'}
+        </button>
+      </form>
       </section>
       )}
 

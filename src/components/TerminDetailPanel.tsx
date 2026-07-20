@@ -5,7 +5,7 @@ import { TodoDetailModal } from './TodoDetailModal'
 import { AntragDetailModal } from './AntragDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDateTime } from '../lib/format'
-import { ANTRAG_STATUS_BADGE, ANTRAG_STATUS_LABEL } from '../lib/antragStatus'
+import { antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 
 function toDatetimeLocalValue(iso: string): string {
   const d = new Date(iso)
@@ -332,9 +332,9 @@ export function TerminDetailPanel({
                   className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
                 >
                   <span
-                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${ANTRAG_STATUS_BADGE[a.status]}`}
+                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
                   >
-                    {ANTRAG_STATUS_LABEL[a.status]}
+                    {antragStatusLabel(a.status, a.ergebnis)}
                   </span>
                   <span className="truncate text-sm font-medium text-slate-800">{a.titel}</span>
                 </button>

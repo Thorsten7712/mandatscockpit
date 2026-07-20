@@ -7,14 +7,8 @@ export type EventHerkunft = 'privat' | 'uebernommene_sitzung' | 'fraktionsbuero'
 export type SessionStatus = 'geplant' | 'aktiv' | 'abgeschlossen' | 'abgesagt'
 export type EventStatus = 'geplant' | 'abgesagt'
 export type Sichtbarkeit = 'privat' | 'geteilt'
-export type AntragStatus =
-  | 'entwurf'
-  | 'eingereicht'
-  | 'in_beratung'
-  | 'vertagt'
-  | 'beschlossen'
-  | 'abgelehnt'
-  | 'zurueckgezogen'
+export type AntragStatus = 'entwurf' | 'gestellt' | 'in_beratung' | 'vertagt' | 'abgestimmt' | 'zurueckgezogen'
+export type AntragErgebnis = 'positiv' | 'negativ'
 
 export interface Profile {
   id: string
@@ -157,7 +151,10 @@ export interface AntragRow {
   titel: string
   inhalt: string | null
   status: AntragStatus
+  ergebnis: AntragErgebnis | null
   ausschuss: string | null
+  /** Dient dem Fristen-Nachschlag UND dem Teilen-Kandidatenfilter (analog todos.ebene) */
+  ebene: Ebene | null
   session_id: string | null
   mitantragsteller: string | null
   eingereicht_am: string | null
@@ -170,4 +167,17 @@ export interface AntragComment {
   user_id: string
   inhalt: string
   erstellt_am: string
+}
+
+/** Teilen-Freigabe eines Antrags mit einer Kollegin/einem Kollegen (analog TodoPlacement, ohne Board-Position) */
+export interface AntragShare {
+  id: string
+  antrag_id: string
+  user_id: string
+}
+
+export interface AntragDeadlineSetting {
+  user_id: string
+  ebene: Ebene
+  tage_vor_sitzung: number
 }

@@ -1,9 +1,22 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragComment, AntragRow, AntragStatus, SessionRow, SummaryRow } from '../lib/types'
-import { ANTRAG_STATUS_LABEL, ANTRAG_STATUS_ORDER } from '../lib/antragStatus'
+import type {
+  AntragComment,
+  AntragDeadlineSetting,
+  AntragErgebnis,
+  AntragRow,
+  AntragShare,
+  AntragStatus,
+  Ebene,
+  Profile,
+  SessionRow,
+  SummaryRow,
+} from '../lib/types'
+import { ANTRAG_STATUS_ORDER, antragStatusLabel } from '../lib/antragStatus'
+import { computeAntragDeadline } from '../lib/antragDeadline'
 import { formatDate, formatDateTime } from '../lib/format'
+import { EBENE_LABEL } from '../lib/sourceColors'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 
 export function AntragDetailModal({
@@ -22,10 +35,13 @@ export function AntragDetailModal({
   const [gremienVorschlaege, setGremienVorschlaege] = useState<string[]>([])
   const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
   const [linkedSession, setLinkedSession] = useState<SessionRow | null>(null)
+  const [tageByEbene, setTageByEbene] = useState<Map<Ebene, number>>(new Map())
 
   const [editTitel, setEditTitel] = useState('')
   const [editStatus, setEditStatus] = useState<AntragStatus>('entwurf')
+  const [editErgebnis, setEditErgebnis] = useState<AntragErgebnis | ''>('')
   const [editAusschuss, setEditAusschuss] = useState('')
+  const [editEbene, setEditEbene] = useState<Ebene | ''>('')
   const [editInhalt, setEditInhalt] = useState('')
   const [editMitantragsteller, setEditMitantragsteller] = useState('')
   const [editSessionId, setEditSessionId] = useState('')
@@ -34,7 +50,19 @@ export function AntragDetailModal({
   const [editError, setEditError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  // Teilen mit Kolleg*innen gleicher Partei+Ebene - gleiches Modell wie bei
+  // ToDo-Karten (siehe TodoDetailModal.tsx), nur ohne Board-Position: hier
+  // reicht eine reine Sichtbarkeits-/Bearbeitungs-Freigabe (antrag_shares).
+  const [myProfile, setMyProfile] = useState<Profile | null>(null)
+  const [shares, setShares] = useState<AntragShare[]>([])
+  const [shareNames, setShareNames] = useState<Map<string, string>>(new Map())
+  const [candidates, setCandidates] = useState<Profile[]>([])
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [shareSearch, setShareSearch] = useState('')
+  const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
+
   const [comments, setComments] = useState<AntragComment[]>([])
+  const [commentAuthorNames, setCommentAuthorNames] = useState<Map<string, string>>(new Map())
   const [newComment, setNewComment] = useState('')
   const [savingComment, setSavingComment] = useState(false)
 
@@ -53,7 +81,9 @@ export function AntragDetailModal({
     setAntrag(data)
     setEditTitel(data.titel)
     setEditStatus(data.status)
+    setEditErgebnis(data.ergebnis ?? '')
     setEditAusschuss(data.ausschuss ?? '')
+    setEditEbene(data.ebene ?? '')
     setEditInhalt(data.inhalt ?? '')
     setEditMitantragsteller(data.mitantragsteller ?? '')
     setEditSessionId(data.session_id ?? '')
@@ -68,6 +98,13 @@ export function AntragDetailModal({
   async function loadComments() {
     const { data } = await supabase.from('antrag_comments').select('*').eq('antrag_id', id).order('erstellt_am')
     setComments(data ?? [])
+    const ids = Array.from(new Set((data ?? []).map((c) => c.user_id)))
+    if (ids.length === 0) {
+      setCommentAuthorNames(new Map())
+      return
+    }
+    const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
+    setCommentAuthorNames(new Map((profs ?? []).map((p) => [p.id, p.name])))
   }
 
   async function loadDocuments() {
@@ -75,10 +112,37 @@ export function AntragDetailModal({
     setDocuments(data ?? [])
   }
 
+  // Volle Freigabeliste (alle Kolleg*innen, für die dieser Antrag freigegeben
+  // ist) - für den Ersteller der Checkbox-/Chip-Zustand, für alle anderen die
+  // read-only "Geteilt mit"-Anzeige. RLS erlaubt jeder geteilten Person, alle
+  // Freigaben desselben Antrags zu lesen (antrag_shares_select).
+  async function loadSharing() {
+    const { data: sh } = await supabase.from('antrag_shares').select('*').eq('antrag_id', id)
+    setShares(sh ?? [])
+    const ids = Array.from(new Set((sh ?? []).map((s) => s.user_id)))
+    if (ids.length === 0) {
+      setShareNames(new Map())
+      return
+    }
+    const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
+    setShareNames(new Map((profs ?? []).map((p) => [p.id, p.name])))
+  }
+
+  async function loadCandidates(ebene: Ebene) {
+    if (!myProfile?.partei || !userId) {
+      setCandidates([])
+      return
+    }
+    const { data } = await supabase.from('profiles').select('*').neq('id', userId)
+    const filtered = (data ?? []).filter((p) => p.partei === myProfile.partei && (p.ebenen ?? []).includes(ebene))
+    setCandidates(filtered)
+  }
+
   useEffect(() => {
     loadAntrag()
     loadComments()
     loadDocuments()
+    loadSharing()
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
@@ -93,26 +157,75 @@ export function AntragDetailModal({
           .order('datum')
         setOwnSessions(sessions ?? [])
       }
+      const { data: profileRow } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
+      setMyProfile(profileRow)
+      const { data: fristen } = await supabase
+        .from('antrag_deadline_settings')
+        .select('*')
+        .eq('user_id', data.user.id)
+      setTageByEbene(
+        new Map(((fristen ?? []) as AntragDeadlineSetting[]).map((f) => [f.ebene, f.tage_vor_sitzung])),
+      )
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // Kandidatenliste neu laden, sobald die Ebene des Antrags oder das eigene
+  // Profil bekannt ist bzw. sich ändert (nur relevant für den Ersteller).
+  useEffect(() => {
+    if (antrag?.user_id === userId && antrag?.ebene) {
+      loadCandidates(antrag.ebene)
+    } else {
+      setCandidates([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [antrag?.ebene, antrag?.user_id, userId, myProfile])
+
+  // Sitzung ausgewählt -> Ausschuss/Ebene automatisch übernehmen, sofern der
+  // Nutzer sie noch nicht selbst gesetzt hat (bleibt frei überschreibbar).
+  function handleSessionChange(sessionId: string) {
+    setEditSessionId(sessionId)
+    const session = ownSessions.find((s) => s.id === sessionId)
+    if (session) {
+      if (!editAusschuss.trim() && session.gremium) setEditAusschuss(session.gremium)
+      if (!editEbene && session.ebene) setEditEbene(session.ebene)
+    }
+  }
+
   async function handleSaveEdit(e: FormEvent) {
     e.preventDefault()
     if (!antrag) return
-    setEditSaving(true)
     setEditError(null)
+
+    if (editStatus === 'gestellt' && documents.length === 0) {
+      setEditError('Vor dem Status "Gestellt" muss mindestens ein Dokument hochgeladen sein.')
+      return
+    }
+    if (editStatus === 'abgestimmt' && !editErgebnis) {
+      setEditError('Bitte ein Ergebnis (Positiv/Negativ) wählen.')
+      return
+    }
+
+    setEditSaving(true)
+
+    // eingereicht_am nur beim ÜBERGANG in "Gestellt" automatisch auf heute
+    // setzen (falls noch leer) - ein erneutes Speichern ohne Statuswechsel
+    // überschreibt ein bereits gesetztes/manuell angepasstes Datum nicht.
+    const wirdGestellt = editStatus === 'gestellt' && antrag.status !== 'gestellt'
+    const eingereichtAm = editEingereichtAm || (wirdGestellt ? new Date().toISOString().slice(0, 10) : null)
 
     const { error } = await supabase
       .from('antraege')
       .update({
         titel: editTitel,
         status: editStatus,
+        ergebnis: editStatus === 'abgestimmt' ? editErgebnis || null : null,
         ausschuss: editAusschuss || null,
+        ebene: editEbene || null,
         inhalt: editInhalt || null,
         mitantragsteller: editMitantragsteller || null,
         session_id: editSessionId || null,
-        eingereicht_am: editEingereichtAm || null,
+        eingereicht_am: eingereichtAm,
       })
       .eq('id', antrag.id)
     if (error) {
@@ -126,16 +239,33 @@ export function AntragDetailModal({
     onChanged()
   }
 
+  const istErsteller = antrag?.user_id === userId
+
   async function handleDelete() {
-    if (!antrag) return
+    if (!antrag || !userId) return
     setDeleteError(null)
-    const { error } = await supabase.from('antraege').delete().eq('id', antrag.id)
+    const { error } = istErsteller
+      ? await supabase.from('antraege').delete().eq('id', antrag.id)
+      : await supabase.from('antrag_shares').delete().eq('antrag_id', antrag.id).eq('user_id', userId)
     if (error) {
       setDeleteError(error.message)
       return
     }
     onChanged()
     onClose()
+  }
+
+  async function handleToggleShare(targetUserId: string, aktuellGeteilt: boolean) {
+    setShareError(null)
+    const { error } = aktuellGeteilt
+      ? await supabase.from('antrag_shares').delete().eq('antrag_id', id).eq('user_id', targetUserId)
+      : await supabase.from('antrag_shares').insert({ antrag_id: id, user_id: targetUserId })
+    if (error) {
+      setShareError(error.message)
+      return
+    }
+    await loadSharing()
+    onChanged()
   }
 
   async function handleAddComment(e: FormEvent) {
@@ -184,6 +314,14 @@ export function AntragDetailModal({
     await loadDocuments()
   }
 
+  const geteilteFreigaben = shares.filter((s) => s.user_id !== userId)
+  const ungeteilteKandidatenGefiltert = candidates
+    .filter((c) => !shares.some((s) => s.user_id === c.id))
+    .filter((c) => c.name.toLowerCase().includes(shareSearch.trim().toLowerCase()))
+
+  const deadline = antrag ? computeAntragDeadline(linkedSession, antrag.ebene, tageByEbene) : null
+  const ueberfaellig = deadline ? deadline.getTime() < Date.now() && antrag?.status === 'entwurf' : false
+
   return (
     <>
       <div
@@ -202,6 +340,13 @@ export function AntragDetailModal({
           </header>
 
           {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
+
+          {deadline && (
+            <p className={`mb-4 text-sm ${ueberfaellig ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
+              Einreichungsfrist: {formatDate(deadline.toISOString())}
+              {ueberfaellig && ' · überfällig'}
+            </p>
+          )}
 
           {antrag && (
             <form
@@ -224,7 +369,7 @@ export function AntragDetailModal({
                 >
                   {ANTRAG_STATUS_ORDER.map((s) => (
                     <option key={s} value={s}>
-                      {ANTRAG_STATUS_LABEL[s]}
+                      {antragStatusLabel(s, null)}
                     </option>
                   ))}
                 </select>
@@ -236,6 +381,31 @@ export function AntragDetailModal({
                   className="mc-input flex-1"
                 />
               </div>
+              {documents.length === 0 && editStatus !== 'gestellt' && (
+                <p className="text-xs text-slate-400">Für den Status "Gestellt" wird ein Dokument benötigt.</p>
+              )}
+              {editStatus === 'abgestimmt' && (
+                <div className="flex items-center gap-4 text-sm">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="ergebnis"
+                      checked={editErgebnis === 'positiv'}
+                      onChange={() => setEditErgebnis('positiv')}
+                    />
+                    <span className="font-medium text-emerald-700">Positiv</span>
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="ergebnis"
+                      checked={editErgebnis === 'negativ'}
+                      onChange={() => setEditErgebnis('negativ')}
+                    />
+                    <span className="font-medium text-rose-700">Negativ</span>
+                  </label>
+                </div>
+              )}
 
               <input
                 type="text"
@@ -268,10 +438,10 @@ export function AntragDetailModal({
               />
 
               <div className="space-y-1">
-                <p className="text-sm text-slate-600">Sitzung, in der der Antrag behandelt wird</p>
+                <p className="text-sm text-slate-600">Sitzung, für die der Antrag vorgesehen ist</p>
                 <select
                   value={editSessionId}
-                  onChange={(e) => setEditSessionId(e.target.value)}
+                  onChange={(e) => handleSessionChange(e.target.value)}
                   className="mc-input w-full"
                 >
                   <option value="">— Keine Verknüpfung —</option>
@@ -297,11 +467,115 @@ export function AntragDetailModal({
                   {editSaving ? 'Speichern...' : 'Speichern'}
                 </button>
                 <button type="button" onClick={handleDelete} className="mc-btn-danger">
-                  Löschen
+                  {istErsteller ? 'Löschen' : 'Freigabe für mich entfernen'}
                 </button>
               </div>
               {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
             </form>
+          )}
+
+          {antrag && (
+            <div className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-700">Teilen</p>
+              {istErsteller ? (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm text-slate-600">Ebene (für Teilen &amp; Frist)</label>
+                    <select
+                      value={editEbene}
+                      onChange={(e) => setEditEbene(e.target.value as Ebene | '')}
+                      className="mc-input w-full"
+                    >
+                      <option value="">– keine –</option>
+                      {(myProfile?.ebenen ?? []).map((e) => (
+                        <option key={e} value={e}>
+                          {EBENE_LABEL[e]}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Änderung wird erst mit „Speichern" oben übernommen.
+                      {(myProfile?.ebenen ?? []).length === 0 &&
+                        ' Trage zuerst in den Einstellungen unter „Profil" deine eigenen Ebenen ein, um Anträge teilen zu können.'}
+                    </p>
+                  </div>
+                  {(geteilteFreigaben.length > 0 || antrag.ebene) && (
+                    <div>
+                      <p className="mb-1 text-sm text-slate-600">
+                        {antrag.ebene ? `Kolleg*innen (gleiche Partei, Ebene ${EBENE_LABEL[antrag.ebene]})` : 'Geteilt mit'}
+                      </p>
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        {geteilteFreigaben.map((s) => (
+                          <span
+                            key={s.user_id}
+                            className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+                          >
+                            {shareNames.get(s.user_id) ?? '…'}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleShare(s.user_id, true)}
+                              aria-label={`${shareNames.get(s.user_id) ?? 'Kolleg*in'} entfernen`}
+                              className="text-primary/70 hover:text-primary"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        {geteilteFreigaben.length === 0 && (
+                          <span className="text-xs text-slate-400">Noch mit niemandem geteilt.</span>
+                        )}
+                      </div>
+                      {antrag.ebene && (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="Kolleg*in suchen..."
+                            value={shareSearch}
+                            onChange={(e) => setShareSearch(e.target.value)}
+                            onFocus={() => setShareDropdownOpen(true)}
+                            onBlur={() => setTimeout(() => setShareDropdownOpen(false), 150)}
+                            className="mc-input w-full"
+                          />
+                          {shareDropdownOpen && (
+                            <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                              {ungeteilteKandidatenGefiltert.map((c) => (
+                                <li key={c.id}>
+                                  <button
+                                    type="button"
+                                    onMouseDown={() => {
+                                      handleToggleShare(c.id, false)
+                                      setShareSearch('')
+                                    }}
+                                    className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                                  >
+                                    {c.name}
+                                  </button>
+                                </li>
+                              ))}
+                              {ungeteilteKandidatenGefiltert.length === 0 && (
+                                <li className="px-3 py-1.5 text-sm text-slate-400">
+                                  {candidates.length === 0
+                                    ? 'Keine Kolleg*innen mit gleicher Partei und Ebene gefunden.'
+                                    : 'Keine Treffer.'}
+                                </li>
+                              )}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {shareError && <p className="text-red-600 text-sm">{shareError}</p>}
+                </>
+              ) : (
+                <p className="text-sm text-slate-600">
+                  Dieser Antrag wurde mit dir geteilt
+                  {antrag.ebene ? ` (Ebene ${EBENE_LABEL[antrag.ebene]})` : ''}.
+                  {geteilteFreigaben.length > 0 &&
+                    ` Weitere: ${geteilteFreigaben.map((s) => shareNames.get(s.user_id) ?? '…').join(', ')}`}
+                </p>
+              )}
+            </div>
           )}
 
           <h2 className="font-semibold mb-2">Kommentare</h2>
@@ -310,16 +584,17 @@ export function AntragDetailModal({
               <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
                 <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
                 <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-slate-400">{formatDateTime(c.erstellt_am)}</span>
-                  {c.user_id === userId && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteComment(c.id)}
-                      className="mc-btn-danger !px-2 !py-1 !text-xs"
-                    >
-                      Löschen
-                    </button>
-                  )}
+                  <span className="text-xs text-slate-400">
+                    {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
+                    {formatDateTime(c.erstellt_am)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteComment(c.id)}
+                    className="mc-btn-danger !px-2 !py-1 !text-xs"
+                  >
+                    Löschen
+                  </button>
                 </div>
               </li>
             ))}

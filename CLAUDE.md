@@ -559,6 +559,50 @@ Vorhanden:
     auf dem alten Stand, auch wenn die DB-Migration schon lokal getestet wurde (genau das ist beim
     ersten Rollout dieser Sektion passiert: DB war fertig, GitHub Pages zeigte trotzdem noch die alte
     Version, bis Code committed und gepusht wurde).
+- **Anträge: Workflow, Teilen, Fristen** (`0023_antraege_sharing_status_fristen.sql`, seit 2026-07-20):
+  Nutzerentscheidung nach dem ersten Rollout - Anlage sollte wieder leichtgewichtig sein (Titel +
+  optional die vorgesehene Sitzung, Status startet immer bei "Entwurf"), Ausschuss+Dokument sind
+  keine Pflichtfelder mehr bei der Anlage. Stattdessen mehrere gezielte Ausbauten:
+  - **Status-Vokabular überarbeitet**: `eingereicht` → `gestellt` (Standard-Sprachgebrauch "einen
+    Antrag stellen"), `beschlossen`/`abgelehnt` → ein gemeinsamer Status `abgestimmt` mit separatem
+    `ergebnis`-Feld (`positiv`/`negativ`) statt zwei Statuswerten - beide waren dieselbe Phase ("im
+    Ausschuss abgestimmt"), unterschieden sich nur im Ausgang. Badge-Farbe (rot/grün) hängt deshalb vom
+    Ergebnis ab, nicht mehr vom Status direkt - `antragBadgeClasses()`/`antragStatusLabel()` in
+    `antragStatus.ts` ersetzen den direkten Map-Zugriff überall. Migration backfillt `ergebnis` aus den
+    alten Statuswerten, bevor sie umbenannt werden (Reihenfolge kritisch). Der Check-Constraint-Name
+    aus `0017` war nicht bekannt (implizit von Postgres vergeben) - per `pg_constraint`/`do $$`-Block
+    dynamisch gefunden statt geraten.
+  - **Dokument-Pflicht verschoben**: nicht mehr bei der Anlage, sondern rein clientseitig erzwungen
+    beim Speichern mit Status `gestellt` (`AntragDetailModal.tsx`, kein DB-Trigger - bewusst wie die
+    übrigen Business-Regeln in dieser App nur clientseitig, kein adversarielles Nutzerumfeld).
+  - **Ebene je Antrag** (`antraege.ebene`) dient zwei Zwecken gleichzeitig: Kandidatenfilter beim
+    Teilen (siehe unten) UND Nachschlage-Schlüssel für die Einreichungsfrist - wird beim Verknüpfen
+    einer Sitzung automatisch aus deren `ebene`/`gremium` in Ausschuss übernommen (nur wenn noch leer,
+    bleibt frei überschreibbar), keine doppelte Ebenen-Abfrage nötig.
+  - **Teilen mit Kolleg*innen** (`antrag_shares`, exakt gleiches Partei+Ebene-Modell wie
+    `todo_placements`/Teilen bei ToDo-Karten, siehe `0021_todo_erledigt_sharing.sql` und
+    `TodoDetailModal.tsx`): volle Gleichberechtigung (jede geteilte Person liest/bearbeitet/kommentiert
+    mit, nur der Ersteller löscht komplett oder ändert die Ebene/Freigabeliste). Anders als beim
+    ToDo-Teilen (dortige `share-todo` Edge Function) reicht hier eine **direkte RLS-Insert-Policy ohne
+    Edge Function** - Anträge haben keine Kanban-Spalten, es muss also keine private
+    Board-Struktur der Ziel-Person aufgelöst werden (das war der einzige Grund für Service-Role bei
+    ToDos). `profiles_select_same_partei_ebene` (0020) reicht dem Ersteller, um Zielprofile für die
+    Kandidatensuche zu lesen. SECURITY DEFINER-Helper (`antrag_gehoert_nutzer`/`antrag_ist_geteilt_mit`)
+    von Anfang an eingebaut, um die in `0021`→`0022` durchlaufene "infinite recursion detected in
+    policy"-Falle (zirkuläre RLS-Abfrage zwischen zwei Tabellen) von vornherein zu vermeiden - inklusive
+    einer Falle beim ersten Anlauf: die Helper-Funktionen sind `language sql` (nicht `plpgsql`) und
+    werden deshalb **beim `CREATE FUNCTION` sofort gegen das Schema geparst**, nicht erst beim ersten
+    Aufruf - `antrag_ist_geteilt_mit` referenzierte `antrag_shares`, das in der ersten Fassung der
+    Migration erst *danach* angelegt wurde (`relation "antrag_shares" does not exist`, Migration lief
+    transaktional komplett zurück, DB blieb sauber). Fix: Tabelle vor den Funktionen anlegen.
+  - **Einreichungsfristen** (`antrag_deadline_settings`, rein privat pro Nutzer+Ebene, Settings-Sektion
+    "Antrags-Fristen"): Tage-vor-der-Sitzung je Ebene (z. B. Kommune = 14), `src/lib/antragDeadline.ts`
+    berechnet daraus `Sitzungsdatum − Tage` für Anträge mit verknüpfter Sitzung + gesetzter Ebene.
+    Anzeige in `AntraegeSection`/`AntragDetailModal` mit Überfällig-Warnung (rot), wenn die Frist
+    verstrichen ist und der Antrag noch im Status "Entwurf" hängt. Bewusst **pro Betrachter** berechnet
+    (die eigenen Settings des gerade eingeloggten Nutzers, nicht die des Ersteller) - bei geteilten
+    Anträgen kann die angezeigte Frist deshalb je nach Person leicht abweichen, das ist beabsichtigt
+    (jede*r hat ggf. andere interne Vorlaufzeiten).
 
 - **Kalenderquellen nach Nutzern getrennt** (`0018_calendar_sources_privat.sql`, seit 2026-07-20): Bug
   behoben, der KONZEPT.md Abschnitt 5.1/7 widersprach ("gemeinsame Grundausstattung vom Ratsbüro" +

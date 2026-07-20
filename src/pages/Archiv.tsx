@@ -9,7 +9,7 @@ import { AntragDetailModal } from '../components/AntragDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from '../components/DocumentPreviewModal'
 import { formatDate, formatDateTime, formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
 import { EBENE_LABEL, sourceColorById } from '../lib/sourceColors'
-import { ANTRAG_STATUS_ABGESCHLOSSEN, ANTRAG_STATUS_BADGE, ANTRAG_STATUS_LABEL } from '../lib/antragStatus'
+import { ANTRAG_STATUS_ABGESCHLOSSEN, antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 
 type Tab = 'sitzungen' | 'aufgaben' | 'dokumente' | 'antraege'
 
@@ -373,9 +373,9 @@ export default function Archiv() {
                       className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
                     >
                       <span
-                        className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${ANTRAG_STATUS_BADGE[a.status]}`}
+                        className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
                       >
-                        {ANTRAG_STATUS_LABEL[a.status]}
+                        {antragStatusLabel(a.status, a.ergebnis)}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>

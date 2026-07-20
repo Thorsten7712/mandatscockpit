@@ -1,32 +1,34 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, AntragStatus, SessionRow, SummaryRow } from '../lib/types'
-import { ANTRAG_STATUS_AKTIV, ANTRAG_STATUS_BADGE, ANTRAG_STATUS_LABEL } from '../lib/antragStatus'
+import type { AntragDeadlineSetting, AntragRow, AntragStatus, Ebene, SessionRow, SummaryRow } from '../lib/types'
+import { ANTRAG_STATUS_AKTIV, antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
+import { computeAntragDeadline } from '../lib/antragDeadline'
 import { AntragDetailModal } from './AntragDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDate } from '../lib/format'
 
 type Filter = 'alle' | AntragStatus
 
-// "Meine Anträge" ist bewusst eine dokumentenzentrierte Übersicht: Kernobjekt
-// ist das hochgeladene Antragsdokument (Word/PDF/...), getaggt mit Metadaten
-// wie dem vorgesehenen Ausschuss - nicht ein reiner Text-Datensatz, an den
-// optional mal ein Dokument gehängt wird. Titel, Ausschuss und Datei sind
-// deshalb schon in der Schnellerfassung Pflicht, nicht erst im Detail-Modal.
+// "Meine Anträge" ist eine dokumentenzentrierte Übersicht (Kernobjekt ist das
+// hochgeladene Antragsdokument, getaggt mit Metadaten wie Ausschuss/Ebene),
+// aber die Anlage selbst ist bewusst leichtgewichtig: Titel + optionale
+// Sitzung reichen, Status startet immer bei "Entwurf". Ausschuss/Ebene werden
+// beim Verknüpfen einer Sitzung automatisch übernommen. Ein Dokument wird
+// erst spätestens beim Status "Gestellt" verlangt (siehe AntragDetailModal).
 export function AntraegeSection() {
   const [userId, setUserId] = useState<string | null>(null)
   const [antraege, setAntraege] = useState<AntragRow[]>([])
   const [sessionById, setSessionById] = useState<Map<string, SessionRow>>(new Map())
   const [docsByAntrag, setDocsByAntrag] = useState<Map<string, SummaryRow[]>>(new Map())
-  const [gremienVorschlaege, setGremienVorschlaege] = useState<string[]>([])
+  const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
+  const [tageByEbene, setTageByEbene] = useState<Map<Ebene, number>>(new Map())
 
   const [statusFilter, setStatusFilter] = useState<Filter>('alle')
   const [ausschussFilter, setAusschussFilter] = useState<string | null>(null)
 
   const [newTitel, setNewTitel] = useState('')
-  const [newAusschuss, setNewAusschuss] = useState('')
-  const [newFile, setNewFile] = useState<File | null>(null)
+  const [newSessionId, setNewSessionId] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
 
@@ -44,7 +46,18 @@ export function AntraegeSection() {
       if (!data.user) return
       setUserId(data.user.id)
       const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
-      setGremienVorschlaege((mine ?? []).map((g) => g.gremium))
+      const gremien = (mine ?? []).map((g) => g.gremium)
+      if (gremien.length > 0) {
+        const { data: sessions } = await supabase.from('sessions').select('*').in('gremium', gremien).order('datum')
+        setOwnSessions(sessions ?? [])
+      }
+      const { data: fristen } = await supabase
+        .from('antrag_deadline_settings')
+        .select('*')
+        .eq('user_id', data.user.id)
+      setTageByEbene(
+        new Map(((fristen ?? []) as AntragDeadlineSetting[]).map((f) => [f.ebene, f.tage_vor_sitzung])),
+      )
     })
   }, [])
 
@@ -86,41 +99,26 @@ export function AntraegeSection() {
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault()
-    if (!userId || !newTitel.trim() || !newAusschuss.trim() || !newFile) return
+    if (!userId || !newTitel.trim()) return
     setAdding(true)
     setAddError(null)
 
-    const path = `${userId}/${Date.now()}-${newFile.name}`
-    const { error: uploadError } = await supabase.storage.from('zusammenfassungen').upload(path, newFile)
-    if (uploadError) {
-      setAddError(uploadError.message)
-      setAdding(false)
-      return
-    }
-
-    const { data: antrag, error: insertError } = await supabase
-      .from('antraege')
-      .insert({ user_id: userId, titel: newTitel.trim(), ausschuss: newAusschuss.trim() })
-      .select()
-      .single()
-    if (insertError || !antrag) {
-      setAddError(insertError?.message ?? 'Antrag konnte nicht angelegt werden.')
-      setAdding(false)
-      return
-    }
-
-    const { error: summaryError } = await supabase
-      .from('summaries')
-      .insert({ user_id: userId, antrag_id: antrag.id, datei_url: path })
-    if (summaryError) {
-      setAddError(summaryError.message)
+    const session = newSessionId ? ownSessions.find((s) => s.id === newSessionId) : undefined
+    const { error } = await supabase.from('antraege').insert({
+      user_id: userId,
+      titel: newTitel.trim(),
+      session_id: newSessionId || null,
+      ausschuss: session?.gremium ?? null,
+      ebene: session?.ebene ?? null,
+    })
+    if (error) {
+      setAddError(error.message)
       setAdding(false)
       return
     }
 
     setNewTitel('')
-    setNewAusschuss('')
-    setNewFile(null)
+    setNewSessionId('')
     setAdding(false)
     await load()
   }
@@ -146,44 +144,32 @@ export function AntraegeSection() {
 
       <form
         onSubmit={handleAdd}
-        className="mb-3 space-y-2 rounded-xl border border-dashed border-slate-300 bg-white p-3"
+        className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white p-3"
       >
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="text"
-            placeholder="Titel"
-            value={newTitel}
-            onChange={(e) => setNewTitel(e.target.value)}
-            className="mc-input min-w-[10rem] flex-1"
-            required
-          />
-          <input
-            type="text"
-            placeholder="Vorgesehener Ausschuss"
-            value={newAusschuss}
-            onChange={(e) => setNewAusschuss(e.target.value)}
-            list="antraege-ausschuss-vorschlaege"
-            className="mc-input min-w-[10rem] flex-1"
-            required
-          />
-          <datalist id="antraege-ausschuss-vorschlaege">
-            {gremienVorschlaege.map((g) => (
-              <option key={g} value={g} />
-            ))}
-          </datalist>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="file"
-            onChange={(e) => setNewFile(e.target.files?.[0] ?? null)}
-            className="min-w-[12rem] flex-1 text-sm"
-            required
-          />
-          <button type="submit" disabled={adding} className="mc-btn-primary shrink-0">
-            {adding ? 'Hochladen...' : 'Antrag hochladen'}
-          </button>
-        </div>
-        {addError && <p className="text-red-600 text-sm">{addError}</p>}
+        <input
+          type="text"
+          placeholder="+ Neuer Antrag (Titel)"
+          value={newTitel}
+          onChange={(e) => setNewTitel(e.target.value)}
+          className="mc-input min-w-[12rem] flex-1"
+          required
+        />
+        <select
+          value={newSessionId}
+          onChange={(e) => setNewSessionId(e.target.value)}
+          className="mc-input min-w-[12rem] flex-1"
+        >
+          <option value="">Vorgesehene Sitzung (optional)</option>
+          {ownSessions.map((se) => (
+            <option key={se.id} value={se.id}>
+              {se.titel} ({formatDate(se.datum)})
+            </option>
+          ))}
+        </select>
+        <button type="submit" disabled={adding} className="mc-btn-primary shrink-0">
+          {adding ? 'Anlegen...' : 'Anlegen'}
+        </button>
+        {addError && <p className="w-full text-sm text-red-600">{addError}</p>}
       </form>
 
       {(vorkommendeStatus.length > 1 || vorkommendeAusschuesse.length > 1) && (
@@ -204,7 +190,7 @@ export function AntraegeSection() {
                   onClick={() => setStatusFilter(s)}
                   className={statusFilter === s ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
                 >
-                  {ANTRAG_STATUS_LABEL[s]}
+                  {antragStatusLabel(s, null)}
                 </button>
               ))}
             </div>
@@ -238,6 +224,8 @@ export function AntraegeSection() {
           const session = a.session_id ? sessionById.get(a.session_id) : undefined
           const docs = docsByAntrag.get(a.id) ?? []
           const [firstDoc, ...weitereDocs] = docs
+          const deadline = computeAntragDeadline(session, a.ebene, tageByEbene)
+          const ueberfaellig = deadline ? deadline.getTime() < Date.now() && a.status === 'entwurf' : false
           return (
             <li key={a.id}>
               <div
@@ -245,9 +233,9 @@ export function AntraegeSection() {
                 className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
               >
                 <span
-                  className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${ANTRAG_STATUS_BADGE[a.status]}`}
+                  className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
                 >
-                  {ANTRAG_STATUS_LABEL[a.status]}
+                  {antragStatusLabel(a.status, a.ergebnis)}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>
@@ -273,7 +261,12 @@ export function AntraegeSection() {
                       <span className="italic text-slate-400">Kein Dokument hochgeladen</span>
                     )}
                     {session && <span className="truncate">🗳️ {session.titel} · {formatDate(session.datum)}</span>}
-                    {a.eingereicht_am && <span>Eingereicht {formatDate(a.eingereicht_am)}</span>}
+                    {deadline && (
+                      <span className={ueberfaellig ? 'font-semibold text-red-600' : ''}>
+                        Frist {formatDate(deadline.toISOString())}
+                        {ueberfaellig && ' · überfällig'}
+                      </span>
+                    )}
                   </span>
                 </span>
               </div>
@@ -283,7 +276,7 @@ export function AntraegeSection() {
         {sichtbar.length === 0 && (
           <li className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
             {aktive.length === 0
-              ? 'Noch keine Anträge. Oben Titel, Ausschuss und Antragsdokument angeben.'
+              ? 'Noch keine Anträge. Oben Titel eingeben, optional die vorgesehene Sitzung wählen.'
               : 'Keine Anträge mit diesen Filtern.'}
           </li>
         )}
