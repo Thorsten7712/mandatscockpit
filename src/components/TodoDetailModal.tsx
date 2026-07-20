@@ -61,6 +61,7 @@ export function TodoDetailModal({
   const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
 
   const [comments, setComments] = useState<TodoComment[]>([])
+  const [commentAuthorNames, setCommentAuthorNames] = useState<Map<string, string>>(new Map())
   const [newComment, setNewComment] = useState('')
   const [savingComment, setSavingComment] = useState(false)
 
@@ -108,6 +109,13 @@ export function TodoDetailModal({
   async function loadComments() {
     const { data } = await supabase.from('todo_comments').select('*').eq('todo_id', id).order('erstellt_am')
     setComments(data ?? [])
+    const ids = Array.from(new Set((data ?? []).map((c) => c.user_id)))
+    if (ids.length === 0) {
+      setCommentAuthorNames(new Map())
+      return
+    }
+    const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
+    setCommentAuthorNames(new Map((profs ?? []).map((p) => [p.id, p.name])))
   }
 
   async function loadDocuments() {
@@ -617,7 +625,10 @@ export function TodoDetailModal({
             <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
               <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-slate-400">{formatDateTime(c.erstellt_am)}</span>
+                <span className="text-xs text-slate-400">
+                  {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
+                  {formatDateTime(c.erstellt_am)}
+                </span>
                 <button
                   type="button"
                   onClick={() => handleDeleteComment(c.id)}
