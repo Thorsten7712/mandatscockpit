@@ -560,6 +560,35 @@ Vorhanden:
     ersten Rollout dieser Sektion passiert: DB war fertig, GitHub Pages zeigte trotzdem noch die alte
     Version, bis Code committed und gepusht wurde).
 
+- **Kalenderquellen nach Nutzern getrennt** (`0018_calendar_sources_privat.sql`, seit 2026-07-20): Bug
+  behoben, der KONZEPT.md Abschnitt 5.1/7 widersprach ("gemeinsame Grundausstattung vom Ratsbüro" +
+  "Mitglied kann zusätzlich eigene Quellen hinzufügen" – letztere sollten nie fremden Mitgliedern
+  sichtbar sein). `calendar_sources_select_all` (0001_init.sql, `using (true)`) machte bislang
+  **jede** Quelle für **jeden** eingeloggten Nutzer sichtbar, auch privat angelegte
+  (`verwaltet_von = <anderer User>`) – dadurch tauchten fremde Quellen in der Kalenderquellen-Liste
+  UND (über die daraus abgeleiteten `sessions.gremium`-Werte) in "Meine Gremien" auf, und deren
+  Sitzungen ließen sich sogar abonnieren. Neue Policy `calendar_sources_select_shared_or_own`:
+  sichtbar sind nur noch gemeinsam verwaltete Quellen (`verwaltet_von is null`, z. B. "Stadtrat
+  Iserlohn") sowie die eigenen; Admins sehen weiterhin alle (konsistent mit den bereits bestehenden
+  `update`/`delete`-Policies aus `0006_calendar_sources_admin.sql`, die Admins schon vorher erlaubten,
+  fremde Quellen zu verwalten). `sessions_select_all` musste dieselbe Regel erben (neue Policy
+  `sessions_select_visible_source`, Join auf `calendar_sources.verwaltet_von`) – sonst wären die
+  Quellen zwar in den Einstellungen versteckt, ihre importierten Sitzungen aber weiterhin für alle im
+  Kalender sichtbar gewesen.
+  - **Tägliche Aktualisierung brauchte keine Änderung**: Der bestehende ICS-Import-Job
+    (`scripts/import-ics.mjs`, GitHub Action täglich 04:00 UTC) und die Einzelquellen-Refresh-Function
+    (`import-ics-source`) laufen beide mit dem Service-Role-Key direkt gegen `calendar_sources` bzw.
+    einen mitgegebenen `source_id` – das umgeht RLS ohnehin komplett und war nie an eine
+    Nutzer-Sichtbarkeit gekoppelt. Private, gemeinsame und admin-verwaltete Quellen werden also
+    weiterhin alle täglich importiert, unabhängig davon, wer sie sehen darf.
+  - **Eine Stelle brauchte trotzdem eine manuelle Anpassung**: `mcp-server/index.ts` liest
+    `sessions`/`calendar_sources` ebenfalls über den Service-Role-Client (siehe oben im MCP-Abschnitt),
+    RLS greift dort also grundsätzlich nicht. `listNextSessions()` filtert seit diesem Fix zusätzlich
+    manuell auf die für die aufrufende `userId` sichtbaren `source_id`s (gleiche Regel wie
+    `calendar_sources_select_shared_or_own`, per `.or('source_id.is.null,source_id.in.(...)')`
+    nachgebildet) – sonst hätte `list_next_sessions` per Claude-Chat weiterhin private Sitzungen
+    fremder Mitglieder ausgegeben, obwohl das Web-UI sie längst korrekt versteckt.
+
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
    `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte

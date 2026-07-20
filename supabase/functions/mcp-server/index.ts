@@ -319,7 +319,19 @@ async function createEvent(supabase: SupabaseClient, userId: string, args: Recor
   return toolTextResult(`Termin "${titel}" am ${formatDateTime(start)} wurde angelegt (id: ${event.id}).`)
 }
 
-async function listNextSessions(supabase: SupabaseClient, args: Record<string, unknown>) {
+async function listNextSessions(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  // supabase läuft hier mit dem Service-Role-Key (siehe Datei-Kopfkommentar),
+  // RLS greift also nicht automatisch - die Sichtbarkeitsregel aus
+  // "sessions_select_visible_source"/"calendar_sources_select_shared_or_own"
+  // (supabase/migrations/0018_calendar_sources_privat.sql) muss hier manuell
+  // nachgebildet werden, sonst würde dieses Tool private Kalenderquellen
+  // anderer Mitglieder mit auflisten.
+  const { data: visibleSources } = await supabase
+    .from('calendar_sources')
+    .select('id')
+    .or(`verwaltet_von.is.null,verwaltet_von.eq.${userId}`)
+  const visibleSourceIds = (visibleSources ?? []).map((s) => s.id as string)
+
   const gremium = typeof args.gremium === 'string' ? args.gremium.trim() : ''
   let query = supabase
     .from('sessions')
@@ -327,6 +339,10 @@ async function listNextSessions(supabase: SupabaseClient, args: Record<string, u
     .gte('datum', new Date().toISOString())
     .order('datum', { ascending: true })
     .limit(20)
+  query =
+    visibleSourceIds.length > 0
+      ? query.or(`source_id.is.null,source_id.in.(${visibleSourceIds.join(',')})`)
+      : query.is('source_id', null)
   if (gremium) query = query.ilike('gremium', `%${gremium}%`)
 
   const { data, error } = await query
@@ -564,7 +580,7 @@ Deno.serve(async (req) => {
           result = await createEvent(supabase, user.id, args)
           break
         case 'list_next_sessions':
-          result = await listNextSessions(supabase, args)
+          result = await listNextSessions(supabase, user.id, args)
           break
         case 'create_session_note':
           result = await createSessionNote(supabase, user.id, args)
