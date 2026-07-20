@@ -426,7 +426,7 @@ Vorhanden:
     Anpassung über den bestehenden `deploy-edge-functions.yml`-Workflow mit (deployt alle Functions
     unter `supabase/functions/` ohne Namen) – bewusst **keine** zweite Workflow-Datei angelegt, das
     hätte nur doppelte Deploy-Läufe erzeugt.
-  - **Vier Produktivfehler nach dem ersten Rollout entdeckt und behoben (2026-07-20), alle beim ersten
+  - **Fünf Produktivfehler nach dem ersten Rollout entdeckt und behoben (2026-07-20), alle beim ersten
     echten Connector-Versuch bzw. bei erneutem Verbinden aufgefallen:**
     1. Supabase prüft den `Authorization`-Header von Edge Functions standardmäßig selbst als
        Supabase-Auth-JWT, bevor die Function überhaupt läuft (`verify_jwt`, Default `true`) – jedes
@@ -472,6 +472,27 @@ Vorhanden:
        JSON) reserviert. Per curl mit allen denkbaren Discovery-Methoden (`resources/list`,
        `prompts/list`, `completion/complete`, `logging/setLevel`) gegenverifiziert: alle liefern jetzt
        HTTP 200.
+    5. Verbinden schlug **trotzdem weiterhin** fehl, mit identischer Fehlermeldung. Diagnose-Experiment
+       (temporärer, nicht committeter Rollback): der exakt gleiche Code-Stand wie beim einzigen
+       erfolgreichen Connector-Versuch (Commit `f5b8ec3`, per `git checkout f5b8ec3 --
+       supabase/functions/mcp-server/index.ts` + Redeploy, danach wieder auf `HEAD` zurückgesetzt) wurde
+       erneut deployt und schlug beim Nutzer **ebenfalls** fehl – das widerlegte sowohl die
+       „stale Client-Cache"- als auch die „create_session_note-Schema"-Hypothese endgültig, da hier
+       nachweislich exakt der einmal funktionierende Stand erneut nicht funktionierte. Der eigentliche
+       Fund danach: Die `corsHeaders` hatten **kein `Access-Control-Allow-Methods`**. Der POST mit
+       `Content-Type: application/json` ist keine CORS-„simple request" (nicht-simpler Content-Type),
+       Browser lösen deshalb einen Preflight (OPTIONS) aus – ohne `Allow-Methods` in dessen Antwort
+       blockiert der Browser den eigentlichen POST komplett, obwohl OPTIONS selbst mit 200 antwortet.
+       **`curl` simuliert diese Browser-CORS-Prüfung nicht** und hat den Bug deshalb über die gesamte
+       bisherige Diagnose hinweg unsichtbar gemacht – das erklärt zugleich, warum es einmalig „im Chat"
+       funktionierte: Die dort sichtbaren `mcp__...`-Tools kamen aus **dieser Claude-Code-CLI-Session**,
+       einem serverseitigen/nicht-Browser-Client ohne CORS-Durchsetzung, während die claude.ai-Web-/
+       Desktop-App den Aufruf browserseitig macht und daher exakt an dieser Lücke scheiterte. Fix:
+       `Access-Control-Allow-Methods: POST, OPTIONS` (+ `Access-Control-Max-Age`) ergänzt. Per curl mit
+       expliziten Preflight-Headern (`Origin`, `Access-Control-Request-Method`,
+       `Access-Control-Request-Headers`) gegenverifiziert – bringt aber naturgemäß keine
+       Curl-basierte Erfolgsgarantie mehr, da genau diese Prüfung zuvor blind war; die eigentliche
+       Bestätigung muss ein echter Verbindungsversuch in Claude liefern.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

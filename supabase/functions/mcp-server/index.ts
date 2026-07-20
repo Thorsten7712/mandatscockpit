@@ -23,9 +23,20 @@
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 
+// Access-Control-Allow-Methods fehlte ursprünglich: Der POST-Request mit
+// Content-Type: application/json ist keine "simple request" (nicht-simpler
+// Content-Type), Browser lösen deshalb einen CORS-Preflight (OPTIONS) aus.
+// Ohne Allow-Methods in der Preflight-Antwort blockiert der Browser den
+// eigentlichen POST komplett, obwohl OPTIONS selbst mit 200 beantwortet
+// wird - curl simuliert diese Browser-CORS-Prüfung nicht und hat den Bug
+// deshalb nie sichtbar gemacht. Betrifft echte Browser-/Electron-Clients
+// (z. B. Claudes claude.ai-Web-App/Desktop-App), nicht serverseitige
+// HTTP-Clients wie Claude Code.
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, mcp-protocol-version',
+  'Access-Control-Max-Age': '86400',
 }
 
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05']
