@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 // Vorschau für hochgeladene Dokumente (Bucket "zusammenfassungen", privat -
@@ -65,8 +66,8 @@ export function DocumentPreviewModal({
                 Herunterladen
               </a>
             )}
-            <button type="button" onClick={onClose} className="mc-btn-ghost !px-2 !py-1 !text-xs">
-              Schließen
+            <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost !p-1.5">
+              <X size={16} />
             </button>
           </div>
         </header>

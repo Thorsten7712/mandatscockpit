@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { X } from 'lucide-react'
 
 /**
  * Gemeinsame Hülle für breite 2-Spalten-Detail-Modals (ToDo, Antrag).
@@ -32,9 +33,9 @@ export function DetailModalShell({
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
           <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-slate-900">{title}</h1>
           <div className="flex shrink-0 items-center gap-2">
-            {headerActions}
-            <button type="button" onClick={onClose} className="mc-btn-ghost">
-              Schließen
+            {headerActions && <div className="flex items-center gap-1.5 border-r border-slate-200 pr-2">{headerActions}</div>}
+            <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost !p-2">
+              <X size={18} />
             </button>
           </div>
         </header>

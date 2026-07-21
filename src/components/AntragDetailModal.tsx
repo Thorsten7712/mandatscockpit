@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type {
   AntragComment,
@@ -70,6 +71,9 @@ export function AntragDetailModal({
   const [savingDocument, setSavingDocument] = useState(false)
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
+
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  useEffect(() => setConfirmDelete(false), [id])
 
   async function loadAntrag() {
     const { data, error } = await supabase.from('antraege').select('*').eq('id', id).single()
@@ -536,52 +540,36 @@ export function AntragDetailModal({
       >
         {editSaving ? 'Speichern...' : 'Speichern'}
       </button>
-      <button type="button" onClick={handleDelete} className="mc-btn-danger !px-3 !py-1.5 !text-sm">
-        {istErsteller ? 'Löschen' : 'Entfernen'}
-      </button>
+      {confirmDelete ? (
+        <div className="mc-animate-pop flex items-center gap-1.5">
+          <span className="hidden text-sm text-slate-500 sm:inline">Sicher?</span>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(false)}
+            className="mc-btn-ghost !px-2.5 !py-1.5 !text-sm"
+          >
+            Abbrechen
+          </button>
+          <button type="button" onClick={handleDelete} className="mc-btn-danger !px-2.5 !py-1.5 !text-sm">
+            {istErsteller ? 'Löschen' : 'Entfernen'}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          aria-label={istErsteller ? 'Löschen' : 'Entfernen'}
+          title={istErsteller ? 'Löschen' : 'Entfernen'}
+          className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+        >
+          <Trash2 size={17} />
+        </button>
+      )}
     </>
   )
 
   const rightColumn = (
     <>
-      <h2 className="font-semibold mb-2">Kommentare</h2>
-      <ul className="space-y-2 mb-3">
-        {comments.map((c) => (
-          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs text-slate-400">
-                {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
-                {formatDateTime(c.erstellt_am)}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleDeleteComment(c.id)}
-                className="mc-btn-danger !px-2 !py-1 !text-xs"
-              >
-                Löschen
-              </button>
-            </div>
-          </li>
-        ))}
-        {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
-      </ul>
-      <form
-        onSubmit={handleAddComment}
-        className="mb-6 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
-      >
-        <textarea
-          placeholder="Kommentar hinzufügen"
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          className="mc-input w-full"
-          rows={2}
-        />
-        <button type="submit" disabled={savingComment || !newComment.trim()} className="mc-btn-primary">
-          {savingComment ? 'Speichern...' : 'Kommentieren'}
-        </button>
-      </form>
-
       <h2 className="font-semibold mb-2">Dokumente</h2>
       <ul className="space-y-2 mb-3">
         {documents.map((d) => (
@@ -617,6 +605,44 @@ export function AntragDetailModal({
         {documentError && <p className="text-red-600 text-sm">{documentError}</p>}
         <button type="submit" disabled={savingDocument || !newFile} className="mc-btn-primary">
           {savingDocument ? 'Hochladen...' : 'Hochladen'}
+        </button>
+      </form>
+
+      <h2 className="font-semibold mb-2">Kommentare</h2>
+      <ul className="space-y-2 mb-3">
+        {comments.map((c) => (
+          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs text-slate-400">
+                {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
+                {formatDateTime(c.erstellt_am)}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleDeleteComment(c.id)}
+                className="mc-btn-danger !px-2 !py-1 !text-xs"
+              >
+                Löschen
+              </button>
+            </div>
+          </li>
+        ))}
+        {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
+      </ul>
+      <form
+        onSubmit={handleAddComment}
+        className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+      >
+        <textarea
+          placeholder="Kommentar hinzufügen"
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          className="mc-input w-full"
+          rows={2}
+        />
+        <button type="submit" disabled={savingComment || !newComment.trim()} className="mc-btn-primary">
+          {savingComment ? 'Speichern...' : 'Kommentieren'}
         </button>
       </form>
     </>

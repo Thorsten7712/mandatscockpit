@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type {
   Ebene,
@@ -71,6 +72,9 @@ export function TodoDetailModal({
   const [savingDocument, setSavingDocument] = useState(false)
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
+
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  useEffect(() => setConfirmDelete(false), [id])
 
   async function loadTodo() {
     const { data, error } = await supabase.from('todos').select('*').eq('id', id).single()
@@ -503,14 +507,21 @@ export function TodoDetailModal({
               rows={3}
             />
 
-            <label className="flex items-center gap-1.5 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={editErledigt}
-                onChange={(e) => setEditErledigt(e.target.checked)}
-              />
-              Erledigt
-            </label>
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <span className="text-sm font-medium text-slate-700">Erledigt</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={editErledigt}
+                aria-label="Erledigt"
+                onClick={() => setEditErledigt((v) => !v)}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${editErledigt ? 'bg-primary' : 'bg-slate-300'}`}
+              >
+                <span
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${editErledigt ? 'translate-x-5' : 'translate-x-0'}`}
+                />
+              </button>
+            </div>
 
             <div className="space-y-1">
               <p className="text-sm text-slate-600">Termin-Verknüpfung</p>
@@ -604,53 +615,36 @@ export function TodoDetailModal({
       >
         {editSaving ? 'Speichern...' : 'Speichern'}
       </button>
-      <button type="button" onClick={handleDelete} className="mc-btn-danger !px-3 !py-1.5 !text-sm">
-        {istErsteller ? 'Löschen' : 'Entfernen'}
-      </button>
+      {confirmDelete ? (
+        <div className="mc-animate-pop flex items-center gap-1.5">
+          <span className="hidden text-sm text-slate-500 sm:inline">Sicher?</span>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(false)}
+            className="mc-btn-ghost !px-2.5 !py-1.5 !text-sm"
+          >
+            Abbrechen
+          </button>
+          <button type="button" onClick={handleDelete} className="mc-btn-danger !px-2.5 !py-1.5 !text-sm">
+            {istErsteller ? 'Löschen' : 'Entfernen'}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          aria-label={istErsteller ? 'Löschen' : 'Entfernen'}
+          title={istErsteller ? 'Löschen' : 'Entfernen'}
+          className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+        >
+          <Trash2 size={17} />
+        </button>
+      )}
     </>
   )
 
   const rightColumn = (
     <>
-      <h2 className="font-semibold mb-2">Kommentare</h2>
-      <ul className="space-y-2 mb-3">
-        {comments.map((c) => (
-          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs text-slate-400">
-                {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
-                {formatDateTime(c.erstellt_am)}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleDeleteComment(c.id)}
-                className="mc-btn-danger !px-2 !py-1 !text-xs"
-              >
-                Löschen
-              </button>
-            </div>
-          </li>
-        ))}
-        {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
-      </ul>
-      <form onSubmit={handleAddComment} className="mb-6 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <textarea
-          placeholder="Kommentar hinzufügen"
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          className="mc-input w-full"
-          rows={2}
-        />
-        <button
-          type="submit"
-          disabled={savingComment || !newComment.trim()}
-          className="mc-btn-primary"
-        >
-          {savingComment ? 'Speichern...' : 'Kommentieren'}
-        </button>
-      </form>
-
       <h2 className="font-semibold mb-2">Dokumente</h2>
       <ul className="space-y-2 mb-3">
         {documents.map((d) => (
@@ -691,6 +685,45 @@ export function TodoDetailModal({
           className="mc-btn-primary"
         >
           {savingDocument ? 'Hochladen...' : 'Hochladen'}
+        </button>
+      </form>
+
+      <h2 className="font-semibold mb-2">Kommentare</h2>
+      <ul className="space-y-2 mb-3">
+        {comments.map((c) => (
+          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs text-slate-400">
+                {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
+                {formatDateTime(c.erstellt_am)}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleDeleteComment(c.id)}
+                className="mc-btn-danger !px-2 !py-1 !text-xs"
+              >
+                Löschen
+              </button>
+            </div>
+          </li>
+        ))}
+        {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
+      </ul>
+      <form onSubmit={handleAddComment} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <textarea
+          placeholder="Kommentar hinzufügen"
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          className="mc-input w-full"
+          rows={2}
+        />
+        <button
+          type="submit"
+          disabled={savingComment || !newComment.trim()}
+          className="mc-btn-primary"
+        >
+          {savingComment ? 'Speichern...' : 'Kommentieren'}
         </button>
       </form>
     </>

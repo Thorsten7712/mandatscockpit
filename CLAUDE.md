@@ -728,6 +728,34 @@ Vorhanden:
     aus `leftColumn` heraus hätte einen Temporal-Dead-Zone-Fehler geworfen, da `const`-Deklarationen in
     JS nicht wie Funktionsdeklarationen gehoisted werden). Rechte Spalte zeigt jetzt nur noch
     Kommentare + Dokumente untereinander.
+  - **Vierte Nachbesserung (noch 2026-07-21):** Recherche über den 21st.dev-Connector
+    ("dropdown menu with inline delete confirmation", "animated toggle switch") plus `impeccable`-
+    Produkt-Register-Prinzipien ("Error Prevention: Bestätigung vor destruktiven Aktionen", "gleiche
+    Aktion = gleiche UI") flossen in vier gezielte Verbesserungen:
+    - **Dokumente vor Kommentare**: rechte Spalte in `TodoDetailModal.tsx`/`AntragDetailModal.tsx`
+      vertauscht (Nutzerwunsch, keine tiefere Begründung nötig).
+    - **Header-Aktionen neu**: "Speichern"/"Löschen"/"Schließen" als drei gleichwertige Text-Buttons
+      nebeneinander wirkten zusammengewürfelt. Jetzt: "Speichern" bleibt primärer Text-Button, "Löschen"
+      wird ein zurückhaltender Icon-Button (`lucide-react` `Trash2`, rot erst im Hover), "Schließen" wird
+      ein `X`-Icon-Button, per `border-r` optisch von den Inhalts-Aktionen abgesetzt - gleiches Muster in
+      `DetailModalShell.tsx` (neue `headerActions`-Umrandung), `TerminDetailModal.tsx` und
+      `DocumentPreviewModal.tsx` übernommen, damit alle vier Modals im Projekt dasselbe Kopfzeilen-
+      Vokabular teilen (vorher hatte nur `DocumentPreviewModal.tsx` schon ein eigenes, jetzt
+      vereinheitlichtes Muster).
+    - **Löschen fragt nach**: Klick auf den Trash-Icon-Button lässt ihn inline zu "Sicher? Abbrechen /
+      Löschen" aufklappen (`confirmDelete`-State, per `mc-animate-pop`), statt sofort zu löschen oder
+      ein natives `window.confirm()` zu nutzen (wie in `UserManagement.tsx` - dort bewusst nicht
+      angeglichen, das ist ein anderer, älterer Teil der App und nicht Teil dieser Modal-Überarbeitung).
+      `confirmDelete` wird bei jedem `id`-Wechsel per `useEffect` zurückgesetzt, damit ein Reopen mit
+      einer anderen Karte nicht versehentlich im aufgeklappten Zustand startet.
+    - **"Erledigt" als Toggle-Switch** (nur `TodoDetailModal.tsx`, Anträge haben kein Erledigt-Feld):
+      die native Checkbox wirkte klein/beliebig neben ihrem Label. Ersetzt durch einen selbstgebauten
+      iOS-artigen Switch (`role="switch"`, `aria-checked`, 200ms `translate-x`-Animation, Füllfarbe folgt
+      `bg-primary` und damit automatisch dem Partei-Theme) - kein neues Package, reines Tailwind wie der
+      Rest der Komponenten-Bibliothek.
+    - Verifiziert per `tsc -b`/`vite build` sowie einem interaktiven statischen Test-Harness (Toggle-Klick
+      und Löschen-Klick per `element.click()` ausgelöst, Zustandswechsel per Screenshot bestätigt) - ein
+      Login-Rundgang im echten Dev-Server bleibt weiterhin offen (Passwort-Eingabe ist tabu).
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

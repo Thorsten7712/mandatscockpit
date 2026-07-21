@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import { TerminDetailPanel } from './TerminDetailPanel'
 
 /**
@@ -33,8 +34,8 @@ export function TerminDetailModal({
           <h1 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             {kind === 'session' ? 'Sitzung' : 'Termin'}
           </h1>
-          <button type="button" onClick={onClose} className="mc-btn-ghost shrink-0">
-            Schließen
+          <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost shrink-0 !p-2">
+            <X size={18} />
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-hidden">
