@@ -701,6 +701,24 @@ Vorhanden:
     ("+ Antrag"), der ein `mc-animate-pop`-Formular ein-/ausblendet, statt einer permanent sichtbaren
     Inline-Zeile in `AntraegeSection.tsx` – `showAddForm`-State, Formular schließt sich nach
     erfolgreichem Anlegen automatisch (gleiches Verhalten wie `handleAddEvent`).
+  - **Zweite Nachbesserung (noch 2026-07-21):** Nutzer mochte den Kommentare/Dokumente/Teilen-Tab-
+    Umschalter aus der ersten Nachbesserung nicht (per `AskUserQuestion` geklärt: "Kommentare &
+    Dokumente wieder untereinander, Teilen separat"). `DetailModalShell.tsx` bekam eine neue
+    `headerActions`-Prop (Slot im Header neben "Schließen"), `TodoDetailModal.tsx`/
+    `AntragDetailModal.tsx` verschieben Speichern+Löschen dorthin (Formular bekam dafür `id`, der
+    Speichern-Button nutzt das HTML-`form`-Attribut, um trotz Position außerhalb des `<form>`-Elements
+    weiter dessen `onSubmit` auszulösen). Rechte Spalte zeigt jetzt wieder alle drei Bereiche
+    permanent untereinander (Kommentare → Dokumente → Teilen/Mitantragsteller), kein `activityTab`-
+    State mehr - die Spalte scrollt dafür bei vielen Kommentaren/Dokumenten wieder als Ganzes, was der
+    Nutzer explizit so wollte (nur das Umschalten störte, nicht das Scrollen der rechten Spalte an
+    sich). Zusätzlich zwei Felder aus den Formularen entfernt, die laut Nutzer nicht gebraucht werden:
+    `AntragDetailModal.tsx` verlor das "Antragstext / Begründung"-Textarea (Anträge werden als Word/PDF
+    hochgeladen, nicht im UI getippt), `TodoDetailModal.tsx` verlor das "Zuständig"-Eingabefeld. Beide
+    Felder wurden bewusst nur aus dem UI entfernt, nicht aus der Datenbank gedroppt (anders als z. B.
+    `mitantragsteller` in `0024`) - der Nutzer bat nur ums Entfernen des Formularfelds, ein
+    Spalten-Drop mit Datenverlust für ggf. bereits befüllte Zeilen ist eine andere, riskantere
+    Entscheidung, die nicht ungefragt getroffen wurde; `todos.zustaendig` wird zudem an anderer Stelle
+    (Board-Karten-Chip, Archiv) weiterhin gelesen und angezeigt.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

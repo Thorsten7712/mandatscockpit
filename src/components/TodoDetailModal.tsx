@@ -18,7 +18,6 @@ import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
 
 type TerminModus = 'keine' | 'datum' | 'termin' | 'sitzung'
-type ActivityTab = 'kommentare' | 'dokumente' | 'teilen'
 
 export function TodoDetailModal({
   id,
@@ -72,8 +71,6 @@ export function TodoDetailModal({
   const [savingDocument, setSavingDocument] = useState(false)
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
-
-  const [activityTab, setActivityTab] = useState<ActivityTab>('kommentare')
 
   async function loadTodo() {
     const { data, error } = await supabase.from('todos').select('*').eq('id', id).single()
@@ -382,7 +379,11 @@ export function TodoDetailModal({
       {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
 
       {todo && (
-          <form onSubmit={handleSaveEdit} className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <form
+            id="todo-edit-form"
+            onSubmit={handleSaveEdit}
+            className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4"
+          >
             <input
               type="text"
               value={editTitel}
@@ -396,13 +397,6 @@ export function TodoDetailModal({
               onChange={(e) => setEditBeschreibung(e.target.value)}
               className="mc-input w-full"
               rows={3}
-            />
-            <input
-              type="text"
-              placeholder="Zuständig (optional)"
-              value={editZustaendig}
-              onChange={(e) => setEditZustaendig(e.target.value)}
-              className="mc-input w-full"
             />
 
             <label className="flex items-center gap-1.5 text-sm text-slate-700">
@@ -487,21 +481,25 @@ export function TodoDetailModal({
             </div>
 
             {editError && <p className="text-red-600 text-sm">{editError}</p>}
-            <div className="flex gap-3 pt-2">
-              <button
-                type="submit"
-                disabled={editSaving}
-                className="mc-btn-primary"
-              >
-                {editSaving ? 'Speichern...' : 'Speichern'}
-              </button>
-              <button type="button" onClick={handleDelete} className="mc-btn-danger">
-                {istErsteller ? 'Löschen' : 'Von meinem Board entfernen'}
-              </button>
-            </div>
             {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
           </form>
         )}
+    </>
+  )
+
+  const headerActions = todo && (
+    <>
+      <button
+        type="submit"
+        form="todo-edit-form"
+        disabled={editSaving}
+        className="mc-btn-primary !px-3 !py-1.5 !text-sm"
+      >
+        {editSaving ? 'Speichern...' : 'Speichern'}
+      </button>
+      <button type="button" onClick={handleDelete} className="mc-btn-danger !px-3 !py-1.5 !text-sm">
+        {istErsteller ? 'Löschen' : 'Entfernen'}
+      </button>
     </>
   )
 
@@ -611,125 +609,102 @@ export function TodoDetailModal({
 
   const rightColumn = (
     <>
-      <div className="mb-4 flex gap-2">
-        <button
-          type="button"
-          onClick={() => setActivityTab('kommentare')}
-          className={activityTab === 'kommentare' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-        >
-          Kommentare ({comments.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActivityTab('dokumente')}
-          className={activityTab === 'dokumente' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-        >
-          Dokumente ({documents.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActivityTab('teilen')}
-          className={activityTab === 'teilen' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-        >
-          Teilen{geteiltePlatzierungen.length > 0 ? ` (${geteiltePlatzierungen.length})` : ''}
-        </button>
-      </div>
-
-      {activityTab === 'teilen' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{teilenTab}</div>}
-
-      {activityTab === 'kommentare' && (
-        <>
-          <ul className="space-y-2 mb-3">
-            {comments.map((c) => (
-              <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-slate-400">
-                    {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
-                    {formatDateTime(c.erstellt_am)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteComment(c.id)}
-                    className="mc-btn-danger !px-2 !py-1 !text-xs"
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            ))}
-            {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
-          </ul>
-          <form onSubmit={handleAddComment} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <textarea
-              placeholder="Kommentar hinzufügen"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              className="mc-input w-full"
-              rows={2}
-            />
-            <button
-              type="submit"
-              disabled={savingComment || !newComment.trim()}
-              className="mc-btn-primary"
-            >
-              {savingComment ? 'Speichern...' : 'Kommentieren'}
-            </button>
-          </form>
-        </>
-      )}
-
-      {activityTab === 'dokumente' && (
-        <>
-          <ul className="space-y-2 mb-3">
-            {documents.map((d) => (
-              <li
-                key={d.id}
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+      <h2 className="font-semibold mb-2">Kommentare</h2>
+      <ul className="space-y-2 mb-3">
+        {comments.map((c) => (
+          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs text-slate-400">
+                {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
+                {formatDateTime(c.erstellt_am)}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleDeleteComment(c.id)}
+                className="mc-btn-danger !px-2 !py-1 !text-xs"
               >
-                {d.datei_url && (
-                  <button
-                    type="button"
-                    onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
-                    className="mc-btn-ghost !px-2 !py-1 !text-xs"
-                  >
-                    📎 {fileNameFromPath(d.datei_url)}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDeleteDocument(d.id)}
-                  className="mc-btn-danger !px-2 !py-1 !text-xs"
-                >
-                  Löschen
-                </button>
-              </li>
-            ))}
-            {documents.length === 0 && <li className="text-slate-400 text-sm">Noch keine Dokumente.</li>}
-          </ul>
-          <form onSubmit={handleUploadDocument} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <input
-              type="file"
-              onChange={(e) => setNewFile(e.target.files?.[0] ?? null)}
-              className="w-full text-sm"
-            />
-            {documentError && <p className="text-red-600 text-sm">{documentError}</p>}
+                Löschen
+              </button>
+            </div>
+          </li>
+        ))}
+        {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
+      </ul>
+      <form onSubmit={handleAddComment} className="mb-6 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <textarea
+          placeholder="Kommentar hinzufügen"
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          className="mc-input w-full"
+          rows={2}
+        />
+        <button
+          type="submit"
+          disabled={savingComment || !newComment.trim()}
+          className="mc-btn-primary"
+        >
+          {savingComment ? 'Speichern...' : 'Kommentieren'}
+        </button>
+      </form>
+
+      <h2 className="font-semibold mb-2">Dokumente</h2>
+      <ul className="space-y-2 mb-3">
+        {documents.map((d) => (
+          <li
+            key={d.id}
+            className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+          >
+            {d.datei_url && (
+              <button
+                type="button"
+                onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
+                className="mc-btn-ghost !px-2 !py-1 !text-xs"
+              >
+                📎 {fileNameFromPath(d.datei_url)}
+              </button>
+            )}
             <button
-              type="submit"
-              disabled={savingDocument || !newFile}
-              className="mc-btn-primary"
+              type="button"
+              onClick={() => handleDeleteDocument(d.id)}
+              className="mc-btn-danger !px-2 !py-1 !text-xs"
             >
-              {savingDocument ? 'Hochladen...' : 'Hochladen'}
+              Löschen
             </button>
-          </form>
-        </>
-      )}
+          </li>
+        ))}
+        {documents.length === 0 && <li className="text-slate-400 text-sm">Noch keine Dokumente.</li>}
+      </ul>
+      <form onSubmit={handleUploadDocument} className="mb-6 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <input
+          type="file"
+          onChange={(e) => setNewFile(e.target.files?.[0] ?? null)}
+          className="w-full text-sm"
+        />
+        {documentError && <p className="text-red-600 text-sm">{documentError}</p>}
+        <button
+          type="submit"
+          disabled={savingDocument || !newFile}
+          className="mc-btn-primary"
+        >
+          {savingDocument ? 'Hochladen...' : 'Hochladen'}
+        </button>
+      </form>
+
+      <h2 className="font-semibold mb-2">Teilen</h2>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{teilenTab}</div>
     </>
   )
 
   return (
     <>
-      <DetailModalShell title={todo?.titel ?? 'Karte'} onClose={onClose} left={leftColumn} right={rightColumn} />
+      <DetailModalShell
+        title={todo?.titel ?? 'Karte'}
+        headerActions={headerActions}
+        onClose={onClose}
+        left={leftColumn}
+        right={rightColumn}
+      />
       {previewDoc && (
         <DocumentPreviewModal
           path={previewDoc.path}

@@ -20,8 +20,6 @@ import { EBENE_LABEL } from '../lib/sourceColors'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
 
-type ActivityTab = 'kommentare' | 'dokumente' | 'mitantragsteller'
-
 export function AntragDetailModal({
   id,
   onClose,
@@ -72,8 +70,6 @@ export function AntragDetailModal({
   const [savingDocument, setSavingDocument] = useState(false)
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
-
-  const [activityTab, setActivityTab] = useState<ActivityTab>('kommentare')
 
   async function loadAntrag() {
     const { data, error } = await supabase.from('antraege').select('*').eq('id', id).single()
@@ -335,6 +331,7 @@ export function AntragDetailModal({
 
           {antrag && (
             <form
+              id="antrag-edit-form"
               onSubmit={handleSaveEdit}
               className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4"
             >
@@ -392,14 +389,6 @@ export function AntragDetailModal({
                 </div>
               )}
 
-              <textarea
-                placeholder="Antragstext / Begründung (optional)"
-                value={editInhalt}
-                onChange={(e) => setEditInhalt(e.target.value)}
-                className="mc-input w-full"
-                rows={5}
-              />
-
               <div className="space-y-1">
                 <p className="text-sm text-slate-600">Sitzung, für die der Antrag vorgesehen ist</p>
                 <select
@@ -425,17 +414,25 @@ export function AntragDetailModal({
               </div>
 
               {editError && <p className="text-red-600 text-sm">{editError}</p>}
-              <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={editSaving} className="mc-btn-primary">
-                  {editSaving ? 'Speichern...' : 'Speichern'}
-                </button>
-                <button type="button" onClick={handleDelete} className="mc-btn-danger">
-                  {istErsteller ? 'Löschen' : 'Nicht mehr Mitantragsteller*in'}
-                </button>
-              </div>
               {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
             </form>
           )}
+    </>
+  )
+
+  const headerActions = antrag && (
+    <>
+      <button
+        type="submit"
+        form="antrag-edit-form"
+        disabled={editSaving}
+        className="mc-btn-primary !px-3 !py-1.5 !text-sm"
+      >
+        {editSaving ? 'Speichern...' : 'Speichern'}
+      </button>
+      <button type="button" onClick={handleDelete} className="mc-btn-danger !px-3 !py-1.5 !text-sm">
+        {istErsteller ? 'Löschen' : 'Entfernen'}
+      </button>
     </>
   )
 
@@ -544,121 +541,96 @@ export function AntragDetailModal({
 
   const rightColumn = (
     <>
-      <div className="mb-4 flex gap-2">
-        <button
-          type="button"
-          onClick={() => setActivityTab('kommentare')}
-          className={activityTab === 'kommentare' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-        >
-          Kommentare ({comments.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActivityTab('dokumente')}
-          className={activityTab === 'dokumente' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-        >
-          Dokumente ({documents.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActivityTab('mitantragsteller')}
-          className={activityTab === 'mitantragsteller' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-        >
-          Mitantragsteller{geteilteFreigaben.length > 0 ? ` (${geteilteFreigaben.length})` : ''}
-        </button>
-      </div>
-
-      {activityTab === 'mitantragsteller' && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{mitantragstellerTab}</div>
-      )}
-
-      {activityTab === 'kommentare' && (
-        <>
-          <ul className="space-y-2 mb-3">
-            {comments.map((c) => (
-              <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-slate-400">
-                    {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
-                    {formatDateTime(c.erstellt_am)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteComment(c.id)}
-                    className="mc-btn-danger !px-2 !py-1 !text-xs"
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            ))}
-            {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
-          </ul>
-          <form
-            onSubmit={handleAddComment}
-            className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
-          >
-            <textarea
-              placeholder="Kommentar hinzufügen"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              className="mc-input w-full"
-              rows={2}
-            />
-            <button type="submit" disabled={savingComment || !newComment.trim()} className="mc-btn-primary">
-              {savingComment ? 'Speichern...' : 'Kommentieren'}
-            </button>
-          </form>
-        </>
-      )}
-
-      {activityTab === 'dokumente' && (
-        <>
-          <ul className="space-y-2 mb-3">
-            {documents.map((d) => (
-              <li
-                key={d.id}
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+      <h2 className="font-semibold mb-2">Kommentare</h2>
+      <ul className="space-y-2 mb-3">
+        {comments.map((c) => (
+          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs text-slate-400">
+                {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
+                {formatDateTime(c.erstellt_am)}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleDeleteComment(c.id)}
+                className="mc-btn-danger !px-2 !py-1 !text-xs"
               >
-                {d.datei_url && (
-                  <button
-                    type="button"
-                    onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
-                    className="mc-btn-ghost !px-2 !py-1 !text-xs"
-                  >
-                    📎 {fileNameFromPath(d.datei_url)}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDeleteDocument(d.id)}
-                  className="mc-btn-danger !px-2 !py-1 !text-xs"
-                >
-                  Löschen
-                </button>
-              </li>
-            ))}
-            {documents.length === 0 && <li className="text-slate-400 text-sm">Noch keine Dokumente.</li>}
-          </ul>
-          <form
-            onSubmit={handleUploadDocument}
-            className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                Löschen
+              </button>
+            </div>
+          </li>
+        ))}
+        {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
+      </ul>
+      <form
+        onSubmit={handleAddComment}
+        className="mb-6 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+      >
+        <textarea
+          placeholder="Kommentar hinzufügen"
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          className="mc-input w-full"
+          rows={2}
+        />
+        <button type="submit" disabled={savingComment || !newComment.trim()} className="mc-btn-primary">
+          {savingComment ? 'Speichern...' : 'Kommentieren'}
+        </button>
+      </form>
+
+      <h2 className="font-semibold mb-2">Dokumente</h2>
+      <ul className="space-y-2 mb-3">
+        {documents.map((d) => (
+          <li
+            key={d.id}
+            className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
           >
-            <input type="file" onChange={(e) => setNewFile(e.target.files?.[0] ?? null)} className="w-full text-sm" />
-            {documentError && <p className="text-red-600 text-sm">{documentError}</p>}
-            <button type="submit" disabled={savingDocument || !newFile} className="mc-btn-primary">
-              {savingDocument ? 'Hochladen...' : 'Hochladen'}
+            {d.datei_url && (
+              <button
+                type="button"
+                onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
+                className="mc-btn-ghost !px-2 !py-1 !text-xs"
+              >
+                📎 {fileNameFromPath(d.datei_url)}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleDeleteDocument(d.id)}
+              className="mc-btn-danger !px-2 !py-1 !text-xs"
+            >
+              Löschen
             </button>
-          </form>
-        </>
-      )}
+          </li>
+        ))}
+        {documents.length === 0 && <li className="text-slate-400 text-sm">Noch keine Dokumente.</li>}
+      </ul>
+      <form
+        onSubmit={handleUploadDocument}
+        className="mb-6 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+      >
+        <input type="file" onChange={(e) => setNewFile(e.target.files?.[0] ?? null)} className="w-full text-sm" />
+        {documentError && <p className="text-red-600 text-sm">{documentError}</p>}
+        <button type="submit" disabled={savingDocument || !newFile} className="mc-btn-primary">
+          {savingDocument ? 'Hochladen...' : 'Hochladen'}
+        </button>
+      </form>
+
+      <h2 className="font-semibold mb-2">Mitantragsteller</h2>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{mitantragstellerTab}</div>
     </>
   )
 
   return (
     <>
-      <DetailModalShell title={antrag?.titel ?? 'Antrag'} onClose={onClose} left={leftColumn} right={rightColumn} />
+      <DetailModalShell
+        title={antrag?.titel ?? 'Antrag'}
+        headerActions={headerActions}
+        onClose={onClose}
+        left={leftColumn}
+        right={rightColumn}
+      />
       {previewDoc && (
         <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} onClose={() => setPreviewDoc(null)} />
       )}

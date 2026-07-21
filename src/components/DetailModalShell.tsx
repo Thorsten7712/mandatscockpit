@@ -8,11 +8,14 @@ import type { ReactNode } from 'react'
  */
 export function DetailModalShell({
   title,
+  headerActions,
   onClose,
   left,
   right,
 }: {
   title: ReactNode
+  /** Speichern/Löschen o.ä. - sitzen im Header neben Schließen statt am Formularende. */
+  headerActions?: ReactNode
   onClose: () => void
   left: ReactNode
   right: ReactNode
@@ -28,9 +31,12 @@ export function DetailModalShell({
       >
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
           <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-slate-900">{title}</h1>
-          <button type="button" onClick={onClose} className="mc-btn-ghost shrink-0">
-            Schließen
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {headerActions}
+            <button type="button" onClick={onClose} className="mc-btn-ghost">
+              Schließen
+            </button>
+          </div>
         </header>
         <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
           <div className="min-h-0 overflow-y-auto border-b border-slate-200 p-6 md:border-b-0 md:border-r">
