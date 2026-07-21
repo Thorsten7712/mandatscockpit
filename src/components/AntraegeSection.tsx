@@ -27,6 +27,7 @@ export function AntraegeSection() {
   const [statusFilter, setStatusFilter] = useState<Filter>('alle')
   const [ausschussFilter, setAusschussFilter] = useState<string | null>(null)
 
+  const [showAddForm, setShowAddForm] = useState(false)
   const [newTitel, setNewTitel] = useState('')
   const [newSessionId, setNewSessionId] = useState('')
   const [adding, setAdding] = useState(false)
@@ -120,6 +121,7 @@ export function AntraegeSection() {
     setNewTitel('')
     setNewSessionId('')
     setAdding(false)
+    setShowAddForm(false)
     await load()
   }
 
@@ -133,44 +135,52 @@ export function AntraegeSection() {
 
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-slate-900">Meine Anträge</h2>
-        {abgeschlosseneAnzahl > 0 && (
-          <Link to="/archiv" className="text-xs font-medium text-primary underline">
-            {abgeschlosseneAnzahl} entschiedene im Archiv
-          </Link>
-        )}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-base font-semibold text-slate-900">Meine Anträge</h2>
+          {abgeschlosseneAnzahl > 0 && (
+            <Link to="/archiv" className="text-xs font-medium text-primary underline">
+              {abgeschlosseneAnzahl} entschiedene im Archiv
+            </Link>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowAddForm((v) => !v)}
+          className={showAddForm ? 'mc-btn-ghost' : 'mc-btn-primary'}
+        >
+          {showAddForm ? 'Abbrechen' : '+ Antrag'}
+        </button>
       </div>
 
-      <form
-        onSubmit={handleAdd}
-        className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white p-3"
-      >
-        <input
-          type="text"
-          placeholder="+ Neuer Antrag (Titel)"
-          value={newTitel}
-          onChange={(e) => setNewTitel(e.target.value)}
-          className="mc-input min-w-[12rem] flex-1"
-          required
-        />
-        <select
-          value={newSessionId}
-          onChange={(e) => setNewSessionId(e.target.value)}
-          className="mc-input min-w-[12rem] flex-1"
-        >
-          <option value="">Vorgesehene Sitzung (optional)</option>
-          {ownSessions.map((se) => (
-            <option key={se.id} value={se.id}>
-              {se.titel} ({formatDate(se.datum)})
-            </option>
-          ))}
-        </select>
-        <button type="submit" disabled={adding} className="mc-btn-primary shrink-0">
-          {adding ? 'Anlegen...' : 'Anlegen'}
-        </button>
-        {addError && <p className="w-full text-sm text-red-600">{addError}</p>}
-      </form>
+      {showAddForm && (
+        <form onSubmit={handleAdd} className="mc-card mc-animate-pop mb-3 space-y-2.5 p-4">
+          <input
+            type="text"
+            placeholder="Titel"
+            value={newTitel}
+            onChange={(e) => setNewTitel(e.target.value)}
+            className="mc-input w-full"
+            required
+          />
+          <select
+            value={newSessionId}
+            onChange={(e) => setNewSessionId(e.target.value)}
+            className="mc-input w-full"
+          >
+            <option value="">Vorgesehene Sitzung (optional)</option>
+            {ownSessions.map((se) => (
+              <option key={se.id} value={se.id}>
+                {se.titel} ({formatDate(se.datum)})
+              </option>
+            ))}
+          </select>
+          {addError && <p className="text-sm text-red-600">{addError}</p>}
+          <button type="submit" disabled={adding} className="mc-btn-primary">
+            {adding ? 'Anlegen...' : 'Antrag anlegen'}
+          </button>
+        </form>
+      )}
 
       {(vorkommendeStatus.length > 1 || vorkommendeAusschuesse.length > 1) && (
         <div className="mb-3 space-y-1.5">
@@ -276,7 +286,7 @@ export function AntraegeSection() {
         {sichtbar.length === 0 && (
           <li className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
             {aktive.length === 0
-              ? 'Noch keine Anträge. Oben Titel eingeben, optional die vorgesehene Sitzung wählen.'
+              ? 'Noch keine Anträge. Über „+ Antrag" oben Titel eingeben, optional die vorgesehene Sitzung wählen.'
               : 'Keine Anträge mit diesen Filtern.'}
           </li>
         )}

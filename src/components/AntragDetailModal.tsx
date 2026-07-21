@@ -20,7 +20,7 @@ import { EBENE_LABEL } from '../lib/sourceColors'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
 
-type ActivityTab = 'kommentare' | 'dokumente'
+type ActivityTab = 'kommentare' | 'dokumente' | 'mitantragsteller'
 
 export function AntragDetailModal({
   id,
@@ -436,110 +436,109 @@ export function AntragDetailModal({
               {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
             </form>
           )}
+    </>
+  )
 
-          {antrag && (
-            <div className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-700">Mitantragsteller</p>
-              {istErsteller ? (
-                <>
-                  <div>
-                    <label className="mb-1 block text-sm text-slate-600">Ebene (für Mitantragsteller &amp; Frist)</label>
-                    <select
-                      value={editEbene}
-                      onChange={(e) => setEditEbene(e.target.value as Ebene | '')}
-                      className="mc-input w-full"
+  const mitantragstellerTab = antrag && (
+    <>
+      {istErsteller ? (
+        <>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Ebene (für Mitantragsteller &amp; Frist)</label>
+            <select
+              value={editEbene}
+              onChange={(e) => setEditEbene(e.target.value as Ebene | '')}
+              className="mc-input w-full"
+            >
+              <option value="">– keine –</option>
+              {(myProfile?.ebenen ?? []).map((e) => (
+                <option key={e} value={e}>
+                  {EBENE_LABEL[e]}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-400">
+              Änderung wird erst mit „Speichern" oben übernommen.
+              {(myProfile?.ebenen ?? []).length === 0 &&
+                ' Trage zuerst in den Einstellungen unter „Profil" deine eigenen Ebenen ein, um Mitantragsteller hinzuzufügen.'}
+            </p>
+          </div>
+          {(geteilteFreigaben.length > 0 || antrag.ebene) && (
+            <div className="mt-3">
+              <p className="mb-1 text-sm text-slate-600">
+                {antrag.ebene ? `Kolleg*innen (gleiche Partei, Ebene ${EBENE_LABEL[antrag.ebene]})` : 'Mitantragsteller'}
+              </p>
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {geteilteFreigaben.map((s) => (
+                  <span
+                    key={s.user_id}
+                    className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+                  >
+                    {shareNames.get(s.user_id) ?? '…'}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleShare(s.user_id, true)}
+                      aria-label={`${shareNames.get(s.user_id) ?? 'Kolleg*in'} entfernen`}
+                      className="text-primary/70 hover:text-primary"
                     >
-                      <option value="">– keine –</option>
-                      {(myProfile?.ebenen ?? []).map((e) => (
-                        <option key={e} value={e}>
-                          {EBENE_LABEL[e]}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-xs text-slate-400">
-                      Änderung wird erst mit „Speichern" oben übernommen.
-                      {(myProfile?.ebenen ?? []).length === 0 &&
-                        ' Trage zuerst in den Einstellungen unter „Profil" deine eigenen Ebenen ein, um Mitantragsteller hinzuzufügen.'}
-                    </p>
-                  </div>
-                  {(geteilteFreigaben.length > 0 || antrag.ebene) && (
-                    <div>
-                      <p className="mb-1 text-sm text-slate-600">
-                        {antrag.ebene ? `Kolleg*innen (gleiche Partei, Ebene ${EBENE_LABEL[antrag.ebene]})` : 'Mitantragsteller'}
-                      </p>
-                      <div className="mb-2 flex flex-wrap gap-1.5">
-                        {geteilteFreigaben.map((s) => (
-                          <span
-                            key={s.user_id}
-                            className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {geteilteFreigaben.length === 0 && (
+                  <span className="text-xs text-slate-400">Noch keine Mitantragsteller.</span>
+                )}
+              </div>
+              {antrag.ebene && (
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Mitantragsteller suchen..."
+                    value={shareSearch}
+                    onChange={(e) => setShareSearch(e.target.value)}
+                    onFocus={() => setShareDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setShareDropdownOpen(false), 150)}
+                    className="mc-input w-full"
+                  />
+                  {shareDropdownOpen && (
+                    <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                      {ungeteilteKandidatenGefiltert.map((c) => (
+                        <li key={c.id}>
+                          <button
+                            type="button"
+                            onMouseDown={() => {
+                              handleToggleShare(c.id, false)
+                              setShareSearch('')
+                            }}
+                            className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
                           >
-                            {shareNames.get(s.user_id) ?? '…'}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleShare(s.user_id, true)}
-                              aria-label={`${shareNames.get(s.user_id) ?? 'Kolleg*in'} entfernen`}
-                              className="text-primary/70 hover:text-primary"
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                        {geteilteFreigaben.length === 0 && (
-                          <span className="text-xs text-slate-400">Noch keine Mitantragsteller.</span>
-                        )}
-                      </div>
-                      {antrag.ebene && (
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="Mitantragsteller suchen..."
-                            value={shareSearch}
-                            onChange={(e) => setShareSearch(e.target.value)}
-                            onFocus={() => setShareDropdownOpen(true)}
-                            onBlur={() => setTimeout(() => setShareDropdownOpen(false), 150)}
-                            className="mc-input w-full"
-                          />
-                          {shareDropdownOpen && (
-                            <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-                              {ungeteilteKandidatenGefiltert.map((c) => (
-                                <li key={c.id}>
-                                  <button
-                                    type="button"
-                                    onMouseDown={() => {
-                                      handleToggleShare(c.id, false)
-                                      setShareSearch('')
-                                    }}
-                                    className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
-                                  >
-                                    {c.name}
-                                  </button>
-                                </li>
-                              ))}
-                              {ungeteilteKandidatenGefiltert.length === 0 && (
-                                <li className="px-3 py-1.5 text-sm text-slate-400">
-                                  {candidates.length === 0
-                                    ? 'Keine Kolleg*innen mit gleicher Partei und Ebene gefunden.'
-                                    : 'Keine Treffer.'}
-                                </li>
-                              )}
-                            </ul>
-                          )}
-                        </div>
+                            {c.name}
+                          </button>
+                        </li>
+                      ))}
+                      {ungeteilteKandidatenGefiltert.length === 0 && (
+                        <li className="px-3 py-1.5 text-sm text-slate-400">
+                          {candidates.length === 0
+                            ? 'Keine Kolleg*innen mit gleicher Partei und Ebene gefunden.'
+                            : 'Keine Treffer.'}
+                        </li>
                       )}
-                    </div>
+                    </ul>
                   )}
-                  {shareError && <p className="text-red-600 text-sm">{shareError}</p>}
-                </>
-              ) : (
-                <p className="text-sm text-slate-600">
-                  Du bist Mitantragsteller*in dieses Antrags
-                  {antrag.ebene ? ` (Ebene ${EBENE_LABEL[antrag.ebene]})` : ''}.
-                  {geteilteFreigaben.length > 0 &&
-                    ` Weitere: ${geteilteFreigaben.map((s) => shareNames.get(s.user_id) ?? '…').join(', ')}`}
-                </p>
+                </div>
               )}
             </div>
           )}
+          {shareError && <p className="text-red-600 text-sm">{shareError}</p>}
+        </>
+      ) : (
+        <p className="text-sm text-slate-600">
+          Du bist Mitantragsteller*in dieses Antrags
+          {antrag.ebene ? ` (Ebene ${EBENE_LABEL[antrag.ebene]})` : ''}.
+          {geteilteFreigaben.length > 0 &&
+            ` Weitere: ${geteilteFreigaben.map((s) => shareNames.get(s.user_id) ?? '…').join(', ')}`}
+        </p>
+      )}
     </>
   )
 
@@ -560,7 +559,18 @@ export function AntragDetailModal({
         >
           Dokumente ({documents.length})
         </button>
+        <button
+          type="button"
+          onClick={() => setActivityTab('mitantragsteller')}
+          className={activityTab === 'mitantragsteller' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+        >
+          Mitantragsteller{geteilteFreigaben.length > 0 ? ` (${geteilteFreigaben.length})` : ''}
+        </button>
       </div>
+
+      {activityTab === 'mitantragsteller' && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{mitantragstellerTab}</div>
+      )}
 
       {activityTab === 'kommentare' && (
         <>

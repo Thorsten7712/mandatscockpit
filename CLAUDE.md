@@ -686,6 +686,21 @@ Vorhanden:
     `getBoundingClientRect()`/`scrollHeight` gegengemessen) – ein Login-Test im echten Dev-Server war
     nicht möglich, da das Eintragen von Passwörtern grundsätzlich tabu ist; ein echter Login-Rundgang
     im Browser steht daher noch aus.
+  - **Nachbesserung nach Nutzer-Feedback (noch 2026-07-21):** Drei Punkte. (1) Dashboard-Reihenfolge
+    getauscht – `CalendarView` (Termine) steht jetzt links, `AntraegeSection` (Anträge) rechts (vorher
+    umgekehrt), reine JSX-Reihenfolge im Grid in `Dashboard.tsx`. (2) Die linke Spalte von
+    `TodoDetailModal`/`AntragDetailModal` musste trotz des 2-Spalten-Umbaus noch scrollen, sobald
+    "Teilen"/"Mitantragsteller" (Ebene-Select + Kolleg*innen-Chips + Such-Dropdown) sichtbar war – der
+    Block wurde deshalb komplett aus der linken Formular-Spalte in einen dritten Tab der rechten
+    Aktivitäts-Spalte verschoben (`activityTab: 'kommentare' | 'dokumente' | 'teilen'` bzw.
+    `'mitantragsteller'`, Tab-Button zeigt die Anzahl der bereits Geteilten als Badge). Damit enthält
+    die linke Spalte nur noch das reine Bearbeiten-Formular (Titel/Beschreibung/Zuständig/Termin bzw.
+    Titel/Status/Inhalt/Sitzung) und bleibt in der Praxis immer ohne Scrollen sichtbar – per statischem
+    Test-Harness gegengemessen (`scrollHeight === clientHeight`, `needsScroll: false`). (3) Anlegen
+    eines neuen Antrags ist jetzt wie bei Terminen (`CalendarView.tsx`s "+ Termin") ein Button
+    ("+ Antrag"), der ein `mc-animate-pop`-Formular ein-/ausblendet, statt einer permanent sichtbaren
+    Inline-Zeile in `AntraegeSection.tsx` – `showAddForm`-State, Formular schließt sich nach
+    erfolgreichem Anlegen automatisch (gleiches Verhalten wie `handleAddEvent`).
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

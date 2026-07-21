@@ -88,8 +88,8 @@ export default function Dashboard() {
           <TodoBoard />
         </section>
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-          <AntraegeSection />
           <CalendarView />
+          <AntraegeSection />
         </div>
       </main>
     </div>

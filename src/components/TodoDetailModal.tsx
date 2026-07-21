@@ -18,7 +18,7 @@ import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
 
 type TerminModus = 'keine' | 'datum' | 'termin' | 'sitzung'
-type ActivityTab = 'kommentare' | 'dokumente'
+type ActivityTab = 'kommentare' | 'dokumente' | 'teilen'
 
 export function TodoDetailModal({
   id,
@@ -502,111 +502,110 @@ export function TodoDetailModal({
             {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
           </form>
         )}
+    </>
+  )
 
-        {todo && (
-          <div className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-700">Teilen</p>
-            {istErsteller ? (
-              <>
-                <div>
-                  <label className="mb-1 block text-sm text-slate-600">Ebene</label>
-                  <select
-                    value={todo.ebene ?? ''}
-                    onChange={(e) => handleSaveEbene(e.target.value)}
-                    className="mc-input w-full"
-                  >
-                    <option value="">– keine –</option>
-                    {(myProfile?.ebenen ?? []).map((e) => (
-                      <option key={e} value={e}>
-                        {EBENE_LABEL[e]}
-                      </option>
-                    ))}
-                  </select>
-                  {(myProfile?.ebenen ?? []).length === 0 && (
-                    <p className="mt-1 text-xs text-slate-400">
-                      Trage zuerst in den Einstellungen unter „Profil" deine eigenen Ebenen ein, um Karten
-                      teilen zu können.
-                    </p>
-                  )}
-                </div>
-                {(geteiltePlatzierungen.length > 0 || todo.ebene) && (
-                  <div>
-                    <p className="mb-1 text-sm text-slate-600">
-                      {todo.ebene ? `Kolleg*innen (gleiche Partei, Ebene ${EBENE_LABEL[todo.ebene]})` : 'Geteilt mit'}
-                    </p>
-                    <div className="mb-2 flex flex-wrap gap-1.5">
-                      {geteiltePlatzierungen.map((p) => (
-                        <span
-                          key={p.user_id}
-                          className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
-                        >
-                          {placementNames.get(p.user_id) ?? '…'}
-                          <button
-                            type="button"
-                            onClick={() => handleToggleShare(p.user_id, true)}
-                            aria-label={`${placementNames.get(p.user_id) ?? 'Kolleg*in'} entfernen`}
-                            className="text-primary/70 hover:text-primary"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                      {geteiltePlatzierungen.length === 0 && (
-                        <span className="text-xs text-slate-400">Noch mit niemandem geteilt.</span>
-                      )}
-                    </div>
-                    {todo.ebene && (
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Kolleg*in suchen..."
-                        value={shareSearch}
-                        onChange={(e) => setShareSearch(e.target.value)}
-                        onFocus={() => setShareDropdownOpen(true)}
-                        onBlur={() => setTimeout(() => setShareDropdownOpen(false), 150)}
-                        className="mc-input w-full"
-                      />
-                      {shareDropdownOpen && (
-                        <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-                          {ungeteilteKandidatenGefiltert.map((c) => (
-                            <li key={c.id}>
-                              <button
-                                type="button"
-                                onMouseDown={() => {
-                                  handleToggleShare(c.id, false)
-                                  setShareSearch('')
-                                }}
-                                className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
-                              >
-                                {c.name}
-                              </button>
-                            </li>
-                          ))}
-                          {ungeteilteKandidatenGefiltert.length === 0 && (
-                            <li className="px-3 py-1.5 text-sm text-slate-400">
-                              {candidates.length === 0
-                                ? 'Keine Kolleg*innen mit gleicher Partei und Ebene gefunden.'
-                                : 'Keine Treffer.'}
-                            </li>
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                    )}
-                  </div>
-                )}
-                {shareError && <p className="text-red-600 text-sm">{shareError}</p>}
-              </>
-            ) : (
-              placements.length > 1 && (
-                <p className="text-sm text-slate-600">
-                  {todo.ebene ? `Geteilt für Ebene ${EBENE_LABEL[todo.ebene]}` : 'Geteilt'} · Mitglieder:{' '}
-                  {placements.map((p) => placementNames.get(p.user_id) ?? '…').join(', ')}
-                </p>
-              )
+  const teilenTab = todo && (
+    <>
+      {istErsteller ? (
+        <>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Ebene</label>
+            <select
+              value={todo.ebene ?? ''}
+              onChange={(e) => handleSaveEbene(e.target.value)}
+              className="mc-input w-full"
+            >
+              <option value="">– keine –</option>
+              {(myProfile?.ebenen ?? []).map((e) => (
+                <option key={e} value={e}>
+                  {EBENE_LABEL[e]}
+                </option>
+              ))}
+            </select>
+            {(myProfile?.ebenen ?? []).length === 0 && (
+              <p className="mt-1 text-xs text-slate-400">
+                Trage zuerst in den Einstellungen unter „Profil" deine eigenen Ebenen ein, um Karten
+                teilen zu können.
+              </p>
             )}
           </div>
-        )}
+          {(geteiltePlatzierungen.length > 0 || todo.ebene) && (
+            <div className="mt-3">
+              <p className="mb-1 text-sm text-slate-600">
+                {todo.ebene ? `Kolleg*innen (gleiche Partei, Ebene ${EBENE_LABEL[todo.ebene]})` : 'Geteilt mit'}
+              </p>
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {geteiltePlatzierungen.map((p) => (
+                  <span
+                    key={p.user_id}
+                    className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+                  >
+                    {placementNames.get(p.user_id) ?? '…'}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleShare(p.user_id, true)}
+                      aria-label={`${placementNames.get(p.user_id) ?? 'Kolleg*in'} entfernen`}
+                      className="text-primary/70 hover:text-primary"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {geteiltePlatzierungen.length === 0 && (
+                  <span className="text-xs text-slate-400">Noch mit niemandem geteilt.</span>
+                )}
+              </div>
+              {todo.ebene && (
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Kolleg*in suchen..."
+                  value={shareSearch}
+                  onChange={(e) => setShareSearch(e.target.value)}
+                  onFocus={() => setShareDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setShareDropdownOpen(false), 150)}
+                  className="mc-input w-full"
+                />
+                {shareDropdownOpen && (
+                  <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                    {ungeteilteKandidatenGefiltert.map((c) => (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          onMouseDown={() => {
+                            handleToggleShare(c.id, false)
+                            setShareSearch('')
+                          }}
+                          className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                        >
+                          {c.name}
+                        </button>
+                      </li>
+                    ))}
+                    {ungeteilteKandidatenGefiltert.length === 0 && (
+                      <li className="px-3 py-1.5 text-sm text-slate-400">
+                        {candidates.length === 0
+                          ? 'Keine Kolleg*innen mit gleicher Partei und Ebene gefunden.'
+                          : 'Keine Treffer.'}
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </div>
+              )}
+            </div>
+          )}
+          {shareError && <p className="text-red-600 text-sm">{shareError}</p>}
+        </>
+      ) : (
+        placements.length > 1 && (
+          <p className="text-sm text-slate-600">
+            {todo.ebene ? `Geteilt für Ebene ${EBENE_LABEL[todo.ebene]}` : 'Geteilt'} · Mitglieder:{' '}
+            {placements.map((p) => placementNames.get(p.user_id) ?? '…').join(', ')}
+          </p>
+        )
+      )}
     </>
   )
 
@@ -627,7 +626,16 @@ export function TodoDetailModal({
         >
           Dokumente ({documents.length})
         </button>
+        <button
+          type="button"
+          onClick={() => setActivityTab('teilen')}
+          className={activityTab === 'teilen' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+        >
+          Teilen{geteiltePlatzierungen.length > 0 ? ` (${geteiltePlatzierungen.length})` : ''}
+        </button>
       </div>
+
+      {activityTab === 'teilen' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{teilenTab}</div>}
 
       {activityTab === 'kommentare' && (
         <>
