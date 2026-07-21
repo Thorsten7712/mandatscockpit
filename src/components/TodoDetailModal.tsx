@@ -15,6 +15,7 @@ import type {
 } from '../lib/types'
 import { formatDate, formatDateTime } from '../lib/format'
 import { EBENE_LABEL } from '../lib/sourceColors'
+import { gleicheGliederung } from '../lib/gliederung'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
 
@@ -145,11 +146,14 @@ export function TodoDetailModal({
     setPlacementNames(new Map((profs ?? []).map((p) => [p.id, p.name])))
   }
 
-  // Kandidat*innen fürs Teilen: gleiche Partei UND die auf der Karte gewählte
-  // Ebene in den eigenen Ebenen der Kolleg*in. RLS (profiles_select_same_
-  // partei_ebene) scoped bereits grob auf "gleiche Partei + irgendeine
-  // Ebenen-Überschneidung mit mir" - hier wird zusätzlich exakt auf die
-  // gewählte Karten-Ebene gefiltert.
+  // Kandidat*innen fürs Teilen: gleiche Partei, die auf der Karte gewählte
+  // Ebene in den eigenen Ebenen der Kolleg*in UND (außer bei Bund) dieselbe
+  // Gliederung (welche Kommune/welcher Kreis/welches Land - siehe
+  // src/lib/gliederung.ts, verhindert Querverbindungen zwischen
+  // Mitgliedern derselben Partei aus unterschiedlichen Städten). RLS
+  // (profiles_select_same_partei_ebene) scoped bereits grob auf "gleiche
+  // Partei + irgendeine Ebenen-Überschneidung mit mir" - hier wird
+  // zusätzlich exakt auf die gewählte Karten-Ebene und -Gliederung gefiltert.
   async function loadCandidates(ebene: Ebene) {
     if (!myProfile?.partei || !userId) {
       setCandidates([])
@@ -157,7 +161,7 @@ export function TodoDetailModal({
     }
     const { data } = await supabase.from('profiles').select('*').neq('id', userId)
     const filtered = (data ?? []).filter(
-      (p) => p.partei === myProfile.partei && (p.ebenen ?? []).includes(ebene),
+      (p) => p.partei === myProfile.partei && (p.ebenen ?? []).includes(ebene) && gleicheGliederung(myProfile, p, ebene),
     )
     setCandidates(filtered)
   }

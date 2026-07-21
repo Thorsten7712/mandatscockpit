@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import type { AntragDeadlineSetting, CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
 import { themeById } from '../lib/themes'
 import { EBENE_LABEL, SOURCE_COLORS, sourceColorById } from '../lib/sourceColors'
+import { gliederungFeld } from '../lib/gliederung'
 import { UserManagement } from '../components/UserManagement'
 
 type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'fristen' | 'mcp' | 'benutzer'
@@ -76,6 +77,12 @@ const EBENEN: { value: Ebene; label: string }[] = [
   { value: 'land', label: 'Land' },
   { value: 'bund', label: 'Bund' },
 ]
+
+const GLIEDERUNG_PLATZHALTER: Record<string, string> = {
+  kommune: 'z. B. Iserlohn',
+  kreis: 'z. B. Märkischer Kreis',
+  land: 'z. B. Nordrhein-Westfalen',
+}
 
 export default function Settings() {
   const [activeSection, setActiveSection] = useState<SectionId>('profil')
@@ -335,6 +342,17 @@ export default function Settings() {
     const neu = aktuell.includes(value) ? aktuell.filter((e) => e !== value) : [...aktuell, value]
     setProfile((prev) => (prev ? { ...prev, ebenen: neu } : prev))
     const { error } = await supabase.from('profiles').update({ ebenen: neu }).eq('id', userId)
+    if (error) await loadProfile(userId)
+  }
+
+  // Welche konkrete Kommune/welcher Kreis/welches Land - nötig, damit das
+  // Teilen (siehe gleicheGliederung() in src/lib/gliederung.ts) nicht
+  // fälschlich zwischen Mitgliedern derselben Partei/Ebene aus
+  // unterschiedlichen Städten anbietet. Bund braucht kein Gegenstück
+  // (gliederungFeld() liefert dafür null).
+  async function updateGliederung(feld: 'gliederung_kommune' | 'gliederung_kreis' | 'gliederung_land', value: string) {
+    if (!userId) return
+    const { error } = await supabase.from('profiles').update({ [feld]: value || null }).eq('id', userId)
     if (error) await loadProfile(userId)
   }
 
@@ -625,6 +643,33 @@ export default function Settings() {
             Wird von dir selbst gepflegt (anders als die Partei) - mehrere Ebenen gleichzeitig möglich,
             z. B. Stadtrat und Kreistag. Bestimmt, mit wem du ToDo-Karten teilen kannst.
           </p>
+
+          {(profile?.ebenen ?? []).some((e) => gliederungFeld(e)) && (
+            <div className="mt-3 space-y-2">
+              {EBENEN.filter((e) => (profile?.ebenen ?? []).includes(e.value) && gliederungFeld(e.value)).map(
+                (e) => {
+                  const feld = gliederungFeld(e.value)!
+                  return (
+                    <div key={e.value}>
+                      <label className="mb-1 block text-xs text-slate-500">Welche{e.value === 'land' ? 's' : e.value === 'kreis' ? 'r' : ''} {e.label}?</label>
+                      <input
+                        type="text"
+                        defaultValue={profile?.[feld] ?? ''}
+                        placeholder={GLIEDERUNG_PLATZHALTER[e.value]}
+                        onBlur={(ev) => updateGliederung(feld, ev.target.value)}
+                        className="mc-input w-full"
+                      />
+                    </div>
+                  )
+                },
+              )}
+              <p className="text-xs text-slate-400">
+                Nötig, damit Teilen nur mit Kolleg*innen derselben Kommune/desselben Kreises/Landes
+                funktioniert - ohne diese Angabe erscheinst du für diese Ebene bei niemandem als
+                Teilen-Kandidat*in.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

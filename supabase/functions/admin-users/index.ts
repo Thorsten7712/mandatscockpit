@@ -17,9 +17,12 @@
 //   { action: 'create', email, password, name, rolle? }
 //     -> { user: {...} }  (Profil legt der handle_new_user-Trigger an,
 //        rolle wird danach gesetzt; email_confirm: true, damit keine
-//        Bestätigungsmail nötig ist - der Admin teilt das Startpasswort mit)
+//        Bestätigungsmail nötig ist - der Admin teilt das Startpasswort mit;
+//        muss_passwort_aendern ist per Spalten-Default bereits true)
 //   { action: 'update', user_id, name?, rolle?, fraktion?, partei?, email?, password? }
-//     -> { ok: true }
+//     -> { ok: true }  (wird password gesetzt, erzwingt das wie bei der
+//        Neuanlage einen Passwortwechsel beim nächsten Login -
+//        muss_passwort_aendern wird auf true zurückgesetzt)
 //   { action: 'delete', user_id }
 //     -> { ok: true }  (bereinigt vorher calendar_sources.verwaltet_von und
 //        events.erstellt_von, die NICHT on delete cascade sind, sowie die
@@ -182,7 +185,12 @@ Deno.serve(async (req) => {
         authUpdate.email = body.email
         authUpdate.email_confirm = true
       }
-      if (body.password) authUpdate.password = body.password
+      if (body.password) {
+        authUpdate.password = body.password
+        // Ein Admin-Reset zählt wie ein Start-Passwort bei der Neuanlage -
+        // der Nutzer muss es beim nächsten Login zwingend ändern.
+        await admin.from('profiles').update({ muss_passwort_aendern: true }).eq('id', body.user_id)
+      }
       if (Object.keys(authUpdate).length > 0) {
         const { error } = await admin.auth.admin.updateUserById(body.user_id, authUpdate)
         if (error) return jsonResponse({ error: error.message }, 500)

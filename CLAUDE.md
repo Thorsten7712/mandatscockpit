@@ -757,6 +757,44 @@ Vorhanden:
       und Löschen-Klick per `element.click()` ausgelöst, Zustandswechsel per Screenshot bestätigt) - ein
       Login-Rundgang im echten Dev-Server bleibt weiterhin offen (Passwort-Eingabe ist tabu).
 
+- **Erzwungener Passwortwechsel + Gliederung (welche Kommune/welcher Kreis/welches Land)**
+  (`0025_profiles_muss_passwort_aendern.sql`, `0026_profiles_gliederung.sql`, seit 2026-07-21):
+  - **Passwortzwang**: `profiles.muss_passwort_aendern` (Default `true`, bei der Migration für
+    bestehende Nutzer einmalig auf `false` zurückgesetzt - niemand wird rückwirkend gezwungen, nur
+    neue oder per Admin zurückgesetzte Passwörter). `admin-users`-Edge-Function setzt es bei
+    `action: 'create'` implizit über den Spalten-Default und bei `action: 'update'` explizit wieder auf
+    `true`, sobald ein neues `password` mitgeschickt wird (ein Admin-Reset zählt also wie ein
+    Start-Passwort). Neue Komponente `src/components/ForcedPasswordChange.tsx` (Login.tsx-Optik,
+    zwei Passwortfelder, min. 8 Zeichen, `supabase.auth.updateUser()` + `profiles`-Update in einem
+    Rutsch) wird von `ProtectedRoute.tsx` **vor** den eigentlichen Kindern gerendert, sobald das Flag
+    gesetzt ist - blockt dadurch jede geschützte Route unabhängig von der angefragten URL. Bewusst
+    kein Dead-End: ein dezenter "Abmelden"-Link bleibt als Ausweg.
+  - **Gliederung**: `profiles.ebenen` (0020) markierte bisher nur grob die Ebene
+    (kommune/kreis/land/bund) - zwei Mitglieder derselben Partei aus unterschiedlichen Städten wären
+    dadurch fälschlich als Teilen-Kandidaten füreinander erschienen
+    (`TodoDetailModal.tsx`/`AntragDetailModal.tsx`, `loadCandidates()`). Drei neue nullable Spalten
+    `gliederung_kommune`/`gliederung_kreis`/`gliederung_land` (Bund braucht keine weitere Angabe, es
+    gibt nur einen Bundestag). Neue Datei `src/lib/gliederung.ts`: `gliederungFeld(ebene)` mappt Ebene
+    → passende Spalte (oder `null` bei Bund), `gleicheGliederung(a, b, ebene)` vergleicht getrimmt
+    case-insensitive und wertet eine leere Gliederung **nie** als Treffer - bewusst kein hartes
+    Pflichtfeld auf DB-Ebene (analog zur clientseitig durchgesetzten Dokument-Pflicht bei Anträgen),
+    sondern sanft über die Matching-Logik erzwungen: ohne eingetragene Gliederung taucht man für diese
+    Ebene bei niemandem als Kandidat*in auf (Hinweistext in Settings.tsx macht das explizit). RLS
+    (`profiles_select_same_partei_ebene`, 0020) bleibt unverändert als grobe Vorfilterung; die exakte
+    Prüfung passiert weiterhin rein clientseitig in `loadCandidates()` (gleiches Muster wie schon für
+    die Ebene selbst). `Settings.tsx` "Meine Ebenen"-Block zeigt pro angehaktem Nicht-Bund-Eintrag ein
+    Textfeld darunter (Persistenz `onBlur`, analog zum bestehenden `saveEditColumn`-Muster fürs
+    Board-Spalten-Umbenennen). **Rollout-Nebenwirkung:** Bestehende Nutzer mit
+    kommune/kreis/land-Ebenen haben direkt nach der Migration eine leere Gliederung - bestehende
+    Teilen-Verbindungen auf diesen Ebenen pausieren, bis beide Seiten ihre Gliederung nachtragen
+    (beabsichtigt, verhindert falsche Querverbindungen).
+  - `UserManagement.tsx` bleibt unverändert außer einem ergänzten Hinweistext beim Anlegen ("... muss
+    es beim ersten Login zwingend selbst ändern") - Ebenen/Gliederung sind weiterhin bewusst
+    Selbstauskunft, keine Admin-Pflege.
+  - Verifiziert per `tsc -b`/`vite build`, `deno check` (admin-users), `supabase db push` gegen das
+    Live-Projekt sowie einem statischen Test-Harness für `ForcedPasswordChange` und die neuen
+    Gliederung-Felder - ein echter Login-Rundgang bleibt offen (Passwort-Eingabe ist tabu).
+
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
    `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte

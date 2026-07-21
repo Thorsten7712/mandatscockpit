@@ -310,7 +310,8 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
           />
           <p className="mt-2 text-xs text-slate-400">
             Der Benutzer kann sich sofort mit E-Mail und Start-Passwort anmelden (keine
-            Bestätigungsmail). Passwort bitte sicher übermitteln.
+            Bestätigungsmail). Passwort bitte sicher übermitteln - der Benutzer muss es beim ersten
+            Login zwingend selbst ändern.
           </p>
         </div>
       )}

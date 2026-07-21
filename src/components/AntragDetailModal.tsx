@@ -18,6 +18,7 @@ import { ANTRAG_STATUS_ORDER, antragStatusLabel } from '../lib/antragStatus'
 import { computeAntragDeadline } from '../lib/antragDeadline'
 import { formatDate, formatDateTime } from '../lib/format'
 import { EBENE_LABEL } from '../lib/sourceColors'
+import { gleicheGliederung } from '../lib/gliederung'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
 
@@ -130,13 +131,19 @@ export function AntragDetailModal({
     setShareNames(new Map((profs ?? []).map((p) => [p.id, p.name])))
   }
 
+  // Gleiche Partei, überschneidende Ebene UND (außer bei Bund) dieselbe
+  // Gliederung (welche Kommune/welcher Kreis/welches Land - siehe
+  // src/lib/gliederung.ts, verhindert Querverbindungen zwischen
+  // Mitgliedern derselben Partei aus unterschiedlichen Städten).
   async function loadCandidates(ebene: Ebene) {
     if (!myProfile?.partei || !userId) {
       setCandidates([])
       return
     }
     const { data } = await supabase.from('profiles').select('*').neq('id', userId)
-    const filtered = (data ?? []).filter((p) => p.partei === myProfile.partei && (p.ebenen ?? []).includes(ebene))
+    const filtered = (data ?? []).filter(
+      (p) => p.partei === myProfile.partei && (p.ebenen ?? []).includes(ebene) && gleicheGliederung(myProfile, p, ebene),
+    )
     setCandidates(filtered)
   }
 

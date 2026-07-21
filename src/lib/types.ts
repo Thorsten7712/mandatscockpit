@@ -20,6 +20,12 @@ export interface Profile {
   partei: string | null
   /** Eigene Mandate/Ebenen, selbst gepflegt in Settings (mehrere gleichzeitig möglich) */
   ebenen: Ebene[]
+  /** Welche Kommune/welcher Kreis/welches Land konkret (Bund braucht keine Angabe) - siehe src/lib/gliederung.ts */
+  gliederung_kommune: string | null
+  gliederung_kreis: string | null
+  gliederung_land: string | null
+  /** true = admin-vergebenes Passwort noch nicht selbst geändert (siehe ForcedPasswordChange.tsx) */
+  muss_passwort_aendern: boolean
 }
 
 export interface CalendarSource {
