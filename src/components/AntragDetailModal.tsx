@@ -318,124 +318,6 @@ export function AntragDetailModal({
   const deadline = antrag ? computeAntragDeadline(linkedSession, antrag.ebene, tageByEbene) : null
   const ueberfaellig = deadline ? deadline.getTime() < Date.now() && antrag?.status === 'entwurf' : false
 
-  const leftColumn = (
-    <>
-      {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
-
-      {deadline && (
-            <p className={`mb-4 text-sm ${ueberfaellig ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
-              Einreichungsfrist: {formatDate(deadline.toISOString())}
-              {ueberfaellig && ' · überfällig'}
-            </p>
-          )}
-
-          {antrag && (
-            <form
-              id="antrag-edit-form"
-              onSubmit={handleSaveEdit}
-              className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4"
-            >
-              <input
-                type="text"
-                value={editTitel}
-                onChange={(e) => setEditTitel(e.target.value)}
-                className="mc-input w-full font-medium"
-                required
-              />
-
-              <div className="flex gap-2">
-                <select
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value as AntragStatus)}
-                  className="mc-input flex-1"
-                >
-                  {ANTRAG_STATUS_ORDER.map((s) => (
-                    <option key={s} value={s}>
-                      {antragStatusLabel(s, null)}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="date"
-                  value={editEingereichtAm}
-                  onChange={(e) => setEditEingereichtAm(e.target.value)}
-                  title="Eingereicht am"
-                  className="mc-input flex-1"
-                />
-              </div>
-              {documents.length === 0 && editStatus !== 'gestellt' && (
-                <p className="text-xs text-slate-400">Für den Status "Gestellt" wird ein Dokument benötigt.</p>
-              )}
-              {editStatus === 'abgestimmt' && (
-                <div className="flex items-center gap-4 text-sm">
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="radio"
-                      name="ergebnis"
-                      checked={editErgebnis === 'positiv'}
-                      onChange={() => setEditErgebnis('positiv')}
-                    />
-                    <span className="font-medium text-emerald-700">Positiv</span>
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="radio"
-                      name="ergebnis"
-                      checked={editErgebnis === 'negativ'}
-                      onChange={() => setEditErgebnis('negativ')}
-                    />
-                    <span className="font-medium text-rose-700">Negativ</span>
-                  </label>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <p className="text-sm text-slate-600">Sitzung, für die der Antrag vorgesehen ist</p>
-                <select
-                  value={editSessionId}
-                  onChange={(e) => handleSessionChange(e.target.value)}
-                  className="mc-input w-full"
-                >
-                  <option value="">— Keine Verknüpfung —</option>
-                  {ownSessions.map((se) => (
-                    <option key={se.id} value={se.id}>
-                      {se.titel} ({formatDate(se.datum)})
-                    </option>
-                  ))}
-                </select>
-                {linkedSession && (
-                  <p className="text-xs text-slate-500">
-                    Aktuell verknüpft:{' '}
-                    <Link to={`/termin/session/${linkedSession.id}`} className="underline">
-                      {linkedSession.titel} ({formatDateTime(linkedSession.datum)})
-                    </Link>
-                  </p>
-                )}
-              </div>
-
-              {editError && <p className="text-red-600 text-sm">{editError}</p>}
-              {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
-            </form>
-          )}
-    </>
-  )
-
-  const headerActions = antrag && (
-    <>
-      <button
-        type="submit"
-        form="antrag-edit-form"
-        disabled={editSaving}
-        className="mc-btn-primary !px-3 !py-1.5 !text-sm"
-      >
-        {editSaving ? 'Speichern...' : 'Speichern'}
-      </button>
-      <button type="button" onClick={handleDelete} className="mc-btn-danger !px-3 !py-1.5 !text-sm">
-        {istErsteller ? 'Löschen' : 'Entfernen'}
-      </button>
-    </>
-  )
-
   const mitantragstellerTab = antrag && (
     <>
       {istErsteller ? (
@@ -539,6 +421,127 @@ export function AntragDetailModal({
     </>
   )
 
+  const leftColumn = (
+    <>
+      {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
+
+      {deadline && (
+            <p className={`mb-4 text-sm ${ueberfaellig ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
+              Einreichungsfrist: {formatDate(deadline.toISOString())}
+              {ueberfaellig && ' · überfällig'}
+            </p>
+          )}
+
+          {antrag && (
+            <form
+              id="antrag-edit-form"
+              onSubmit={handleSaveEdit}
+              className="mb-6 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4"
+            >
+              <input
+                type="text"
+                value={editTitel}
+                onChange={(e) => setEditTitel(e.target.value)}
+                className="mc-input w-full font-medium"
+                required
+              />
+
+              <div className="flex gap-2">
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as AntragStatus)}
+                  className="mc-input flex-1"
+                >
+                  {ANTRAG_STATUS_ORDER.map((s) => (
+                    <option key={s} value={s}>
+                      {antragStatusLabel(s, null)}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="date"
+                  value={editEingereichtAm}
+                  onChange={(e) => setEditEingereichtAm(e.target.value)}
+                  title="Eingereicht am"
+                  className="mc-input flex-1"
+                />
+              </div>
+              {documents.length === 0 && editStatus !== 'gestellt' && (
+                <p className="text-xs text-slate-400">Für den Status "Gestellt" wird ein Dokument benötigt.</p>
+              )}
+              {editStatus === 'abgestimmt' && (
+                <div className="flex items-center gap-4 text-sm">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="ergebnis"
+                      checked={editErgebnis === 'positiv'}
+                      onChange={() => setEditErgebnis('positiv')}
+                    />
+                    <span className="font-medium text-emerald-700">Positiv</span>
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="ergebnis"
+                      checked={editErgebnis === 'negativ'}
+                      onChange={() => setEditErgebnis('negativ')}
+                    />
+                    <span className="font-medium text-rose-700">Negativ</span>
+                  </label>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <p className="text-sm text-slate-600">Sitzung, für die der Antrag vorgesehen ist</p>
+                <select
+                  value={editSessionId}
+                  onChange={(e) => handleSessionChange(e.target.value)}
+                  className="mc-input w-full"
+                >
+                  <option value="">— Keine Verknüpfung —</option>
+                  {ownSessions.map((se) => (
+                    <option key={se.id} value={se.id}>
+                      {se.titel} ({formatDate(se.datum)})
+                    </option>
+                  ))}
+                </select>
+                {linkedSession && (
+                  <p className="text-xs text-slate-500">
+                    Aktuell verknüpft:{' '}
+                    <Link to={`/termin/session/${linkedSession.id}`} className="underline">
+                      {linkedSession.titel} ({formatDateTime(linkedSession.datum)})
+                    </Link>
+                  </p>
+                )}
+              </div>
+
+              {editError && <p className="text-red-600 text-sm">{editError}</p>}
+              {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
+            </form>
+          )}
+
+      <h2 className="font-semibold mb-2">Mitantragsteller</h2>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{mitantragstellerTab}</div>
+    </>
+  )
+
+  const headerActions = antrag && (
+    <>
+      <button
+        type="submit"
+        form="antrag-edit-form"
+        disabled={editSaving}
+        className="mc-btn-primary !px-3 !py-1.5 !text-sm"
+      >
+        {editSaving ? 'Speichern...' : 'Speichern'}
+      </button>
+      <button type="button" onClick={handleDelete} className="mc-btn-danger !px-3 !py-1.5 !text-sm">
+        {istErsteller ? 'Löschen' : 'Entfernen'}
+      </button>
+    </>
+  )
+
   const rightColumn = (
     <>
       <h2 className="font-semibold mb-2">Kommentare</h2>
@@ -616,9 +619,6 @@ export function AntragDetailModal({
           {savingDocument ? 'Hochladen...' : 'Hochladen'}
         </button>
       </form>
-
-      <h2 className="font-semibold mb-2">Mitantragsteller</h2>
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{mitantragstellerTab}</div>
     </>
   )
 

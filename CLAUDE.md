@@ -719,6 +719,15 @@ Vorhanden:
     Spalten-Drop mit Datenverlust für ggf. bereits befüllte Zeilen ist eine andere, riskantere
     Entscheidung, die nicht ungefragt getroffen wurde; `todos.zustaendig` wird zudem an anderer Stelle
     (Board-Karten-Chip, Archiv) weiterhin gelesen und angezeigt.
+  - **Dritte Nachbesserung (noch 2026-07-21):** Nutzer wollte "Teilen"/"Mitantragsteller" doch wieder
+    zurück auf die linke Seite ("da ist Platz") - nachdem Antragstext/Zuständig aus den Formularen
+    entfernt wurden, ist die linke Spalte inzwischen kurz genug, dass der ursprüngliche Scroll-Grund
+    für den Umzug (siehe erste Nachbesserung oben) nicht mehr greift. `teilenTab`/
+    `mitantragstellerTab` mussten dafür in beiden Modals vor `leftColumn` deklariert werden (die
+    Konstanten wurden vorher zwischen `headerActions` und `rightColumn` gebaut, ein direktes Referenzieren
+    aus `leftColumn` heraus hätte einen Temporal-Dead-Zone-Fehler geworfen, da `const`-Deklarationen in
+    JS nicht wie Funktionsdeklarationen gehoisted werden). Rechte Spalte zeigt jetzt nur noch
+    Kommentare + Dokumente untereinander.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
