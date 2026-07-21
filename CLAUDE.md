@@ -654,6 +654,39 @@ Vorhanden:
     aber technisch weiterhin nutzbar gewesen (Schreibzugriff per bekannter/erratener UUID, obwohl die
     Quelle in der UI nicht mehr auftaucht) – das wäre eine stille Sicherheitslücke geblieben.
 
+- **UI-Redesign: einheitliche breite Detail-Modals + Anträge/Termine nebeneinander** (2026-07-21,
+  Nutzerfeedback nach Review): Die ToDo-/Antrag-Modals waren `max-w-lg` (512px) und stapelten
+  Bearbeiten-Formular → Teilen → Kommentare → Dokumente komplett vertikal in einem Scroll-Bereich;
+  Sitzungstermine öffneten sich zudem als Inline-Split-View statt als Modal wie ToDos/Anträge
+  (Konsistenz-Verstoß). Neue gemeinsame Hülle `src/components/DetailModalShell.tsx`
+  (`h-[85vh] max-w-5xl`, 2-Spalten-Grid `grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]`,
+  jede Spalte eigenes `overflow-y-auto` – Kernfelder links bleiben ohne Scrollen sichtbar, nur die
+  Aktivität rechts scrollt) wird von `TodoDetailModal.tsx` und `AntragDetailModal.tsx` genutzt (drittes
+  Vorkommen des Chrome-Musters wäre laut Projekt-Konvention nicht mehr tolerierbar, siehe
+  `fileNameFromPath`-Beispiel oben). Rechte Spalte bekam zusätzlich einen lokalen Tab-Umschalter
+  (Kommentare/Dokumente mit Zählern) statt beide Listen dauerhaft übereinander zu zeigen.
+  - **Termine als Modal statt Split-View**: `TerminDetailPanel.tsx` bekam eine neue optionale Prop
+    `layout?: 'stacked' | 'columns'` (Default `'stacked'` – die Standalone-Seite `TerminDetail.tsx`
+    bleibt unverändert). Neues `src/components/TerminDetailModal.tsx` ist ein dünner Wrapper (eigenes
+    Chrome statt `DetailModalShell`, da der Header hier generisch "Sitzung"/"Termin" bleibt – der
+    echte Titel steht bereits als erste Zeile im Panel-Body). Verschachtelte Modals (Todo/Antrag/
+    Dokument-Vorschau, geöffnet aus "Verknüpfte Aufgaben/Anträge" heraus) bleiben unverändert als
+    Siblings im `TerminDetailPanel`-Return gerendert – per Browser-Test verifiziert, dass
+    `backdrop-filter` auf einem Ancestor **keinen** Containing Block für `position: fixed`-Nachfahren
+    erzeugt (anders als `filter`/`transform`), sie also trotz der neuen Modal-Verschachtelung weiterhin
+    viewport-weit statt nur im Ancestor-Bereich rendern. `CalendarView.tsx` und `Archiv.tsx`
+    ("Vergangene Sitzungen") nutzen jetzt beide `TerminDetailModal` statt der alten Zwei-Spalten-Flex-
+    Split-View.
+  - **Dashboard-Layout**: `Dashboard.tsx` zeigt "Meine Anträge" und "Nächste Termine" jetzt
+    nebeneinander (`grid grid-cols-1 lg:grid-cols-2 gap-6`, ToDo-Board bleibt oben in voller Breite für
+    die Spalten-Grid). `AntraegeSection.tsx`s Liste bekam zur Höhen-Angleichung dasselbe
+    `max-h-[26rem] overflow-y-auto` wie `CalendarView.tsx`s Terminliste.
+  - Verifiziert per `tsc -b`/`vite build` (fehlerfrei) sowie einem statischen Test-Harness mit der
+    tatsächlich kompilierten CSS (unabhängiges Scrollen der Modal-Spalten und Dashboard-Grid per
+    `getBoundingClientRect()`/`scrollHeight` gegengemessen) – ein Login-Test im echten Dev-Server war
+    nicht möglich, da das Eintragen von Passwörtern grundsätzlich tabu ist; ein echter Login-Rundgang
+    im Browser steht daher noch aus.
+
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
    `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte

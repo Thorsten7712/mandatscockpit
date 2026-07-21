@@ -17,10 +17,13 @@ export function TerminDetailPanel({
   kind,
   id,
   onDeleted,
+  layout = 'stacked',
 }: {
   kind: 'event' | 'session'
   id: string
   onDeleted?: () => void
+  /** 'columns' wird von TerminDetailModal für die breite 2-Spalten-Ansicht genutzt. */
+  layout?: 'stacked' | 'columns'
 }) {
   const [userId, setUserId] = useState<string | null>(null)
   const [event, setEvent] = useState<EventRow | null>(null)
@@ -209,8 +212,8 @@ export function TerminDetailPanel({
   const ort = event?.ort ?? session?.ort
   const abgesagt = event?.status === 'abgesagt' || session?.status === 'abgesagt'
 
-  return (
-    <div>
+  const detailsBlock = (
+    <>
       <h2 className="mb-3 text-lg font-bold text-slate-900">{titel ?? 'Termin'}</h2>
 
       {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
@@ -301,7 +304,11 @@ export function TerminDetailPanel({
           )}
         </div>
       )}
+    </>
+  )
 
+  const linkedBlock = (
+    <>
       <h3 className="mb-2 text-sm font-semibold text-slate-900">Verknüpfte Aufgaben</h3>
       <ul className="mb-6 space-y-2">
         {linkedTodos.map((t) => (
@@ -346,7 +353,11 @@ export function TerminDetailPanel({
           </ul>
         </>
       )}
+    </>
+  )
 
+  const notesBlock = (
+    <>
       <h3 className="mb-2 text-sm font-semibold text-slate-900">Notizen &amp; Dokumente</h3>
       <ul className="mb-3 space-y-2">
         {summaries.map((s) => (
@@ -402,7 +413,11 @@ export function TerminDetailPanel({
           {savingSummary ? 'Speichern...' : 'Hinzufügen'}
         </button>
       </form>
+    </>
+  )
 
+  const nestedModals = (
+    <>
       {openTodoId && (
         <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadLinkedTodos} />
       )}
@@ -416,6 +431,28 @@ export function TerminDetailPanel({
           onClose={() => setPreviewDoc(null)}
         />
       )}
+    </>
+  )
+
+  if (layout === 'columns') {
+    return (
+      <div className="grid h-full min-h-0 grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <div className="min-h-0 overflow-y-auto border-b border-slate-200 p-6 md:border-b-0 md:border-r">
+          {detailsBlock}
+          {linkedBlock}
+        </div>
+        <div className="min-h-0 overflow-y-auto p-6">{notesBlock}</div>
+        {nestedModals}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {detailsBlock}
+      {linkedBlock}
+      {notesBlock}
+      {nestedModals}
     </div>
   )
 }

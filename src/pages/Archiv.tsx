@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { CheckSquare, FileText, Gavel, History } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { AntragRow, CalendarSource, SessionRow, SummaryRow, TodoRow } from '../lib/types'
-import { TerminDetailPanel } from '../components/TerminDetailPanel'
+import { TerminDetailModal } from '../components/TerminDetailModal'
 import { TodoDetailModal } from '../components/TodoDetailModal'
 import { AntragDetailModal } from '../components/AntragDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from '../components/DocumentPreviewModal'
@@ -197,96 +197,76 @@ export default function Archiv() {
         </div>
 
         {tab === 'sitzungen' && (
-          <section className="mc-animate-fade flex items-start gap-6">
-            <div className="min-w-0 flex-1">
-              <ul className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
-                {sessions.map((s) => {
-                  const { day, month } = formatDayMonth(s.datum)
-                  const source = s.source_id ? sourceById.get(s.source_id) : undefined
-                  const farbe = sourceColorById(source?.farbe)
-                  const abgesagt = s.status === 'abgesagt'
-                  const isSelected = selectedSession === s.id
-                  return (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedSession(s.id)}
-                        className={`flex w-full items-center gap-3 rounded-xl border bg-white p-3 text-left shadow-sm transition-[box-shadow,border-color] duration-150 hover:shadow-md ${abgesagt ? 'opacity-60' : ''} ${isSelected ? 'border-transparent ring-2 ring-primary' : 'border-slate-200'}`}
+          <section className="mc-animate-fade max-w-2xl">
+            <ul className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+              {sessions.map((s) => {
+                const { day, month } = formatDayMonth(s.datum)
+                const source = s.source_id ? sourceById.get(s.source_id) : undefined
+                const farbe = sourceColorById(source?.farbe)
+                const abgesagt = s.status === 'abgesagt'
+                return (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSession(s.id)}
+                      className={`flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md ${abgesagt ? 'opacity-60' : ''}`}
+                    >
+                      <span
+                        className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg ${abgesagt ? 'bg-red-50 text-red-400' : farbe.chip}`}
                       >
+                        <span className="text-base font-bold leading-none">{day}</span>
+                        <span className="text-[10px] font-semibold uppercase leading-tight">{month}</span>
+                      </span>
+                      <span className="min-w-0 flex-1">
                         <span
-                          className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg ${abgesagt ? 'bg-red-50 text-red-400' : farbe.chip}`}
+                          className={`flex items-center gap-1.5 text-sm font-medium text-slate-900 ${abgesagt ? 'line-through' : ''}`}
                         >
-                          <span className="text-base font-bold leading-none">{day}</span>
-                          <span className="text-[10px] font-semibold uppercase leading-tight">{month}</span>
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span
-                            className={`flex items-center gap-1.5 text-sm font-medium text-slate-900 ${abgesagt ? 'line-through' : ''}`}
-                          >
-                            <span className="truncate">{s.titel}</span>
-                            {notizenIds.has(s.id) && (
-                              <span className="shrink-0" title="Enthält Notizen/Dokumente">
-                                📎
-                              </span>
-                            )}
-                            <span
-                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
-                            >
-                              {source ? (EBENE_LABEL[source.ebene] ?? 'Sitzung') : 'Sitzung'}
+                          <span className="truncate">{s.titel}</span>
+                          {notizenIds.has(s.id) && (
+                            <span className="shrink-0" title="Enthält Notizen/Dokumente">
+                              📎
                             </span>
-                            {abgesagt && (
-                              <span className="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-500 no-underline">
-                                Abgesagt
-                              </span>
-                            )}
+                          )}
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
+                          >
+                            {source ? (EBENE_LABEL[source.ebene] ?? 'Sitzung') : 'Sitzung'}
                           </span>
-                          <span className="mt-0.5 block truncate text-xs text-slate-500">
-                            {formatTime(s.datum)} Uhr
-                            {s.ort && ` · ${s.ort}`}
-                          </span>
+                          {abgesagt && (
+                            <span className="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-500 no-underline">
+                              Abgesagt
+                            </span>
+                          )}
                         </span>
-                      </button>
-                    </li>
-                  )
-                })}
-                {sessions.length === 0 && meineGremien?.length === 0 && (
-                  <li className="mc-card p-6 text-center text-sm text-slate-400">
-                    Keine Gremien ausgewählt. Unter{' '}
-                    <Link to="/settings" className="font-medium text-primary underline">
-                      Einstellungen
-                    </Link>{' '}
-                    die Gremien anhaken, in denen du ein Mandat hast.
-                  </li>
-                )}
-                {sessions.length === 0 && meineGremien !== null && meineGremien.length > 0 && (
-                  <li className="mc-card p-6 text-center text-sm text-slate-400">
-                    Keine vergangenen Sitzungen.
-                  </li>
-                )}
-              </ul>
-            </div>
-
-            <div className="min-w-0 flex-1">
-              {selectedSession ? (
-                <div className="mc-card mc-animate-slide p-5" key={selectedSession}>
-                  <div className="mb-3 flex justify-end">
-                    <button type="button" onClick={() => setSelectedSession(null)} className="mc-btn-ghost">
-                      Schließen
+                        <span className="mt-0.5 block truncate text-xs text-slate-500">
+                          {formatTime(s.datum)} Uhr
+                          {s.ort && ` · ${s.ort}`}
+                        </span>
+                      </span>
                     </button>
-                  </div>
-                  <TerminDetailPanel kind="session" id={selectedSession} />
-                </div>
-              ) : (
-                <div className="flex min-h-[10rem] items-center justify-center rounded-xl border-2 border-dashed border-slate-200 p-6 text-center">
-                  <p className="text-sm text-slate-400">
-                    Sitzung auswählen, um Details,
-                    <br />
-                    Notizen &amp; Dokumente zu sehen.
-                  </p>
-                </div>
+                  </li>
+                )
+              })}
+              {sessions.length === 0 && meineGremien?.length === 0 && (
+                <li className="mc-card p-6 text-center text-sm text-slate-400">
+                  Keine Gremien ausgewählt. Unter{' '}
+                  <Link to="/settings" className="font-medium text-primary underline">
+                    Einstellungen
+                  </Link>{' '}
+                  die Gremien anhaken, in denen du ein Mandat hast.
+                </li>
               )}
-            </div>
+              {sessions.length === 0 && meineGremien !== null && meineGremien.length > 0 && (
+                <li className="mc-card p-6 text-center text-sm text-slate-400">
+                  Keine vergangenen Sitzungen.
+                </li>
+              )}
+            </ul>
           </section>
+        )}
+
+        {selectedSession && (
+          <TerminDetailModal kind="session" id={selectedSession} onClose={() => setSelectedSession(null)} />
         )}
 
         {tab === 'aufgaben' && (

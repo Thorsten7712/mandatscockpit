@@ -132,7 +132,7 @@ export function AntraegeSection() {
   const abgeschlosseneAnzahl = antraege.length - aktive.length
 
   return (
-    <section className="mb-10">
+    <section>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-base font-semibold text-slate-900">Meine Anträge</h2>
         {abgeschlosseneAnzahl > 0 && (
@@ -219,7 +219,7 @@ export function AntraegeSection() {
         </div>
       )}
 
-      <ul className="space-y-2">
+      <ul className="max-h-[26rem] space-y-2 overflow-y-auto pr-1">
         {sichtbar.map((a) => {
           const session = a.session_id ? sessionById.get(a.session_id) : undefined
           const docs = docsByAntrag.get(a.id) ?? []

@@ -18,6 +18,9 @@ import { computeAntragDeadline } from '../lib/antragDeadline'
 import { formatDate, formatDateTime } from '../lib/format'
 import { EBENE_LABEL } from '../lib/sourceColors'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
+import { DetailModalShell } from './DetailModalShell'
+
+type ActivityTab = 'kommentare' | 'dokumente'
 
 export function AntragDetailModal({
   id,
@@ -69,6 +72,8 @@ export function AntragDetailModal({
   const [savingDocument, setSavingDocument] = useState(false)
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
+
+  const [activityTab, setActivityTab] = useState<ActivityTab>('kommentare')
 
   async function loadAntrag() {
     const { data, error } = await supabase.from('antraege').select('*').eq('id', id).single()
@@ -317,26 +322,11 @@ export function AntragDetailModal({
   const deadline = antrag ? computeAntragDeadline(linkedSession, antrag.ebene, tageByEbene) : null
   const ueberfaellig = deadline ? deadline.getTime() < Date.now() && antrag?.status === 'entwurf' : false
 
-  return (
+  const leftColumn = (
     <>
-      <div
-        className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]"
-        onClick={onClose}
-      >
-        <div
-          className="mc-animate-pop max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <header className="mb-4 flex items-center justify-between gap-4">
-            <h1 className="truncate text-xl font-bold text-slate-900">{antrag?.titel ?? 'Antrag'}</h1>
-            <button type="button" onClick={onClose} className="mc-btn-ghost shrink-0">
-              Schließen
-            </button>
-          </header>
+      {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
 
-          {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
-
-          {deadline && (
+      {deadline && (
             <p className={`mb-4 text-sm ${ueberfaellig ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
               Einreichungsfrist: {formatDate(deadline.toISOString())}
               {ueberfaellig && ' · überfällig'}
@@ -550,8 +540,30 @@ export function AntragDetailModal({
               )}
             </div>
           )}
+    </>
+  )
 
-          <h2 className="font-semibold mb-2">Kommentare</h2>
+  const rightColumn = (
+    <>
+      <div className="mb-4 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setActivityTab('kommentare')}
+          className={activityTab === 'kommentare' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+        >
+          Kommentare ({comments.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActivityTab('dokumente')}
+          className={activityTab === 'dokumente' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+        >
+          Dokumente ({documents.length})
+        </button>
+      </div>
+
+      {activityTab === 'kommentare' && (
+        <>
           <ul className="space-y-2 mb-3">
             {comments.map((c) => (
               <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
@@ -575,7 +587,7 @@ export function AntragDetailModal({
           </ul>
           <form
             onSubmit={handleAddComment}
-            className="mb-6 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+            className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
           >
             <textarea
               placeholder="Kommentar hinzufügen"
@@ -588,8 +600,11 @@ export function AntragDetailModal({
               {savingComment ? 'Speichern...' : 'Kommentieren'}
             </button>
           </form>
+        </>
+      )}
 
-          <h2 className="font-semibold mb-2">Dokumente</h2>
+      {activityTab === 'dokumente' && (
+        <>
           <ul className="space-y-2 mb-3">
             {documents.map((d) => (
               <li
@@ -626,8 +641,14 @@ export function AntragDetailModal({
               {savingDocument ? 'Hochladen...' : 'Hochladen'}
             </button>
           </form>
-        </div>
-      </div>
+        </>
+      )}
+    </>
+  )
+
+  return (
+    <>
+      <DetailModalShell title={antrag?.titel ?? 'Antrag'} onClose={onClose} left={leftColumn} right={rightColumn} />
       {previewDoc && (
         <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} onClose={() => setPreviewDoc(null)} />
       )}

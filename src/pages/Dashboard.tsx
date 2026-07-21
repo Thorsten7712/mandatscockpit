@@ -83,12 +83,14 @@ export default function Dashboard() {
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <section className="mb-10">
+        <section className="mb-8">
           <h2 className="mb-3 text-base font-semibold text-slate-900">ToDo-Board</h2>
           <TodoBoard />
         </section>
-        <AntraegeSection />
-        <CalendarView />
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+          <AntraegeSection />
+          <CalendarView />
+        </div>
       </main>
     </div>
   )
