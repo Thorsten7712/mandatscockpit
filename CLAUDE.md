@@ -830,6 +830,14 @@ Vorhanden:
     Sitzungs-Filter ein. Badge zeigt "Erledigt" (grün, durchgestrichener Titel) oder "ToDo" (analog
     zur Card-Darstellung im Board); Klick öffnet `TodoDetailModal`. Damit deckt die Sektion jetzt alle
     drei Stellen ab, an denen im Projekt Dokumente hochgeladen werden können (Antrag, Sitzung, ToDo).
+  - **📎-Flag auf den Board-Karten** (noch 2026-07-21, `TodoBoard.tsx`): Nutzerwunsch, das "Enthält
+    Dokumente"-Symbol auch direkt auf den ToDo-Karten zu sehen, nicht nur in "Meine Dokumente" bzw.
+    im geöffneten Kartendetail. Gleiches Nachlade-Muster wie `eventById`/`sessionById` (nur für die
+    aktuell sichtbaren Karten, kein Volltabellen-Join): `dokumentIds`-Set aus
+    `summaries.select('todo_id').in('todo_id', ...)`. Icon sitzt bewusst als **Präfix** vor dem
+    Kartentitel (wie das bestehende 🔗-Symbol für geteilte Karten), nicht als Suffix danach - ein
+    Suffix mit vorangestelltem Leerzeichen konnte bei langen Titeln in eine eigene Zeile umbrechen
+    und wirkte dann verwaist (per Test-Harness-Screenshot entdeckt und korrigiert).
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

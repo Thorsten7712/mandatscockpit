@@ -29,11 +29,13 @@ function Card({
   settings,
   onOpen,
   terminLabel,
+  hatDokument,
 }: {
   todo: TodoRow
   settings: TodoBoardSettings | null
   onOpen: () => void
   terminLabel: string | null
+  hatDokument: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: todo.id })
   // touchAction: 'none' ist auf Touch-Geräten (iPad) nötig, sonst interpretiert
@@ -56,6 +58,7 @@ function Card({
     >
       <p className={`text-sm font-medium ${todo.erledigt ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
         {todo.ebene && <span title="Für Kolleg*innen freigebbar/geteilt">🔗 </span>}
+        {hatDokument && <span title="Enthält Dokumente">📎 </span>}
         {todo.titel}
       </p>
       {(zeigeTermin || zeigeZustaendig) && (
@@ -82,6 +85,7 @@ function Column({
   onOpenTodo,
   canAddCard,
   terminLabels,
+  dokumentIds,
 }: {
   column: TodoColumn
   entries: TodoRow[]
@@ -90,6 +94,7 @@ function Column({
   onOpenTodo: (id: string) => void
   canAddCard: boolean
   terminLabels: Record<string, string | null>
+  dokumentIds: Set<string>
 }) {
   const { setNodeRef } = useDroppable({ id: column.id })
   const [newCardTitel, setNewCardTitel] = useState('')
@@ -119,6 +124,7 @@ function Column({
             settings={settings}
             onOpen={() => onOpenTodo(t.id)}
             terminLabel={terminLabels[t.id] ?? null}
+            hatDokument={dokumentIds.has(t.id)}
           />
         ))}
       </div>
@@ -146,6 +152,7 @@ export function TodoBoard() {
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
   const [eventById, setEventById] = useState<Map<string, { titel: string; start: string }>>(new Map())
   const [sessionById, setSessionById] = useState<Map<string, { titel: string; datum: string }>>(new Map())
+  const [dokumentIds, setDokumentIds] = useState<Set<string>>(new Set())
 
   // MouseSensor + TouchSensor statt PointerSensor: Auf iPad/Touch-Geräten
   // kollidiert ein reiner PointerSensor oft mit Safaris nativer Scroll-
@@ -215,6 +222,19 @@ export function TodoBoard() {
         .select('id, titel, datum')
         .in('id', sessionIds)
         .then(({ data }) => setSessionById(new Map((data ?? []).map((s) => [s.id, s]))))
+    }
+
+    // 📎-Flag fürs "Enthält Dokumente" (siehe TodoDetailModal.tsx "Dokumente")
+    // - nur für die aktuell sichtbaren Karten nachladen, kein Volltabellen-Join.
+    const todoIds = todos.map((t) => t.id)
+    if (todoIds.length === 0) {
+      setDokumentIds(new Set())
+    } else {
+      supabase
+        .from('summaries')
+        .select('todo_id')
+        .in('todo_id', todoIds)
+        .then(({ data }) => setDokumentIds(new Set((data ?? []).map((d) => d.todo_id as string))))
     }
   }, [todos])
 
@@ -327,6 +347,7 @@ export function TodoBoard() {
               onOpenTodo={setOpenTodoId}
               canAddCard={col.id === neuColumn.id}
               terminLabels={terminLabels}
+              dokumentIds={dokumentIds}
             />
           ))}
         </div>
