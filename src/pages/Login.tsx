@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Login() {
@@ -23,7 +23,7 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-100 p-4">
       <form
         onSubmit={handleLogin}
         className="mc-animate-pop w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-8 shadow-xl"
@@ -56,6 +56,15 @@ export default function Login() {
           Zugangsdaten bekommst du von einem Admin (Benutzerverwaltung in den Einstellungen).
         </p>
       </form>
+      <p className="text-xs text-slate-400">
+        <Link to="/impressum" className="underline hover:text-slate-600">
+          Impressum
+        </Link>
+        {' · '}
+        <Link to="/datenschutz" className="underline hover:text-slate-600">
+          Datenschutz
+        </Link>
+      </p>
     </div>
   )
 }

@@ -839,6 +839,34 @@ Vorhanden:
     Suffix mit vorangestelltem Leerzeichen konnte bei langen Titeln in eine eigene Zeile umbrechen
     und wirkte dann verwaist (per Test-Harness-Screenshot entdeckt und korrigiert).
 
+- **Impressum, Datenschutzerklärung, Kontaktformular** (`0027_kontakt_anfragen.sql`, seit 2026-07-22):
+  Da mehrere Ratsmitglieder das Cockpit mitnutzen (öffentliches GitHub-Repo, GitHub-Pages-Hosting),
+  geht der Betrieb über eine rein private/familiäre Nutzung hinaus - Impressumspflicht nach § 5 DDG.
+  Neue Seiten `src/pages/Impressum.tsx` und `src/pages/Datenschutz.tsx`, als einzige Routen bewusst
+  **außerhalb** von `ProtectedRoute` (siehe `App.tsx`) - müssen ohne Login erreichbar sein. Von
+  `Login.tsx` (Footer, für nicht angemeldete Besucher*innen) und `Dashboard.tsx` (Footer, für
+  angemeldete Nutzer*innen) verlinkt. Angaben (Name/Anschrift/Kontakt) direkt vom Nutzer erhalten;
+  die Datenschutzerklärung ist inhaltlich an der tatsächlichen Datenverarbeitung im Schema orientiert
+  (Supabase EU-Hosting Frankfurt, GitHub Pages fürs Frontend, private Storage-Buckets), nicht aus
+  einem generischen Template - ersetzt aber keine rechtliche Prüfung im Einzelfall.
+  - **Kontaktformular** (`src/components/KontaktFormular.tsx`, auf der Impressum-Seite): erste Stelle
+    im Projekt mit einer **anonymen Insert-Policy** (`kontakt_anfragen_insert_all`, `to anon,
+    authenticated`) - alle anderen Tabellen verlangen Login. Enthält ein unsichtbares Honeypot-Feld
+    (`website`, per CSS `absolute left-[-9999px]` ausgeblendet) als einfache, kostenlose Bot-Abwehr
+    ohne Captcha-Dienst - kein Ersatz für echten Spam-Schutz, hält aber naive Formular-Bots ab.
+  - **Zustellung bewusst als In-App-Postfach statt E-Mail-Versand** (Nutzerentscheidung nach
+    Rückfrage): ein echter E-Mail-Versand hätte einen externen Dienst (z. B. Resend) samt neuem
+    API-Key-Secret gebraucht. Stattdessen neue Tabelle `kontakt_anfragen` (Name, E-Mail, Nachricht,
+    `gelesen`-Flag) und ein neuer Admin-Bereich "Kontaktanfragen" in `Settings.tsx`
+    (`src/components/KontaktAnfragenListe.tsx`, RLS `kontakt_anfragen_select_admin` auf `rolle =
+    'admin'` beschränkt) - gleiches Muster wie die bestehende Benutzerverwaltung.
+  - Verifiziert per `tsc -b`/`vite build`, `supabase db push` gegen das Live-Projekt sowie einem
+    echten End-to-End-Test im Dev-Server: `/impressum` und `/datenschutz` sind ohne Login erreichbar
+    (im Gegensatz zu den anderen Seiten kein Passwort nötig, daher hier ausnahmsweise ein echter
+    Browser-Rundgang statt nur ein statischer Test-Harness), Kontaktformular erfolgreich gegen die
+    Live-Datenbank abgesendet (eine Test-Nachricht "Testabsender" liegt entsprechend im
+    Kontaktanfragen-Postfach und kann dort gelöscht werden).
+
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
    `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte

@@ -4,6 +4,8 @@ import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Archiv from './pages/Archiv'
 import TerminDetail from './pages/TerminDetail'
+import Impressum from './pages/Impressum'
+import Datenschutz from './pages/Datenschutz'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ThemeLoader } from './components/ThemeLoader'
 
@@ -13,6 +15,8 @@ export default function App() {
       <ThemeLoader />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/impressum" element={<Impressum />} />
+        <Route path="/datenschutz" element={<Datenschutz />} />
         <Route
           path="/"
           element={

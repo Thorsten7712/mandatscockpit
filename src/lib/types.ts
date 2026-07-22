@@ -186,3 +186,13 @@ export interface AntragDeadlineSetting {
   ebene: Ebene
   tage_vor_sitzung: number
 }
+
+/** Eingang über das Kontaktformular auf der öffentlichen Impressum-Seite. */
+export interface KontaktAnfrage {
+  id: string
+  name: string
+  email: string
+  nachricht: string
+  gelesen: boolean
+  erstellt_am: string
+}

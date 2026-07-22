@@ -1,14 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Bot, CalendarClock, CalendarDays, Landmark, SquareKanban, User, Users } from 'lucide-react'
+import { Bot, CalendarClock, CalendarDays, Landmark, Mail, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { AntragDeadlineSetting, CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
 import { themeById } from '../lib/themes'
 import { EBENE_LABEL, SOURCE_COLORS, sourceColorById } from '../lib/sourceColors'
 import { gliederungFeld } from '../lib/gliederung'
 import { UserManagement } from '../components/UserManagement'
+import { KontaktAnfragenListe } from '../components/KontaktAnfragenListe'
 
-type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'fristen' | 'mcp' | 'benutzer'
+type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'fristen' | 'mcp' | 'benutzer' | 'kontakt'
 
 const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: boolean }[] = [
   { id: 'profil', label: 'Profil', icon: User },
@@ -18,6 +19,7 @@ const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: b
   { id: 'fristen', label: 'Antrags-Fristen', icon: CalendarClock },
   { id: 'mcp', label: 'MCP Connection', icon: Bot },
   { id: 'benutzer', label: 'Benutzerverwaltung', icon: Users, adminOnly: true },
+  { id: 'kontakt', label: 'Kontaktanfragen', icon: Mail, adminOnly: true },
 ]
 
 // Erzeugt ein zufälliges Bearer-Token client-seitig (nie an den Server
@@ -1139,6 +1141,12 @@ export default function Settings() {
       {activeSection === 'benutzer' && isAdmin && (
       <section className="mc-animate-fade">
         <UserManagement currentUserId={userId} />
+      </section>
+      )}
+
+      {activeSection === 'kontakt' && isAdmin && (
+      <section className="mc-animate-fade">
+        <KontaktAnfragenListe />
       </section>
       )}
 

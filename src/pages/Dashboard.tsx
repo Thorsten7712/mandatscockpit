@@ -92,6 +92,15 @@ export default function Dashboard() {
           <AntraegeSection />
         </div>
       </main>
+      <footer className="mx-auto max-w-7xl px-6 pb-8 text-xs text-slate-400">
+        <Link to="/impressum" className="underline hover:text-slate-600">
+          Impressum
+        </Link>
+        {' · '}
+        <Link to="/datenschutz" className="underline hover:text-slate-600">
+          Datenschutz
+        </Link>
+      </footer>
     </div>
   )
 }
