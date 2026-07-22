@@ -1,17 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragDeadlineSetting, AntragRow, AntragStatus, Ebene, SessionRow, SummaryRow } from '../lib/types'
+import type { AntragDeadlineSetting, AntragRow, Ebene, SessionRow, SummaryRow } from '../lib/types'
 import { ANTRAG_STATUS_AKTIV, antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 import { computeAntragDeadline } from '../lib/antragDeadline'
 import { AntragDetailModal } from './AntragDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDate } from '../lib/format'
 
-type Filter = 'alle' | AntragStatus
+/** 'alle' = ungefiltert, 'eigene' = Anträge ohne Sitzungsbezug, sonst eine session_id. */
+type SitzungFilter = 'alle' | 'eigene' | string
 
-// "Meine Anträge" ist eine dokumentenzentrierte Übersicht (Kernobjekt ist das
-// hochgeladene Antragsdokument, getaggt mit Metadaten wie Ausschuss/Ebene),
+// "Antrags-Dokumente" ist eine dokumentenzentrierte Übersicht (Kernobjekt ist
+// das hochgeladene Antragsdokument, getaggt mit der verknüpften Sitzung),
 // aber die Anlage selbst ist bewusst leichtgewichtig: Titel + optionale
 // Sitzung reichen, Status startet immer bei "Entwurf". Ausschuss/Ebene werden
 // beim Verknüpfen einer Sitzung automatisch übernommen. Ein Dokument wird
@@ -24,8 +25,7 @@ export function AntraegeSection() {
   const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
   const [tageByEbene, setTageByEbene] = useState<Map<Ebene, number>>(new Map())
 
-  const [statusFilter, setStatusFilter] = useState<Filter>('alle')
-  const [ausschussFilter, setAusschussFilter] = useState<string | null>(null)
+  const [sitzungFilter, setSitzungFilter] = useState<SitzungFilter>('alle')
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [newTitel, setNewTitel] = useState('')
@@ -126,18 +126,26 @@ export function AntraegeSection() {
   }
 
   const aktive = antraege.filter((a) => ANTRAG_STATUS_AKTIV.includes(a.status))
-  const vorkommendeStatus = ANTRAG_STATUS_AKTIV.filter((s) => aktive.some((a) => a.status === s))
-  const vorkommendeAusschuesse = Array.from(new Set(aktive.filter((a) => a.ausschuss).map((a) => a.ausschuss as string)))
-  const sichtbar = aktive.filter(
-    (a) => (statusFilter === 'alle' || a.status === statusFilter) && (!ausschussFilter || a.ausschuss === ausschussFilter),
-  )
+  // Sitzungs-Filter: ein Chip pro Sitzung, die tatsächlich unter den aktiven
+  // Anträgen vorkommt (chronologisch), plus "Eigene Anträge" für Anträge
+  // ohne Sitzungsbezug - keine wirkungslosen Filter anzeigen.
+  const vorkommendeSitzungen = Array.from(new Set(aktive.filter((a) => a.session_id).map((a) => a.session_id as string)))
+    .map((id) => sessionById.get(id))
+    .filter((s): s is SessionRow => Boolean(s))
+    .sort((a, b) => a.datum.localeCompare(b.datum))
+  const hatEigeneOhneSitzung = aktive.some((a) => !a.session_id)
+  const sichtbar = aktive.filter((a) => {
+    if (sitzungFilter === 'alle') return true
+    if (sitzungFilter === 'eigene') return !a.session_id
+    return a.session_id === sitzungFilter
+  })
   const abgeschlosseneAnzahl = antraege.length - aktive.length
 
   return (
     <section>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold text-slate-900">Meine Anträge</h2>
+          <h2 className="text-base font-semibold text-slate-900">Antrags-Dokumente</h2>
           {abgeschlosseneAnzahl > 0 && (
             <Link to="/archiv" className="text-xs font-medium text-primary underline">
               {abgeschlosseneAnzahl} entschiedene im Archiv
@@ -182,49 +190,33 @@ export function AntraegeSection() {
         </form>
       )}
 
-      {(vorkommendeStatus.length > 1 || vorkommendeAusschuesse.length > 1) && (
-        <div className="mb-3 space-y-1.5">
-          {vorkommendeStatus.length > 1 && (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setStatusFilter('alle')}
-                className={statusFilter === 'alle' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-              >
-                Alle Status
-              </button>
-              {vorkommendeStatus.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStatusFilter(s)}
-                  className={statusFilter === s ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-                >
-                  {antragStatusLabel(s, null)}
-                </button>
-              ))}
-            </div>
-          )}
-          {vorkommendeAusschuesse.length > 1 && (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setAusschussFilter(null)}
-                className={!ausschussFilter ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-              >
-                Alle Ausschüsse
-              </button>
-              {vorkommendeAusschuesse.map((a) => (
-                <button
-                  key={a}
-                  type="button"
-                  onClick={() => setAusschussFilter(a)}
-                  className={ausschussFilter === a ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
-                >
-                  {a}
-                </button>
-              ))}
-            </div>
+      {(vorkommendeSitzungen.length > 0 || hatEigeneOhneSitzung) && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSitzungFilter('alle')}
+            className={sitzungFilter === 'alle' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+          >
+            Alle
+          </button>
+          {vorkommendeSitzungen.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSitzungFilter(s.id)}
+              className={sitzungFilter === s.id ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+            >
+              {s.titel}
+            </button>
+          ))}
+          {hatEigeneOhneSitzung && (
+            <button
+              type="button"
+              onClick={() => setSitzungFilter('eigene')}
+              className={sitzungFilter === 'eigene' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+            >
+              Eigene Anträge
+            </button>
           )}
         </div>
       )}
@@ -270,7 +262,11 @@ export function AntraegeSection() {
                     ) : (
                       <span className="italic text-slate-400">Kein Dokument hochgeladen</span>
                     )}
-                    {session && <span className="truncate">🗳️ {session.titel} · {formatDate(session.datum)}</span>}
+                    {session ? (
+                      <span className="truncate">🗳️ {session.titel} · {formatDate(session.datum)}</span>
+                    ) : (
+                      <span className="italic text-slate-400">Ohne Sitzungsbezug</span>
+                    )}
                     {deadline && (
                       <span className={ueberfaellig ? 'font-semibold text-red-600' : ''}>
                         Frist {formatDate(deadline.toISOString())}

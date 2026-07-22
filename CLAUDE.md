@@ -795,6 +795,19 @@ Vorhanden:
     Live-Projekt sowie einem statischen Test-Harness für `ForcedPasswordChange` und die neuen
     Gliederung-Felder - ein echter Login-Rundgang bleibt offen (Passwort-Eingabe ist tabu).
 
+- **"Meine Anträge" → "Antrags-Dokumente"** (`AntraegeSection.tsx`, seit 2026-07-21): Nutzerwunsch,
+  die Dashboard-Sektion konsequent dokumentenzentriert nach Sitzung zu filtern statt nach Status/
+  Ausschuss. Die Status-/Ausschuss-Filter-Chips sind komplett durch einen Sitzungs-Filter ersetzt:
+  "Alle" + ein Chip pro Sitzung, die unter den aktiven Anträgen tatsächlich vorkommt (chronologisch,
+  `vorkommendeSitzungen`) + "Eigene Anträge" für Anträge ohne `session_id` (nur wenn es welche gibt,
+  `hatEigeneOhneSitzung`) - Filter-State-Typ `SitzungFilter = 'alle' | 'eigene' | <session_id>`. Jede
+  Karte zeigt jetzt immer einen Sitzungs-Hinweis, auch wenn keiner besteht (`"Ohne Sitzungsbezug"`
+  statt einfach nichts anzuzeigen) - macht "mit welcher Sitzung verknüpft" für jedes Dokument explizit
+  sichtbar. Klick-Verhalten bewusst unverändert gelassen (Klick auf die Karte öffnet weiterhin das
+  volle `AntragDetailModal`, Klick auf den Dokument-Chip separat per `stopPropagation` die
+  `DocumentPreviewModal`) - der Nutzer wollte weiterhin vollen Zugriff auf Status/Kommentare/
+  Mitantragsteller, nicht nur eine reine Dokumentenliste.
+
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
    `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte
