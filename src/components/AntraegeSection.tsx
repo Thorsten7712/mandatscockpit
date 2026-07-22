@@ -5,21 +5,35 @@ import type { AntragDeadlineSetting, AntragRow, Ebene, SessionRow, SummaryRow } 
 import { ANTRAG_STATUS_AKTIV, antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 import { computeAntragDeadline } from '../lib/antragDeadline'
 import { AntragDetailModal } from './AntragDetailModal'
+import { TerminDetailModal } from './TerminDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDate } from '../lib/format'
 
 /** 'alle' = ungefiltert, 'eigene' = Anträge ohne Sitzungsbezug, sonst eine session_id. */
 type SitzungFilter = 'alle' | 'eigene' | string
 
-// "Antrags-Dokumente" ist eine dokumentenzentrierte Übersicht (Kernobjekt ist
-// das hochgeladene Antragsdokument, getaggt mit der verknüpften Sitzung),
-// aber die Anlage selbst ist bewusst leichtgewichtig: Titel + optionale
-// Sitzung reichen, Status startet immer bei "Entwurf". Ausschuss/Ebene werden
-// beim Verknüpfen einer Sitzung automatisch übernommen. Ein Dokument wird
-// erst spätestens beim Status "Gestellt" verlangt (siehe AntragDetailModal).
+interface DokumentItem {
+  key: string
+  kind: 'antrag' | 'sitzungsdokument'
+  erstellt: string
+  sessionId: string | null
+  antrag?: AntragRow
+  primaryDoc?: SummaryRow
+  weitereCount: number
+  inhalt?: string | null
+}
+
+// "Meine Dokumente" bündelt zwei Quellen zu einer chronologischen, nach
+// Sitzung filterbaren Liste: eigene Anträge (mit Status-Workflow, siehe
+// AntragDetailModal) UND Dokumente/Notizen, die direkt an einer Sitzung
+// hochgeladen wurden (Redebeiträge, Analysen, Zusammenfassungen - über
+// "Notizen & Dokumente" in TerminDetailPanel.tsx), ohne einem Antrag
+// zugeordnet zu sein. Die Antrag-Anlage bleibt bewusst leichtgewichtig:
+// Titel + optionale Sitzung reichen, Status startet immer bei "Entwurf".
 export function AntraegeSection() {
   const [userId, setUserId] = useState<string | null>(null)
   const [antraege, setAntraege] = useState<AntragRow[]>([])
+  const [sessionDocs, setSessionDocs] = useState<SummaryRow[]>([])
   const [sessionById, setSessionById] = useState<Map<string, SessionRow>>(new Map())
   const [docsByAntrag, setDocsByAntrag] = useState<Map<string, SummaryRow[]>>(new Map())
   const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
@@ -34,6 +48,7 @@ export function AntraegeSection() {
   const [addError, setAddError] = useState<string | null>(null)
 
   const [openId, setOpenId] = useState<string | null>(null)
+  const [openTerminId, setOpenTerminId] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
   async function load() {
@@ -41,8 +56,22 @@ export function AntraegeSection() {
     setAntraege(data ?? [])
   }
 
+  // Direkt an Sitzungen hochgeladene Dokumente/Notizen, nicht über einen
+  // Antrag (siehe "Notizen & Dokumente" in TerminDetailPanel.tsx) - RLS
+  // (summaries_manage_own) scoped bereits auf eigene Einträge.
+  async function loadSessionDocs() {
+    const { data } = await supabase
+      .from('summaries')
+      .select('*')
+      .not('session_id', 'is', null)
+      .is('antrag_id', null)
+      .order('erstellt_am', { ascending: false })
+    setSessionDocs(data ?? [])
+  }
+
   useEffect(() => {
     load()
+    loadSessionDocs()
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
@@ -62,11 +91,16 @@ export function AntraegeSection() {
     })
   }, [])
 
-  // Verknüpfte Sitzungen und die hochgeladenen Dokumente nur für die
-  // tatsächlich vorhandenen Anträge nachladen (gleiches Muster wie
+  // Verknüpfte Sitzungen (aus Anträgen UND direkten Sitzungsdokumenten) und
+  // die hochgeladenen Antrags-Dokumente nachladen (gleiches Muster wie
   // eventById/sessionById in TodoBoard).
   useEffect(() => {
-    const sessionIds = Array.from(new Set(antraege.filter((a) => a.session_id).map((a) => a.session_id as string)))
+    const sessionIds = Array.from(
+      new Set([
+        ...antraege.filter((a) => a.session_id).map((a) => a.session_id as string),
+        ...sessionDocs.map((d) => d.session_id as string),
+      ]),
+    )
     if (sessionIds.length === 0) {
       setSessionById(new Map())
     } else {
@@ -96,7 +130,7 @@ export function AntraegeSection() {
           setDocsByAntrag(map)
         })
     }
-  }, [antraege])
+  }, [antraege, sessionDocs])
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault()
@@ -126,18 +160,43 @@ export function AntraegeSection() {
   }
 
   const aktive = antraege.filter((a) => ANTRAG_STATUS_AKTIV.includes(a.status))
-  // Sitzungs-Filter: ein Chip pro Sitzung, die tatsächlich unter den aktiven
-  // Anträgen vorkommt (chronologisch), plus "Eigene Anträge" für Anträge
+
+  const antragItems: DokumentItem[] = aktive.map((a) => {
+    const docs = docsByAntrag.get(a.id) ?? []
+    const [firstDoc, ...weitereDocs] = docs
+    return {
+      key: `antrag-${a.id}`,
+      kind: 'antrag',
+      erstellt: a.created_at,
+      sessionId: a.session_id,
+      antrag: a,
+      primaryDoc: firstDoc,
+      weitereCount: weitereDocs.length,
+    }
+  })
+  const sitzungsDokumentItems: DokumentItem[] = sessionDocs.map((d) => ({
+    key: `doc-${d.id}`,
+    kind: 'sitzungsdokument',
+    erstellt: d.erstellt_am,
+    sessionId: d.session_id,
+    primaryDoc: d.datei_url ? d : undefined,
+    weitereCount: 0,
+    inhalt: d.inhalt,
+  }))
+  const alleItems = [...antragItems, ...sitzungsDokumentItems].sort((a, b) => b.erstellt.localeCompare(a.erstellt))
+
+  // Sitzungs-Filter: ein Chip pro Sitzung, die tatsächlich unter den
+  // Einträgen vorkommt (chronologisch), plus "Eigene Anträge" für Anträge
   // ohne Sitzungsbezug - keine wirkungslosen Filter anzeigen.
-  const vorkommendeSitzungen = Array.from(new Set(aktive.filter((a) => a.session_id).map((a) => a.session_id as string)))
+  const vorkommendeSitzungen = Array.from(new Set(alleItems.filter((i) => i.sessionId).map((i) => i.sessionId as string)))
     .map((id) => sessionById.get(id))
     .filter((s): s is SessionRow => Boolean(s))
     .sort((a, b) => a.datum.localeCompare(b.datum))
-  const hatEigeneOhneSitzung = aktive.some((a) => !a.session_id)
-  const sichtbar = aktive.filter((a) => {
+  const hatEigeneOhneSitzung = antragItems.some((i) => !i.sessionId)
+  const sichtbar = alleItems.filter((item) => {
     if (sitzungFilter === 'alle') return true
-    if (sitzungFilter === 'eigene') return !a.session_id
-    return a.session_id === sitzungFilter
+    if (sitzungFilter === 'eigene') return item.kind === 'antrag' && !item.sessionId
+    return item.sessionId === sitzungFilter
   })
   const abgeschlosseneAnzahl = antraege.length - aktive.length
 
@@ -145,7 +204,7 @@ export function AntraegeSection() {
     <section>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold text-slate-900">Antrags-Dokumente</h2>
+          <h2 className="text-base font-semibold text-slate-900">Meine Dokumente</h2>
           {abgeschlosseneAnzahl > 0 && (
             <Link to="/archiv" className="text-xs font-medium text-primary underline">
               {abgeschlosseneAnzahl} entschiedene im Archiv
@@ -222,57 +281,91 @@ export function AntraegeSection() {
       )}
 
       <ul className="max-h-[26rem] space-y-2 overflow-y-auto pr-1">
-        {sichtbar.map((a) => {
-          const session = a.session_id ? sessionById.get(a.session_id) : undefined
-          const docs = docsByAntrag.get(a.id) ?? []
-          const [firstDoc, ...weitereDocs] = docs
-          const deadline = computeAntragDeadline(session, a.ebene, tageByEbene)
-          const ueberfaellig = deadline ? deadline.getTime() < Date.now() && a.status === 'entwurf' : false
+        {sichtbar.map((item) => {
+          const session = item.sessionId ? sessionById.get(item.sessionId) : undefined
+
+          if (item.kind === 'antrag') {
+            const a = item.antrag!
+            const deadline = computeAntragDeadline(session, a.ebene, tageByEbene)
+            const ueberfaellig = deadline ? deadline.getTime() < Date.now() && a.status === 'entwurf' : false
+            return (
+              <li key={item.key}>
+                <div
+                  onClick={() => setOpenId(a.id)}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                >
+                  <span
+                    className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
+                  >
+                    {antragStatusLabel(a.status, a.ergebnis)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                      {a.ausschuss && (
+                        <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                          {a.ausschuss}
+                        </span>
+                      )}
+                      {item.primaryDoc?.datei_url ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPreviewDoc({ path: item.primaryDoc!.datei_url!, name: fileNameFromPath(item.primaryDoc!.datei_url!) })
+                          }}
+                          className="mc-btn-ghost !px-1.5 !py-0.5 !text-xs"
+                        >
+                          📎 {fileNameFromPath(item.primaryDoc.datei_url)}
+                          {item.weitereCount > 0 && ` +${item.weitereCount}`}
+                        </button>
+                      ) : (
+                        <span className="italic text-slate-400">Kein Dokument hochgeladen</span>
+                      )}
+                      {session ? (
+                        <span className="truncate">🗳️ {session.titel} · {formatDate(session.datum)}</span>
+                      ) : (
+                        <span className="italic text-slate-400">Ohne Sitzungsbezug</span>
+                      )}
+                      {deadline && (
+                        <span className={ueberfaellig ? 'font-semibold text-red-600' : ''}>
+                          Frist {formatDate(deadline.toISOString())}
+                          {ueberfaellig && ' · überfällig'}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </div>
+              </li>
+            )
+          }
+
+          // kind === 'sitzungsdokument': Notiz/Dokument direkt an einer
+          // Sitzung, ohne zugehörigen Antrag - Titel gibt es hier nicht, die
+          // Zeile zeigt stattdessen den Dateinamen bzw. einen Notiz-Schnipsel.
           return (
-            <li key={a.id}>
+            <li key={item.key}>
               <div
-                onClick={() => setOpenId(a.id)}
+                onClick={() => item.sessionId && setOpenTerminId(item.sessionId)}
                 className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
               >
-                <span
-                  className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
-                >
-                  {antragStatusLabel(a.status, a.ergebnis)}
+                <span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  {item.primaryDoc ? 'Dokument' : 'Notiz'}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      if (!item.primaryDoc?.datei_url) return
+                      e.stopPropagation()
+                      setPreviewDoc({ path: item.primaryDoc.datei_url, name: fileNameFromPath(item.primaryDoc.datei_url) })
+                    }}
+                    className="block truncate text-left text-sm font-medium text-slate-900 hover:underline"
+                  >
+                    {item.primaryDoc?.datei_url ? `📎 ${fileNameFromPath(item.primaryDoc.datei_url)}` : item.inhalt || 'Notiz'}
+                  </button>
                   <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                    {a.ausschuss && (
-                      <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-                        {a.ausschuss}
-                      </span>
-                    )}
-                    {firstDoc?.datei_url ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setPreviewDoc({ path: firstDoc.datei_url!, name: fileNameFromPath(firstDoc.datei_url!) })
-                        }}
-                        className="mc-btn-ghost !px-1.5 !py-0.5 !text-xs"
-                      >
-                        📎 {fileNameFromPath(firstDoc.datei_url)}
-                        {weitereDocs.length > 0 && ` +${weitereDocs.length}`}
-                      </button>
-                    ) : (
-                      <span className="italic text-slate-400">Kein Dokument hochgeladen</span>
-                    )}
-                    {session ? (
-                      <span className="truncate">🗳️ {session.titel} · {formatDate(session.datum)}</span>
-                    ) : (
-                      <span className="italic text-slate-400">Ohne Sitzungsbezug</span>
-                    )}
-                    {deadline && (
-                      <span className={ueberfaellig ? 'font-semibold text-red-600' : ''}>
-                        Frist {formatDate(deadline.toISOString())}
-                        {ueberfaellig && ' · überfällig'}
-                      </span>
-                    )}
+                    {session && <span className="truncate">🗳️ {session.titel} · {formatDate(session.datum)}</span>}
                   </span>
                 </span>
               </div>
@@ -281,14 +374,17 @@ export function AntraegeSection() {
         })}
         {sichtbar.length === 0 && (
           <li className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
-            {aktive.length === 0
-              ? 'Noch keine Anträge. Über „+ Antrag" oben Titel eingeben, optional die vorgesehene Sitzung wählen.'
-              : 'Keine Anträge mit diesen Filtern.'}
+            {alleItems.length === 0
+              ? 'Noch keine Dokumente. Über „+ Antrag" oben einen Antrag anlegen, oder bei einer Sitzung unter „Notizen & Dokumente" ein Dokument hochladen.'
+              : 'Keine Dokumente für diese Auswahl.'}
           </li>
         )}
       </ul>
 
       {openId && <AntragDetailModal id={openId} onClose={() => setOpenId(null)} onChanged={load} />}
+      {openTerminId && (
+        <TerminDetailModal kind="session" id={openTerminId} onClose={() => setOpenTerminId(null)} />
+      )}
       {previewDoc && (
         <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} onClose={() => setPreviewDoc(null)} />
       )}

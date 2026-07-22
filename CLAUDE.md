@@ -807,6 +807,21 @@ Vorhanden:
   volle `AntragDetailModal`, Klick auf den Dokument-Chip separat per `stopPropagation` die
   `DocumentPreviewModal`) - der Nutzer wollte weiterhin vollen Zugriff auf Status/Kommentare/
   Mitantragsteller, nicht nur eine reine Dokumentenliste.
+  - **Erweiterung auf Sitzungsdokumente** (noch 2026-07-21, Überschrift jetzt "Meine Dokumente"):
+    Nutzerwunsch, hier auch Dokumente/Notizen zu sehen, die direkt an einer Sitzung hochgeladen
+    wurden (vorbereitete Redebeiträge, Analysen, Zusammenfassungen - über "Notizen & Dokumente" in
+    `TerminDetailPanel.tsx`), nicht nur Antrags-Dokumente. Neuer Typ `DokumentItem` vereinheitlicht
+    beide Quellen zu einer chronologischen Liste (sortiert nach `erstellt`/`created_at` bzw.
+    `erstellt_am`): `kind: 'antrag'` (unverändertes Verhalten) und `kind: 'sitzungsdokument'` (neu,
+    aus `summaries` mit gesetztem `session_id` **und** `antrag_id is null`, RLS
+    `summaries_manage_own` scoped bereits auf eigene Einträge). Sitzungsdokument-Zeilen haben kein
+    Titel-Feld wie ein Antrag - die Zeile zeigt stattdessen den Dateinamen (Badge "Dokument") oder,
+    falls nur eine Text-Notiz ohne Datei vorliegt, einen Schnipsel des Notiztexts (Badge "Notiz");
+    Klick auf die Zeile öffnet `TerminDetailModal` für die verknüpfte Sitzung (analog zum
+    `AntragDetailModal` bei Antrag-Zeilen), Klick auf den Dateinamen separat per `stopPropagation`
+    die `DocumentPreviewModal`. Der Sitzungs-Filter (`vorkommendeSitzungen`) berücksichtigt jetzt
+    Sitzungen aus beiden Quellen; "Eigene Anträge" bleibt spezifisch für Anträge ohne Sitzungsbezug,
+    da Sitzungsdokumente per Definition immer eine Sitzung haben.
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
