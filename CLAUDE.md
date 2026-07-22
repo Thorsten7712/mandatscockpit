@@ -822,6 +822,14 @@ Vorhanden:
     die `DocumentPreviewModal`. Der Sitzungs-Filter (`vorkommendeSitzungen`) berücksichtigt jetzt
     Sitzungen aus beiden Quellen; "Eigene Anträge" bleibt spezifisch für Anträge ohne Sitzungsbezug,
     da Sitzungsdokumente per Definition immer eine Sitzung haben.
+  - **Dritte Quelle: Dokumente an ToDo-Karten** (noch 2026-07-21): `DokumentItem` bekam einen dritten
+    `kind: 'todo'` (aus `summaries` mit gesetztem `todo_id`, gruppiert nach Karte wie Anträge nach
+    `docsByAntrag` - mehrere Dokumente derselben Karte landen in einer Zeile mit "+N"). Die
+    zugehörigen ToDo-Karten werden gezielt nachgeladen (`todoById`, gleiches Muster wie
+    `eventById`/`sessionById` in `TodoBoard.tsx`), deren `session_id` fließt ebenfalls in den
+    Sitzungs-Filter ein. Badge zeigt "Erledigt" (grün, durchgestrichener Titel) oder "ToDo" (analog
+    zur Card-Darstellung im Board); Klick öffnet `TodoDetailModal`. Damit deckt die Sektion jetzt alle
+    drei Stellen ab, an denen im Projekt Dokumente hochgeladen werden können (Antrag, Sitzung, ToDo).
 
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.

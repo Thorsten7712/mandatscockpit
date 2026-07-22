@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragDeadlineSetting, AntragRow, Ebene, SessionRow, SummaryRow } from '../lib/types'
+import type { AntragDeadlineSetting, AntragRow, Ebene, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { ANTRAG_STATUS_AKTIV, antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 import { computeAntragDeadline } from '../lib/antragDeadline'
 import { AntragDetailModal } from './AntragDetailModal'
 import { TerminDetailModal } from './TerminDetailModal'
+import { TodoDetailModal } from './TodoDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDate } from '../lib/format'
 
@@ -14,26 +15,31 @@ type SitzungFilter = 'alle' | 'eigene' | string
 
 interface DokumentItem {
   key: string
-  kind: 'antrag' | 'sitzungsdokument'
+  kind: 'antrag' | 'todo' | 'sitzungsdokument'
   erstellt: string
   sessionId: string | null
   antrag?: AntragRow
+  todo?: TodoRow
+  todoId?: string
   primaryDoc?: SummaryRow
   weitereCount: number
   inhalt?: string | null
 }
 
-// "Meine Dokumente" bündelt zwei Quellen zu einer chronologischen, nach
+// "Meine Dokumente" bündelt drei Quellen zu einer chronologischen, nach
 // Sitzung filterbaren Liste: eigene Anträge (mit Status-Workflow, siehe
-// AntragDetailModal) UND Dokumente/Notizen, die direkt an einer Sitzung
-// hochgeladen wurden (Redebeiträge, Analysen, Zusammenfassungen - über
-// "Notizen & Dokumente" in TerminDetailPanel.tsx), ohne einem Antrag
-// zugeordnet zu sein. Die Antrag-Anlage bleibt bewusst leichtgewichtig:
-// Titel + optionale Sitzung reichen, Status startet immer bei "Entwurf".
+// AntragDetailModal), Dokumente an ToDo-Karten sowie Dokumente/Notizen, die
+// direkt an einer Sitzung hochgeladen wurden (Redebeiträge, Analysen,
+// Zusammenfassungen - über "Notizen & Dokumente" in TerminDetailPanel.tsx),
+// ohne einem Antrag zugeordnet zu sein. Die Antrag-Anlage bleibt bewusst
+// leichtgewichtig: Titel + optionale Sitzung reichen, Status startet immer
+// bei "Entwurf".
 export function AntraegeSection() {
   const [userId, setUserId] = useState<string | null>(null)
   const [antraege, setAntraege] = useState<AntragRow[]>([])
   const [sessionDocs, setSessionDocs] = useState<SummaryRow[]>([])
+  const [todoDocs, setTodoDocs] = useState<SummaryRow[]>([])
+  const [todoById, setTodoById] = useState<Map<string, TodoRow>>(new Map())
   const [sessionById, setSessionById] = useState<Map<string, SessionRow>>(new Map())
   const [docsByAntrag, setDocsByAntrag] = useState<Map<string, SummaryRow[]>>(new Map())
   const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
@@ -49,6 +55,7 @@ export function AntraegeSection() {
 
   const [openId, setOpenId] = useState<string | null>(null)
   const [openTerminId, setOpenTerminId] = useState<string | null>(null)
+  const [openTodoId, setOpenTodoId] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
   async function load() {
@@ -69,9 +76,20 @@ export function AntraegeSection() {
     setSessionDocs(data ?? [])
   }
 
+  // Dokumente an ToDo-Karten (siehe "Dokumente" in TodoDetailModal.tsx).
+  async function loadTodoDocs() {
+    const { data } = await supabase
+      .from('summaries')
+      .select('*')
+      .not('todo_id', 'is', null)
+      .order('erstellt_am', { ascending: false })
+    setTodoDocs(data ?? [])
+  }
+
   useEffect(() => {
     load()
     loadSessionDocs()
+    loadTodoDocs()
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
@@ -91,14 +109,33 @@ export function AntraegeSection() {
     })
   }, [])
 
-  // Verknüpfte Sitzungen (aus Anträgen UND direkten Sitzungsdokumenten) und
-  // die hochgeladenen Antrags-Dokumente nachladen (gleiches Muster wie
-  // eventById/sessionById in TodoBoard).
+  // Die referenzierten ToDo-Karten nachladen (Titel, Erledigt-Status,
+  // eigener Sitzungsbezug - nur die tatsächlich verlinkten, gleiches Muster
+  // wie eventById/sessionById in TodoBoard).
+  useEffect(() => {
+    const todoIds = Array.from(new Set(todoDocs.map((d) => d.todo_id as string)))
+    if (todoIds.length === 0) {
+      setTodoById(new Map())
+    } else {
+      supabase
+        .from('todos')
+        .select('*')
+        .in('id', todoIds)
+        .then(({ data }) => setTodoById(new Map((data ?? []).map((t: TodoRow) => [t.id, t]))))
+    }
+  }, [todoDocs])
+
+  // Verknüpfte Sitzungen (aus Anträgen, direkten Sitzungsdokumenten UND
+  // verknüpften ToDo-Karten) und die hochgeladenen Antrags-Dokumente
+  // nachladen (gleiches Muster wie eventById/sessionById in TodoBoard).
   useEffect(() => {
     const sessionIds = Array.from(
       new Set([
         ...antraege.filter((a) => a.session_id).map((a) => a.session_id as string),
         ...sessionDocs.map((d) => d.session_id as string),
+        ...Array.from(todoById.values())
+          .filter((t) => t.session_id)
+          .map((t) => t.session_id as string),
       ]),
     )
     if (sessionIds.length === 0) {
@@ -130,7 +167,7 @@ export function AntraegeSection() {
           setDocsByAntrag(map)
         })
     }
-  }, [antraege, sessionDocs])
+  }, [antraege, sessionDocs, todoById])
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault()
@@ -183,7 +220,32 @@ export function AntraegeSection() {
     weitereCount: 0,
     inhalt: d.inhalt,
   }))
-  const alleItems = [...antragItems, ...sitzungsDokumentItems].sort((a, b) => b.erstellt.localeCompare(a.erstellt))
+  // Mehrere Dokumente derselben ToDo-Karte zu einer Zeile gruppiert (analog
+  // Anträge) - todoDocs kommt bereits absteigend sortiert, das erste Dokument
+  // je todo_id ist also das zuletzt hochgeladene.
+  const docsByTodo = new Map<string, SummaryRow[]>()
+  for (const d of todoDocs) {
+    const list = docsByTodo.get(d.todo_id as string) ?? []
+    list.push(d)
+    docsByTodo.set(d.todo_id as string, list)
+  }
+  const todoItems: DokumentItem[] = Array.from(docsByTodo.entries()).map(([todoId, docs]) => {
+    const [firstDoc, ...weitereDocs] = docs
+    const todo = todoById.get(todoId)
+    return {
+      key: `todo-${todoId}`,
+      kind: 'todo',
+      erstellt: firstDoc.erstellt_am,
+      sessionId: todo?.session_id ?? null,
+      todo,
+      todoId,
+      primaryDoc: firstDoc,
+      weitereCount: weitereDocs.length,
+    }
+  })
+  const alleItems = [...antragItems, ...todoItems, ...sitzungsDokumentItems].sort((a, b) =>
+    b.erstellt.localeCompare(a.erstellt),
+  )
 
   // Sitzungs-Filter: ein Chip pro Sitzung, die tatsächlich unter den
   // Einträgen vorkommt (chronologisch), plus "Eigene Anträge" für Anträge
@@ -340,6 +402,49 @@ export function AntraegeSection() {
             )
           }
 
+          if (item.kind === 'todo') {
+            const todo = item.todo
+            return (
+              <li key={item.key}>
+                <div
+                  onClick={() => item.todoId && setOpenTodoId(item.todoId)}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                >
+                  <span
+                    className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${todo?.erledigt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}
+                  >
+                    {todo?.erledigt ? 'Erledigt' : 'ToDo'}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-sm font-medium ${todo?.erledigt ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                      {todo?.titel ?? 'ToDo-Karte'}
+                    </span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                      {item.primaryDoc?.datei_url && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPreviewDoc({ path: item.primaryDoc!.datei_url!, name: fileNameFromPath(item.primaryDoc!.datei_url!) })
+                          }}
+                          className="mc-btn-ghost !px-1.5 !py-0.5 !text-xs"
+                        >
+                          📎 {fileNameFromPath(item.primaryDoc.datei_url)}
+                          {item.weitereCount > 0 && ` +${item.weitereCount}`}
+                        </button>
+                      )}
+                      {session ? (
+                        <span className="truncate">🗳️ {session.titel} · {formatDate(session.datum)}</span>
+                      ) : (
+                        <span className="italic text-slate-400">Ohne Sitzungsbezug</span>
+                      )}
+                    </span>
+                  </span>
+                </div>
+              </li>
+            )
+          }
+
           // kind === 'sitzungsdokument': Notiz/Dokument direkt an einer
           // Sitzung, ohne zugehörigen Antrag - Titel gibt es hier nicht, die
           // Zeile zeigt stattdessen den Dateinamen bzw. einen Notiz-Schnipsel.
@@ -375,7 +480,7 @@ export function AntraegeSection() {
         {sichtbar.length === 0 && (
           <li className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
             {alleItems.length === 0
-              ? 'Noch keine Dokumente. Über „+ Antrag" oben einen Antrag anlegen, oder bei einer Sitzung unter „Notizen & Dokumente" ein Dokument hochladen.'
+              ? 'Noch keine Dokumente. Über „+ Antrag" oben einen Antrag anlegen, oder bei einer Sitzung bzw. einer ToDo-Karte ein Dokument hochladen.'
               : 'Keine Dokumente für diese Auswahl.'}
           </li>
         )}
@@ -384,6 +489,9 @@ export function AntraegeSection() {
       {openId && <AntragDetailModal id={openId} onClose={() => setOpenId(null)} onChanged={load} />}
       {openTerminId && (
         <TerminDetailModal kind="session" id={openTerminId} onClose={() => setOpenTerminId(null)} />
+      )}
+      {openTodoId && (
+        <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadTodoDocs} />
       )}
       {previewDoc && (
         <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} onClose={() => setPreviewDoc(null)} />
