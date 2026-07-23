@@ -28,6 +28,17 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
+// "webcal://"/"webcals://" sind nur eine Client-Konvention ("das hier ist ein
+// abonnierbarer Kalender") und kein von fetch unterstütztes Protokoll -
+// ical.async.fromURL() wirft dafür deterministisch "fetch failed" (kein
+// Netzwerkfehler). WICHTIG: identischer Fix in scripts/import-ics.mjs
+// nachziehen (Logik bewusst dupliziert, siehe CLAUDE.md).
+function normalizeIcsUrl(url: string): string {
+  if (url.startsWith('webcal://')) return `https://${url.slice('webcal://'.length)}`
+  if (url.startsWith('webcals://')) return `https://${url.slice('webcals://'.length)}`
+  return url
+}
+
 // node-ical liefert ICS-Properties mit Parametern (z. B. "SUMMARY;LANGUAGE=de:...",
 // wie im echten ALLRIS-Feed von Iserlohn) als { params, val } statt als String.
 function toText(value: unknown): string {
@@ -131,7 +142,7 @@ Deno.serve(async (req) => {
 
   let parsed: Record<string, unknown>
   try {
-    parsed = await ical.async.fromURL(source.ics_url)
+    parsed = await ical.async.fromURL(normalizeIcsUrl(source.ics_url))
   } catch (err) {
     return jsonResponse({ error: `Fehler beim Laden des ICS-Feeds: ${String(err)}` }, 502)
   }

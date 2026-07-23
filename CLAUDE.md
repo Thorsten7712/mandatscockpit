@@ -867,6 +867,39 @@ Vorhanden:
     Live-Datenbank abgesendet (eine Test-Nachricht "Testabsender" liegt entsprechend im
     Kontaktanfragen-Postfach und kann dort gelöscht werden).
 
+- **Bugfix: `webcal://`-Quellen ließen den täglichen ICS-Import deterministisch scheitern**
+  (seit 2026-07-23): Der tägliche Import-Job (`import-ics.yml`) war zwei Tage in Folge (2026-07-22
+  und 2026-07-23) rot. Root Cause: die von Benjamin Korte angelegte Quelle "Kreistag" nutzt ein
+  `webcal://`-URL-Schema (eine reine Client-Konvention "das hier ist ein abonnierbarer Kalender",
+  von iCal/Outlook/Google Calendar traditionell 1:1 zu `http(s)://` aufgelöst) - Node/undicis
+  natives `fetch` (das `ical.async.fromURL()` intern nutzt) kennt dieses Schema nicht und wirft
+  dafür bei **jedem einzelnen Aufruf** "fetch failed" (kein Netzwerkfehler, kein Flackern - lokal
+  reproduziert und verifiziert: derselbe Request funktioniert sofort fehlerfrei, sobald man
+  `webcal://` durch `https://` ersetzt). Da `scripts/import-ics.mjs` bei mindestens einer
+  fehlgeschlagenen Quelle mit `process.exit(1)` abbricht, färbte diese eine kaputte private Quelle
+  den gesamten täglichen Job für alle Quellen rot, obwohl die anderen drei (inkl. "Stadtrat
+  Iserlohn") jeden Tag anstandslos durchliefen.
+  - Fix: neue Hilfsfunktion `normalizeIcsUrl()` (in `scripts/import-ics.mjs` **und**
+    `supabase/functions/import-ics-source/index.ts`, gleiche bewusste Dopplung wie bei der
+    Gremium-Extraktion) mappt `webcal://`/`webcals://` vor dem Fetch auf `https://` - lokal mit der
+    echten, betroffenen URL gegenverifiziert (vorher: "fetch failed" bei jedem Versuch, nachher: 26
+    VEVENTs korrekt geparst).
+  - Nebenbefund beim Debuggen, bewusst nicht automatisch "repariert": zwei weitere private Quellen
+    hatten eigene, unabhängige Probleme. "Kreistag MK" (Stefan Woelk) zeigt auf
+    `https://www.sitzungsdienst-maerkischer-kreis.de/ri/si010_i.asp` - liefert HTTP 403 (auch per
+    curl reproduzierbar) und hat keine `template=ical`-Query-Parameter wie die funktionierende
+    Schwester-Quelle "Kreistag" vom selben Anbieter; sieht nach einer falsch kopierten
+    Seiten-URL statt eines echten ICS-Exportlinks aus - node-ical wirft dafür keinen Fehler
+    (leeres, aber parsbares HTML), sondern liefert nur 0 Termine, war also nie Teil des roten
+    Job-Status. "LWL" (Benjamin Korte) nutzt `http://` statt `https://` und braucht dadurch einen
+    301-Redirect vor dem eigentlichen ICS-Feed - lief in den beiden untersuchten Läufen einmal durch
+    und einmal mit "fetch failed" fehl (vermutlich netzwerkbedingtes Flackern auf GitHub-Actions-
+    Runnern beim Redirect-Hop, nicht reproduzierbar vom lokalen Rechner aus). Beides sind private
+    Quellen anderer Mitglieder (nicht meine) - die Korrektur der URLs selbst wurde bewusst nicht
+    automatisiert vorgenommen (auch von der Auto-Mode-Berechtigungsprüfung blockiert, als ein
+    direktes `UPDATE` auf `calendar_sources` versucht wurde), sondern den jeweiligen Besitzern zur
+    eigenständigen Korrektur in ihren Settings überlassen.
+
 1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
    Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
    `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte

@@ -20,6 +20,18 @@ if (!supabaseUrl || !serviceRoleKey) {
 
 const supabase = createClient(supabaseUrl, serviceRoleKey)
 
+// "webcal://"/"webcals://" sind nur eine Client-Konvention ("das hier ist ein
+// abonnierbarer Kalender") und kein von Node/undici unterstütztes fetch-
+// Protokoll - ical.async.fromURL() wirft dafür deterministisch bei JEDEM
+// Aufruf "fetch failed" (kein Netzwerkfehler, kein Flakiness - siehe
+// gescheiterte Runs am 2026-07-22/23 für die Quelle "Kreistag"). webcal(s)
+// entspricht laut Konvention 1:1 http(s), Kalender-Apps lösen das genauso auf.
+function normalizeIcsUrl(url) {
+  if (url.startsWith('webcal://')) return `https://${url.slice('webcal://'.length)}`
+  if (url.startsWith('webcals://')) return `https://${url.slice('webcals://'.length)}`
+  return url
+}
+
 // node-ical liefert ICS-Properties mit Parametern (z. B. "SUMMARY;LANGUAGE=de:...",
 // wie im echten ALLRIS-Feed von Iserlohn) als { params, val } statt als String.
 // Diese Funktion normalisiert beide Formen zu einem String.
@@ -82,7 +94,7 @@ async function importSource(source) {
       .not('ics_uid', 'is', null)
     const existingByUid = new Map((existing ?? []).map((row) => [row.ics_uid, row.status]))
 
-    const parsed = await ical.async.fromURL(source.ics_url)
+    const parsed = await ical.async.fromURL(normalizeIcsUrl(source.ics_url))
     const entries = Object.values(parsed).filter((entry) => entry.type === 'VEVENT' && entry.uid && entry.start)
 
     const rows = entries.map((entry) => {
@@ -145,7 +157,11 @@ async function importSource(source) {
     )
     return { source: source.name, imported: rows.length }
   } catch (err) {
-    console.error(`  Fehler beim Verarbeiten der Quelle: ${err.message}`)
+    // Sources laufen parallel (Promise.all in main()) - ohne den Quellnamen
+    // hier lässt sich ein "fetch failed" in den Logs keiner bestimmten Quelle
+    // zuordnen, da die Reihenfolge der Log-Zeilen nicht der Reihenfolge der
+    // "Importiere ..."-Zeilen entsprechen muss.
+    console.error(`  Fehler beim Verarbeiten der Quelle "${source.name}": ${err.message}`)
     return { source: source.name, imported: 0, error: err.message }
   }
 }
