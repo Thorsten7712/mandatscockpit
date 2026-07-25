@@ -2,7 +2,15 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Bot, CalendarClock, CalendarDays, Landmark, Mail, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragDeadlineSetting, CalendarSource, Ebene, Profile, TodoBoardSettings, TodoColumn } from '../lib/types'
+import type {
+  AntragDeadlineSetting,
+  CalendarSource,
+  CalendarSourceArt,
+  Ebene,
+  Profile,
+  TodoBoardSettings,
+  TodoColumn,
+} from '../lib/types'
 import { themeById } from '../lib/themes'
 import { EBENE_LABEL, SOURCE_COLORS, sourceColorById } from '../lib/sourceColors'
 import { gliederungFeld } from '../lib/gliederung'
@@ -80,6 +88,19 @@ const EBENEN: { value: Ebene; label: string }[] = [
   { value: 'bund', label: 'Bund' },
 ]
 
+const ARTEN: { value: CalendarSourceArt; label: string; hint: string }[] = [
+  {
+    value: 'sitzung',
+    label: 'Sitzungs-/Gremienkalender',
+    hint: 'Sitzungen werden nach Gremium gefiltert (siehe „Meine Gremien")',
+  },
+  {
+    value: 'termin',
+    label: 'Terminkalender',
+    hint: 'Alle Einträge werden ungefiltert übernommen, keine Gremien-Auswahl',
+  },
+]
+
 const GLIEDERUNG_PLATZHALTER: Record<string, string> = {
   kommune: 'z. B. Iserlohn',
   kreis: 'z. B. Märkischer Kreis',
@@ -95,6 +116,7 @@ export default function Settings() {
   const [name, setName] = useState('')
   const [ebene, setEbene] = useState<Ebene>('kommune')
   const [icsUrl, setIcsUrl] = useState('')
+  const [art, setArt] = useState<CalendarSourceArt>('sitzung')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -126,6 +148,7 @@ export default function Settings() {
   const [editName, setEditName] = useState('')
   const [editEbene, setEditEbene] = useState<Ebene>('kommune')
   const [editIcsUrl, setEditIcsUrl] = useState('')
+  const [editArt, setEditArt] = useState<CalendarSourceArt>('sitzung')
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -291,6 +314,7 @@ export default function Settings() {
     setEditName(s.name)
     setEditEbene(s.ebene)
     setEditIcsUrl(s.ics_url)
+    setEditArt(s.art)
     setEditError(null)
   }
 
@@ -306,7 +330,7 @@ export default function Settings() {
     setEditError(null)
     const { error } = await supabase
       .from('calendar_sources')
-      .update({ name: editName, ebene: editEbene, ics_url: editIcsUrl })
+      .update({ name: editName, ebene: editEbene, ics_url: editIcsUrl, art: editArt })
       .eq('id', editingId)
     if (error) {
       setEditError(error.message)
@@ -333,6 +357,21 @@ export default function Settings() {
       await supabase.from('user_gremien').insert({ user_id: userId, gremium })
       setMeineGremien((prev) => [...prev, gremium])
     }
+  }
+
+  async function selectAllGremien() {
+    if (!userId) return
+    const alle = Array.from(new Set(gremien.map((g) => g.gremium)))
+    const fehlend = alle.filter((g) => !meineGremien.includes(g))
+    if (fehlend.length === 0) return
+    await supabase.from('user_gremien').insert(fehlend.map((gremium) => ({ user_id: userId, gremium })))
+    setMeineGremien((prev) => [...prev, ...fehlend])
+  }
+
+  async function deselectAllGremien() {
+    if (!userId) return
+    await supabase.from('user_gremien').delete().eq('user_id', userId)
+    setMeineGremien([])
   }
 
   // Anders als Partei (admin-verwaltet, siehe UserManagement) trägt jeder
@@ -380,13 +419,14 @@ export default function Settings() {
     setError(null)
     const { error } = await supabase
       .from('calendar_sources')
-      .insert({ name, ebene, ics_url: icsUrl, verwaltet_von: userId })
+      .insert({ name, ebene, ics_url: icsUrl, art, verwaltet_von: userId })
     if (error) {
       setError(error.message)
     } else {
       setName('')
       setEbene('kommune')
       setIcsUrl('')
+      setArt('sitzung')
       await loadSources()
     }
     setSaving(false)
@@ -713,6 +753,17 @@ export default function Settings() {
                       </option>
                     ))}
                   </select>
+                  <select
+                    value={editArt}
+                    onChange={(e) => setEditArt(e.target.value as CalendarSourceArt)}
+                    className="mc-input w-full"
+                  >
+                    {ARTEN.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="url"
                     value={editIcsUrl}
@@ -748,6 +799,11 @@ export default function Settings() {
                   <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${farbe.chip}`}>
                     {EBENE_LABEL[s.ebene] ?? s.ebene}
                   </span>
+                  {s.art === 'termin' && (
+                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      Terminkalender
+                    </span>
+                  )}
                 </span>
                 <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500">
                   Abonniert
@@ -830,6 +886,16 @@ export default function Settings() {
         Häkchen bei den Gremien, in denen du ein Mandat hast. Das Dashboard zeigt dann nur noch
         Sitzungstermine dieser Gremien an.
       </p>
+      {gremien.length > 0 && (
+        <div className="mb-3 flex gap-2 max-w-md">
+          <button type="button" onClick={selectAllGremien} className="mc-btn-ghost !text-xs">
+            Alle auswählen
+          </button>
+          <button type="button" onClick={deselectAllGremien} className="mc-btn-ghost !text-xs">
+            Alle abwählen
+          </button>
+        </div>
+      )}
       {/* Gruppiert nach Kalenderquelle: Gruppen-Header mit Farbpunkt der
           Quelle + Ebene-Badge, damit die Zuordnung Kommune/Kreis/Land/Bund
           direkt sichtbar ist. Gremien ohne zuordenbare Quelle landen in
@@ -931,6 +997,24 @@ export default function Settings() {
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm text-slate-600 mb-1" htmlFor="source-art">
+            Art der Quelle
+          </label>
+          <select
+            id="source-art"
+            value={art}
+            onChange={(e) => setArt(e.target.value as CalendarSourceArt)}
+            className="mc-input w-full"
+          >
+            {ARTEN.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-400">{ARTEN.find((o) => o.value === art)?.hint}</p>
         </div>
         <div>
           <label className="block text-sm text-slate-600 mb-1" htmlFor="source-ics-url">

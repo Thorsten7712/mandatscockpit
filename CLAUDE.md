@@ -22,6 +22,9 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
 - **Kalender:** kombiniert automatisch importierte Sitzungstermine (aus frei konfigurierbaren ICS-Feeds,
   Tabelle `calendar_sources`) mit frei eingetragenen persönlichen Terminen. Termine können auch vom
   Fraktionsbüro für Mitglieder der eigenen Fraktion angelegt werden (Tabelle `events`, Spalte `herkunft`).
+  Jede Quelle hat eine `art`: `sitzung` (Gremien-gefiltert via `user_gremien`) oder `termin` (reiner
+  Terminkalender, alle Einträge ungefiltert). Import-Horizont: `MIN_IMPORT_DATUM = 2025-11-11`
+  (ältere Feed-Einträge werden nicht importiert, ältere DB-Bestände bleiben unangetastet erhalten).
 - **ToDo-Board:** Kanban-Stil mit frei definierbaren Spalten (`todo_columns`) statt fester Status,
   Drag & Drop via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu

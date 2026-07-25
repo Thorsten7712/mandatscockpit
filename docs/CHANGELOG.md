@@ -953,3 +953,45 @@ gefragt.
     "Stadtrat Iserlohn" nachgezogen, damit es nicht zusätzlich manuell in der UI nachgepflegt werden
     muss.
   - Verifiziert per `tsc -b`/`vite build`, Migration gegen die Live-DB gepusht.
+
+- **Kalenderquellen-Art (Sitzungs-/Gremienkalender vs. Terminkalender) + Import-Horizont**
+  (seit 2026-07-25, `0030_calendar_sources_art.sql`): Nutzerwunsch, zwei grundsätzlich verschiedene
+  Kalendertypen zu unterscheiden. „Sitzungs-/Gremienkalender" (z. B. Stadtrat Iserlohn) funktionieren
+  wie bisher: Sitzungen werden nach Gremium gefiltert, das Mitglied wählt in „Meine Gremien" gezielt
+  aus. „Terminkalender" sind reine Terminlisten ohne Gremien-Konzept - **alle** Einträge sollen
+  ungefiltert übernommen werden, ohne den Gremien-Auswahl-Schritt.
+  - Neue Spalte `calendar_sources.art` (`'sitzung' | 'termin'`, Default `'sitzung'` - alle
+    bestehenden Quellen sind Gremienkalender). Auswahl beim Anlegen/Bearbeiten einer Quelle in
+    `Settings.tsx` (Kalenderquellen-Formulare), Badge „Terminkalender" in der Quellenliste, wenn
+    `art = 'termin'`.
+  - **Import-Skripte** (`scripts/import-ics.mjs`, `supabase/functions/import-ics-source/index.ts`):
+    bei `art = 'termin'` wird bewusst **kein** `gremium` gesetzt (`extractGremium()` wird
+    übersprungen) - sonst würde die heuristische SUMMARY-Auswertung Datenmüll in die
+    „Meine Gremien"-Liste streuen, obwohl diese Quelle ohnehin ungefiltert übernommen wird. Dadurch
+    reicht "gremium is null" bereits aus, um Terminkalender-Einträge aus der Gremien-Auswahl
+    herauszuhalten, ohne zusätzliche Filterlogik in `Settings.tsx`.
+  - **Anzeige-Logik** (`CalendarView.tsx` Dashboard "Nächste Termine", `Archiv.tsx` "Vergangene
+    Sitzungen"): bisher ein einzelnes `.in('gremium', meineGremien)`. Jetzt zwei getrennte Abfragen
+    (gremienweise gefiltert + `source_id in (Terminkalender-Quellen)`), client-seitig über eine
+    `Map` nach `id` gemerged - bewusst **kein** roher `.or('gremium.in.(...),source_id.in.(...)')`-
+    String, weil Gremiennamen im echten Feed bereits Sonderzeichen wie „/" enthalten
+    („Verwaltungsrat Märkischer Stadtbetrieb Iserlohn/Hemer") und ein handgebauter PostgREST-
+    Filter-String bei Kommas/Klammern in Freitext-Gremiennamen brechen könnte.
+  - **"Sitzung nachtragen"/Bearbeiten-Formular** (`Archiv.tsx`, `TerminDetailPanel.tsx`): die
+    Kalenderquellen-Auswahl aus der letzten Nachbesserung zeigt jetzt nur noch Quellen mit
+    `art = 'sitzung'` - manuell erfasste Sitzungen sollen sich laut Nutzerwunsch ausschließlich in
+    Sitzungskalender einreihen lassen, nicht in Terminkalender.
+  - **Retroactiver Import-Horizont**: `MIN_IMPORT_DATUM = 2025-11-11` in beiden Import-Skripten -
+    Feed-Einträge davor werden nicht (mehr) importiert. Fallstrick dabei vermieden: die
+    Absage-Erkennung (`existingByUid`, vergleicht DB-Bestand gegen den aktuellen Feed) lädt jetzt
+    ebenfalls nur Sessions ab diesem Datum - sonst hätte jede bereits importierte, ältere Sitzung
+    beim nächsten Lauf fälschlich als "aus dem Feed verschwunden" gegolten und wäre automatisch auf
+    `status = 'abgesagt'` gesetzt worden, obwohl sie laut Nutzerwunsch unverändert im Archiv bleiben
+    soll ("Alte Termine sollen im Archiv erhalten bleiben"). Kein aktiver Backfill nötig: der
+    Import holt ohnehin den kompletten Feed-Inhalt (nie datumsgefiltert vor dieser Änderung) - was
+    ab 11.11.2025 im Feed steht, kommt beim nächsten Lauf automatisch rein.
+  - "Alle auswählen"/"Alle abwählen" für "Meine Gremien" (`Settings.tsx`) ergänzt (Nutzerwunsch:
+    "auch mit Option 'Alle wählen'") - Bulk-Insert bzw. -Delete auf `user_gremien`.
+  - Verifiziert per `tsc -b`/`vite build`/`deno check` (beide Edge Functions), Migration gegen die
+    Live-DB gepusht und per SQL-Query bestätigt (alle 5 bestehenden Quellen defaulten korrekt auf
+    `art = 'sitzung'`).

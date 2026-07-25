@@ -55,32 +55,44 @@ export function CalendarView() {
     setNotizenIds(ids)
   }
 
+  // Sitzungen aus "sitzung"-Quellen (gremienweise gefiltert) und aus
+  // "termin"-Quellen (reiner Terminkalender, ungefiltert) getrennt laden und
+  // mergen - zwei .in()-Abfragen statt eines rohen .or()-Strings, damit
+  // Gremiennamen mit Kommas/Klammern nicht das PostgREST-Filter-Format
+  // brechen (siehe CLAUDE.md).
+  async function loadSessions(gremien: string[], terminSourceIds: string[]) {
+    const [byGremium, byTerminSource] = await Promise.all([
+      gremien.length > 0
+        ? supabase.from('sessions').select('*').in('gremium', gremien).gte('datum', startOfTodayIso())
+        : Promise.resolve({ data: [] as SessionRow[] }),
+      terminSourceIds.length > 0
+        ? supabase.from('sessions').select('*').in('source_id', terminSourceIds).gte('datum', startOfTodayIso())
+        : Promise.resolve({ data: [] as SessionRow[] }),
+    ])
+    const byId = new Map<string, SessionRow>()
+    ;[...(byGremium.data ?? []), ...(byTerminSource.data ?? [])].forEach((s) => byId.set(s.id, s))
+    setSessions(Array.from(byId.values()).sort((a, b) => a.datum.localeCompare(b.datum)))
+  }
+
   useEffect(() => {
     loadEvents()
     loadNotizenFlags()
-    // Quellen für Farbe + Ebene-Badge der Sitzungen in der Terminliste
-    supabase
-      .from('calendar_sources')
-      .select('*')
-      .then(({ data }) => setSources(data ?? []))
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return
-      setUserId(data.user.id)
-      const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
+    async function init() {
+      // Quellen zuerst laden - wird für Farbe/Ebene-Badge UND für die
+      // "termin"-Quellen-Ids der Sitzungsabfrage gebraucht.
+      const { data: sourceRows } = await supabase.from('calendar_sources').select('*')
+      setSources(sourceRows ?? [])
+      const terminSourceIds = (sourceRows ?? []).filter((s) => s.art === 'termin').map((s) => s.id)
+
+      const { data: authData } = await supabase.auth.getUser()
+      if (!authData.user) return
+      setUserId(authData.user.id)
+      const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', authData.user.id)
       const gremien = (mine ?? []).map((g) => g.gremium)
       setMeineGremien(gremien)
-      if (gremien.length === 0) {
-        setSessions([])
-        return
-      }
-      const { data: sessionRows } = await supabase
-        .from('sessions')
-        .select('*')
-        .in('gremium', gremien)
-        .gte('datum', startOfTodayIso())
-        .order('datum')
-      setSessions(sessionRows ?? [])
-    })
+      await loadSessions(gremien, terminSourceIds)
+    }
+    init()
   }, [])
 
   async function handleAddEvent(e: FormEvent) {

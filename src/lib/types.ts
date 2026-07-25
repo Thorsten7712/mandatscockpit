@@ -9,6 +9,8 @@ export type EventStatus = 'geplant' | 'abgesagt'
 export type Sichtbarkeit = 'privat' | 'geteilt'
 export type AntragStatus = 'entwurf' | 'gestellt' | 'in_beratung' | 'vertagt' | 'abgestimmt' | 'zurueckgezogen'
 export type AntragErgebnis = 'positiv' | 'negativ'
+/** 'sitzung' = Sitzungs-/Gremienkalender (gremienweise Auswahl via user_gremien), 'termin' = reiner Terminkalender (alle Einträge werden ungefiltert übernommen) */
+export type CalendarSourceArt = 'sitzung' | 'termin'
 
 export interface Profile {
   id: string
@@ -36,6 +38,7 @@ export interface CalendarSource {
   verwaltet_von: string | null
   /** Token-Id aus src/lib/sourceColors.ts, null = Theme-Primärfarbe */
   farbe: string | null
+  art: CalendarSourceArt
 }
 
 export interface UserSourceSubscription {

@@ -32,6 +32,14 @@ function normalizeIcsUrl(url) {
   return url
 }
 
+// Nutzerentscheidung: der Kalender-Horizont beginnt am 11.11.2025 - ältere
+// Feed-Einträge werden nicht importiert. Wichtig: bereits vorher importierte
+// Sitzungen VOR diesem Datum bleiben unangetastet im Archiv erhalten - die
+// Absage-Erkennung unten lädt "existing" deshalb ebenfalls nur ab diesem
+// Datum, sonst würden alte Sitzungen fälschlich als "aus dem Feed
+// verschwunden" markiert, nur weil sie unterhalb des Horizonts liegen.
+const MIN_IMPORT_DATUM = new Date('2025-11-11T00:00:00Z')
+
 // node-ical liefert ICS-Properties mit Parametern (z. B. "SUMMARY;LANGUAGE=de:...",
 // wie im echten ALLRIS-Feed von Iserlohn) als { params, val } statt als String.
 // Diese Funktion normalisiert beide Formen zu einem String.
@@ -92,18 +100,27 @@ async function importSource(source) {
       .select('ics_uid, status')
       .eq('source_id', source.id)
       .not('ics_uid', 'is', null)
+      .gte('datum', MIN_IMPORT_DATUM.toISOString())
     const existingByUid = new Map((existing ?? []).map((row) => [row.ics_uid, row.status]))
 
     const parsed = await ical.async.fromURL(normalizeIcsUrl(source.ics_url))
-    const entries = Object.values(parsed).filter((entry) => entry.type === 'VEVENT' && entry.uid && entry.start)
+    const entries = Object.values(parsed).filter(
+      (entry) => entry.type === 'VEVENT' && entry.uid && entry.start && new Date(entry.start) >= MIN_IMPORT_DATUM,
+    )
 
+    // "termin"-Quellen (reiner Terminkalender ohne Gremien-Konzept) tragen
+    // bewusst kein gremium - sonst würde die heuristische SUMMARY-Auswertung
+    // (extractGremium) dort Datenmüll in die "Meine Gremien"-Auswahlliste
+    // streuen, obwohl diese Quelle ohnehin ungefiltert übernommen wird
+    // (siehe CalendarView.tsx/Archiv.tsx: "termin"-Quellen umgehen die
+    // Gremien-Auswahl komplett).
     const rows = entries.map((entry) => {
       const summary = toText(entry.summary)
       return {
         source_id: source.id,
         ics_uid: entry.uid,
         titel: summary || 'Ohne Titel',
-        gremium: summary ? extractGremium(summary) : null,
+        gremium: source.art === 'termin' ? null : summary ? extractGremium(summary) : null,
         ebene: source.ebene,
         datum: new Date(entry.start).toISOString(),
         ort: toText(entry.location) || null,

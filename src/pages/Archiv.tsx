@@ -76,7 +76,15 @@ export default function Archiv() {
     }
   }
 
-  async function loadSessions() {
+  // Sitzungen aus "sitzung"-Quellen (gremienweise gefiltert) und aus
+  // "termin"-Quellen (reiner Terminkalender, ungefiltert) getrennt laden und
+  // mergen - zwei .in()-Abfragen statt eines rohen .or()-Strings, damit
+  // Gremiennamen mit Kommas/Klammern nicht das PostgREST-Filter-Format
+  // brechen (siehe CLAUDE.md). currentSources wird explizit übergeben statt
+  // aus dem sources-State gelesen, da loadSessions() beim initialen Laden
+  // vor dem sources-State-Update aufgerufen wird (React-State ist erst nach
+  // dem Re-Render aktuell).
+  async function loadSessions(currentSources: CalendarSource[]) {
     const { data: mine } = await supabase.auth.getUser()
     if (!mine.user) return
     setUserId(mine.user.id)
@@ -86,17 +94,19 @@ export default function Archiv() {
       .eq('user_id', mine.user.id)
     const gremien = (gremienRows ?? []).map((g) => g.gremium)
     setMeineGremien(gremien)
-    if (gremien.length === 0) {
-      setSessions([])
-      return
-    }
-    const { data } = await supabase
-      .from('sessions')
-      .select('*')
-      .in('gremium', gremien)
-      .lt('datum', startOfTodayIso())
-      .order('datum', { ascending: false })
-    setSessions(data ?? [])
+    const terminSourceIds = currentSources.filter((s) => s.art === 'termin').map((s) => s.id)
+
+    const [byGremium, byTerminSource] = await Promise.all([
+      gremien.length > 0
+        ? supabase.from('sessions').select('*').in('gremium', gremien).lt('datum', startOfTodayIso())
+        : Promise.resolve({ data: [] as SessionRow[] }),
+      terminSourceIds.length > 0
+        ? supabase.from('sessions').select('*').in('source_id', terminSourceIds).lt('datum', startOfTodayIso())
+        : Promise.resolve({ data: [] as SessionRow[] }),
+    ])
+    const byId = new Map<string, SessionRow>()
+    ;[...(byGremium.data ?? []), ...(byTerminSource.data ?? [])].forEach((s) => byId.set(s.id, s))
+    setSessions(Array.from(byId.values()).sort((a, b) => b.datum.localeCompare(a.datum)))
   }
 
   // Manuell nachgetragene Sitzung (supabase/migrations/0028, source_id-Wahl
@@ -142,7 +152,7 @@ export default function Archiv() {
     setNewSourceId('')
     setShowNewSession(false)
     setNewSaving(false)
-    await loadSessions()
+    await loadSessions(sources)
     setSelectedSession(data.id)
   }
 
@@ -208,7 +218,6 @@ export default function Archiv() {
   }
 
   useEffect(() => {
-    loadSessions()
     loadNotizenFlags()
     loadCompletedTodos()
     loadDocuments()
@@ -216,7 +225,11 @@ export default function Archiv() {
     supabase
       .from('calendar_sources')
       .select('*')
-      .then(({ data }) => setSources(data ?? []))
+      .then(({ data }) => {
+        const rows = data ?? []
+        setSources(rows)
+        loadSessions(rows)
+      })
   }, [])
 
   const sourceById = new Map(sources.map((s) => [s.id, s]))
@@ -303,11 +316,13 @@ export default function Archiv() {
                     className="mc-input w-full"
                   >
                     <option value="">Keine – eigenständige Sitzung</option>
-                    {sources.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
+                    {sources
+                      .filter((s) => s.art === 'sitzung')
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div className="flex gap-2">

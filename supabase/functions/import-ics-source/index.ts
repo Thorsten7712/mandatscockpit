@@ -39,6 +39,12 @@ function normalizeIcsUrl(url: string): string {
   return url
 }
 
+// Nutzerentscheidung: der Kalender-Horizont beginnt am 11.11.2025 - ältere
+// Feed-Einträge werden nicht importiert, bereits vorher importierte
+// Sitzungen VOR diesem Datum bleiben unangetastet im Archiv erhalten.
+// WICHTIG: identischer Wert in scripts/import-ics.mjs nachziehen.
+const MIN_IMPORT_DATUM = new Date('2025-11-11T00:00:00Z')
+
 // node-ical liefert ICS-Properties mit Parametern (z. B. "SUMMARY;LANGUAGE=de:...",
 // wie im echten ALLRIS-Feed von Iserlohn) als { params, val } statt als String.
 function toText(value: unknown): string {
@@ -138,6 +144,7 @@ Deno.serve(async (req) => {
     .select('ics_uid, status')
     .eq('source_id', source.id)
     .not('ics_uid', 'is', null)
+    .gte('datum', MIN_IMPORT_DATUM.toISOString())
   const existingByUid = new Map<string, string>((existingRows ?? []).map((r) => [r.ics_uid as string, r.status as string]))
 
   let parsed: Record<string, unknown>
@@ -149,16 +156,17 @@ Deno.serve(async (req) => {
 
   const entries = (Object.values(parsed) as IcalEntry[]).filter(
     (entry): entry is IcalEntry & { uid: string; start: Date } =>
-      entry.type === 'VEVENT' && Boolean(entry.uid) && Boolean(entry.start),
+      entry.type === 'VEVENT' && Boolean(entry.uid) && Boolean(entry.start) && new Date(entry.start!) >= MIN_IMPORT_DATUM,
   )
 
+  // "termin"-Quellen tragen bewusst kein gremium, siehe scripts/import-ics.mjs.
   const rows = entries.map((entry) => {
     const summary = toText(entry.summary)
     return {
       source_id: source.id,
       ics_uid: entry.uid,
       titel: summary || 'Ohne Titel',
-      gremium: summary ? extractGremium(summary) : null,
+      gremium: source.art === 'termin' ? null : summary ? extractGremium(summary) : null,
       ebene: source.ebene,
       datum: new Date(entry.start).toISOString(),
       ort: toText(entry.location) || null,

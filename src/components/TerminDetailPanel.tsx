@@ -350,11 +350,13 @@ export function TerminDetailPanel({
                     className="mc-input w-full"
                   >
                     <option value="">Keine Kalenderquelle – eigenständige Sitzung</option>
-                    {sources.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
+                    {sources
+                      .filter((s) => s.art === 'sitzung')
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
                   </select>
                   <div className="flex gap-2">
                     <input
