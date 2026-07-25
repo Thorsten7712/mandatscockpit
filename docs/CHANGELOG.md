@@ -1,0 +1,886 @@
+# Entwicklungshistorie
+
+Chronologisches Protokoll aller Features, Bugfixes und Entscheidungen im MandatsCockpit-Projekt,
+jeweils inklusive Begründung (Nutzerwunsch, Bug-Root-Cause, Nachbesserungen). Diese Datei ist das
+Gedächtnis des Projekts für **warum** etwas so gebaut wurde, wie es gebaut wurde – bei Unsicherheit
+über eine bestehende Design-Entscheidung hier nachschlagen, bevor sie geändert wird.
+
+Der aktuelle, knapp gehaltene Architektur-/Feature-Überblick sowie die daraus destillierten
+technischen Fallstricke und Konventionen stehen in [`CLAUDE.md`](../CLAUDE.md) – diese Datei muss
+für die tägliche Arbeit **nicht** gelesen werden, außer die Historie zu einem konkreten Punkt ist
+gefragt.
+
+- Login (Supabase Auth, E-Mail/Passwort) mit Redirect-Schutz (`ProtectedRoute`)
+- Dashboard-Seite mit einfacher Kalenderansicht (`CalendarView`) und ToDo-Board (`TodoBoard`)
+- Settings-Seite zum An-/Abmelden von Kalenderquellen sowie zum Anlegen/Löschen eigener Quellen
+  (`Settings`) – nutzt die bereits bestehenden `calendar_sources_insert_own`/`_delete_own`-Policies.
+  Jede Quellenzeile hat einen eigenen „Aktualisieren"-Link, der per Supabase Edge Function
+  (`supabase/functions/import-ics-source`) **nur diese eine Quelle** live neu importiert (siehe unten),
+  und danach die Gremien-Liste neu lädt sowie prüft, ob angehakte `user_gremien`-Einträge noch in den
+  aktuell importierten Sessions vorkommen – falls nicht, Warnhinweis (Häkchen bleibt trotzdem bestehen,
+  für den Fall dass das Gremium später wieder importiert wird).
+- Vollständiges DB-Schema inkl. RLS-Policies (`supabase/migrations/0001_init.sql`,
+  `0002_sessions_ics_uid.sql`, `0003_sessions_ics_uid_constraint.sql`,
+  `0004_sessions_source_cascade.sql`, `0005_user_gremien.sql`, `0006_calendar_sources_admin.sql`,
+  `0007_fix_profiles_rls_recursion.sql`)
+- **Wichtig für neue Policies:** Eine Policy auf `profiles`, die in ihrer eigenen USING-Klausel wieder
+  `profiles` abfragt (z. B. `fraktion = (select fraktion from profiles where id = auth.uid())`), verursacht
+  "infinite recursion detected in policy" (Postgres 42P17) – siehe `0007_fix_profiles_rls_recursion.sql`
+  für den Fix per SECURITY DEFINER-Funktion (`current_user_fraktion()`). Gleiche Vorsicht gilt für jede
+  neue Policy, die profiles per Subquery abfragt (z. B. Rollen-Checks wie in
+  `0006_calendar_sources_admin.sql`) – funktioniert nur, weil `0007` die profiles-Policy selbst
+  entschärft hat.
+- Settings-Seite hat außerdem einen „Meine Gremien"-Bereich: Checkliste aller distinct
+  `sessions.gremium`-Werte, Auswahl landet in `user_gremien` (user_id, gremium). Der Dashboard-Kalender
+  (`CalendarView`) zeigt dadurch nur noch **zukünftige** Sitzungen (`datum >= now()`) der angehakten
+  Gremien an – bei keiner Auswahl leer, mit Hinweis auf die Settings-Seite. „Eigene Termine" ist ebenso
+  auf `start >= now()` gefiltert.
+- Kalenderquellen können jetzt auch bearbeitet werden (Name/Ebene/ICS-URL, Inline-Formular in
+  `Settings`), nicht nur angelegt/gelöscht. Nutzer mit `profiles.rolle = 'admin'` dürfen zusätzlich zu
+  eigenen auch gemeinsam verwaltete Quellen (`verwaltet_von = null`, z. B. die vorkonfigurierte
+  „Stadtrat Iserlohn") sowie fremde bearbeiten/löschen (`0006_calendar_sources_admin.sql`) – vorher war
+  das für niemanden möglich, da `verwaltet_von = auth.uid()` bei `null` nie zutrifft. Um sich selbst zum
+  Admin zu machen: `update public.profiles set rolle = 'admin' where id = auth.uid();` im SQL Editor.
+- GitHub-Actions-Workflows: Deploy nach GitHub Pages, Supabase-Keep-Alive gegen das Auto-Pausieren im
+  Free-Tier, **ICS-Import-Job** (`import-ics.yml`, täglich 04:00 UTC + manuell auslösbar) – lädt alle
+  `calendar_sources`-Feeds via `node-ical` und upsertet sie in `sessions`
+  (Skript: `scripts/import-ics.mjs`, Details in README.md Abschnitt 7). Läuft mit dem
+  `SUPABASE_SERVICE_ROLE_KEY`-Secret, da `sessions` keine Insert/Update-Policy für normale Nutzer hat.
+  Läuft auf Node 22 (nicht 20) – supabase-js initialisiert intern einen Realtime-Client, der unter
+  Node 20 ohne natives WebSocket sofort crasht. Die Gremium-Extraktion aus `SUMMARY` ist an einem
+  echten ALLRIS-Feed-Auszug verifiziert (KONZEPT.md Abschnitt 11): `SUMMARY` enthält dort direkt den
+  Gremiumsnamen, keine „X – Sitzung"-Heuristik nötig. Ausnahme: manche SUMMARYs tragen eine
+  **Anmerkung vor dem Gremiumsnamen** („Verschiebung auf den 12.11.2026 - Aufsichtsrat der
+  Schillerplatz GmbH", „keine relevanten TOP´s - Verwaltungsrat Märkischer Stadtbetrieb
+  Iserlohn/Hemer") – `extractGremium()` trennt solche bekannten Präfixe (Verschiebung/verschoben/
+  keine relevanten TOPs/Absage/entfällt, je gefolgt von `-`) ab, damit daraus keine falschen
+  Gremien-Einträge in der Meine-Gremien-Checkliste entstehen. Der `titel` behält bewusst den vollen
+  SUMMARY-Text (die Anmerkung ist dort nützlich), nur `gremium` wird bereinigt; bereits falsch
+  importierte Zeilen heilt der nächste Import-Lauf über den Upsert per `ics_uid`. Die Präfix-Liste
+  (`ANMERKUNG_MIT_GREMIUM`) ist in `scripts/import-ics.mjs` **und**
+  `supabase/functions/import-ics-source/index.ts` identisch gepflegt (Logik bewusst dupliziert).
+  node-ical liefert Properties mit ICS-Parametern
+  (z. B. `SUMMARY;LANGUAGE=de:...`) als `{params, val}`-Objekt statt String – wird über `toText()`
+  normalisiert.
+- **Supabase Edge Function** (`supabase/functions/import-ics-source/index.ts`, Deno) für den
+  Einzel-Quellen-Reimport aus den Settings (siehe oben). Dupliziert die ICS-Parsing-Logik aus
+  `scripts/import-ics.mjs` bewusst (Deno/Node-Kompatibilität, kein gemeinsames Build-Tooling). Braucht
+  KEIN manuelles Service-Role-Key-Secret – Supabase injiziert `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`
+  automatisch in jede Edge Function. Deploy läuft über einen eigenen Workflow
+  (`.github/workflows/deploy-edge-functions.yml`, nur bei Änderungen unter `supabase/functions/**`) via
+  `supabase/setup-cli`, braucht dafür `SUPABASE_ACCESS_TOKEN` (Personal Access Token, nicht der
+  Projekt-API-Key!) und `SUPABASE_PROJECT_REF` als Repository Secrets (siehe README.md Abschnitt 3,
+  Schritt 6). Lokal mit `deno check --config supabase/functions/import-ics-source/deno.json
+  supabase/functions/import-ics-source/index.ts` typprüfbar (Deno separat installieren, ist nicht Teil
+  von `npm install`) – das eigene `deno.json` im Funktionsordner ist nötig, weil der Node-`package.json`
+  im Repo-Root sonst Deno's Modul-Resolution durcheinanderbringt (`nodeModulesDir: "none"`).
+- **Eigene Termine** lassen sich in `CalendarView` anlegen (Formular: Titel, Start, optional Ende,
+  optional Ort). Nutzt die bereits bestehenden RLS-Policies `events_insert_own_or_fraktionsbuero`/
+  `_update_own`/`_delete_own` – keine neue Migration für die Rechte nötig, nur `events.ort` kam per
+  `0008_events_ort.sql` neu dazu (`sessions.ort` gab's schon). Neue Termine werden mit
+  `herkunft = 'privat'` (Tabellen-Default) angelegt; vom Fraktionsbüro angelegte Termine
+  (`herkunft = 'fraktionsbuero'`) sind laut KONZEPT.md Abschnitt 5.3 vom Mitglied genauso bearbeitbar,
+  RLS unterscheidet hier nicht nach `herkunft`, nur nach `user_id = auth.uid()`.
+- **„Nächste Termine"**: aggregierte, chronologisch sortierte Ansicht ganz oben in `CalendarView`, die
+  `events` und `sessions` client-seitig zusammenführt (Titel, Start als Datum+Uhrzeit, Ort) und per
+  ISO-8601-String-Vergleich sortiert (`a.start.localeCompare(b.start)`, funktioniert weil beide Felder
+  bereits als ISO-Timestamp vorliegen). Ergänzt, nicht ersetzt die beiden Detail-Sektionen darunter
+  („Eigene Termine", „Sitzungstermine").
+- **Termindetails** leben als wiederverwendbare Präsentationskomponente in
+  `src/components/TerminDetailPanel.tsx` (Props: `kind: 'event'|'session'`, `id`, optional
+  `onDeleted`). Zeigt Titel/Start/Ende/Ort/Gremium je nach Typ; bei `kind=event` zusätzlich
+  Bearbeiten/Absagen/Löschen (Inline-Formular). Darunter „Verknüpfte Aufgaben" (liest `todos` gefiltert
+  nach `event_id`/`session_id` je nach `kind`, Klick öffnet dieselbe `TodoDetailModal` wie das ToDo-Board
+  – das Panel hält dafür ein eigenes `openTodoId`-State, unabhängig vom Board) und „Notizen & Dokumente":
+  nutzt die `summaries`-Tabelle (mit `event_id`-Spalte, `0009_summaries_termine.sql`) für Freitext-Notizen
+  und Datei-Uploads. Dateien landen im privaten Storage-Bucket `zusammenfassungen` unter
+  `<user_id>/<dateiname>` (RLS-Policies auf `storage.objects` scopen Zugriff auf den Uploader, per
+  `(storage.foldername(name))[1] = auth.uid()::text`). Downloads laufen über `createSignedUrl()`
+  (60s gültig), da das Bucket nicht public ist. Zwei Verwendungen:
+  - **Inline/Split-View** in `CalendarView.tsx`: Klick auf einen Eintrag in „Nächste Termine" setzt
+    `selected` und rendert das Panel in einer zweiten Spalte rechts daneben (kein Navigieren weg vom
+    Dashboard), mit einem eigenen „Schließen"-Button oberhalb des Panels, der `selected` wieder auf
+    `null` setzt. Einträge mit mindestens einer verknüpften `summaries`-Zeile (Notiz oder Dokument)
+    bekommen ein 📎-Icon vor dem Titel – dafür lädt `CalendarView` einmalig alle `event_id`/`session_id`
+    aus `summaries` in ein `notizenIds`-Set (`loadNotizenFlags()`, erneut aufgerufen beim Schließen/
+    Löschen der Split-View, damit neu hinzugefügte Notizen sich zeitnah im Icon niederschlagen).
+  - **Standalone-Seite** `src/pages/TerminDetail.tsx` (Route `/termin/:kind/:id`) als dünner Wrapper
+    um dasselbe Panel – bleibt erhalten, weil `TodoDetailModal` (siehe unten) von dort aus auf
+    verknüpfte Termine/Sitzungen verlinkt und dafür ein eigenständiges Ziel außerhalb des Modals
+    braucht.
+- **„Abgesagt" statt Löschen** (`0010_abgesagt_status.sql`): `sessions.status` hat jetzt zusätzlich
+  `'abgesagt'`, `events` hat ein neues `status`-Feld (`'geplant'`/`'abgesagt'`, Default `'geplant'`).
+  Grund: `summaries.event_id` hat `on delete cascade` – ein hart gelöschter Termin würde seine Notizen
+  mitreißen, ein abgesagter nicht. `TerminDetail.tsx` hat für `kind=event` einen „Absagen"/„Reaktivieren"-
+  Toggle zusätzlich zu „Löschen" (Absagen bleibt die empfohlene, nicht-destruktive Aktion). Sessions
+  können nicht manuell abgesagt werden, nur der Import-Job setzt/entfernt diesen Status:
+  - `scripts/import-ics.mjs` und `supabase/functions/import-ics-source/index.ts` laden vor dem Upsert
+    die bestehenden `(ics_uid, status)`-Paare der Quelle, um danach zu erkennen, welche UIDs aus dem
+    Feed verschwunden sind (= abgesagt) und welche zuvor abgesagten UIDs wieder normal auftauchen
+    (= reaktiviert). `STATUS:CANCELLED` im Feed wird zusätzlich ausgewertet, verifiziert an einer
+    synthetischen Test-ICS (der reale ALLRIS-Feed nutzt `STATUS` gar nicht, entfernt abgesagte Termine
+    offenbar einfach aus dem Feed – „UID verschwunden" ist daher der wichtigere Erkennungsweg).
+  - Diese Cancel/Uncancel-Updates laufen bewusst **getrennt** vom Haupt-Upsert (der `status` weiterhin
+    nicht mitschickt, um einen manuell gesetzten `'aktiv'`-Status nicht zu überschreiben) – sonst hätte
+    jede Zeile im Upsert-Array einen anderen Status gebraucht, was ein einzelner Bulk-Upsert nicht sauber
+    abbilden kann.
+  - `CalendarView.tsx` zeigt abgesagte Termine/Sitzungen weiterhin an (durchgestrichen, abgedunkelt,
+    „· abgesagt"-Tag), blendet sie nicht aus – sonst wäre die Termindetailsicht mit den Notizen nicht
+    mehr erreichbar.
+- **ToDo-Board vollständig ausgebaut** (`0011_todo_board_ausbau.sql`, `0012_todo_board_settings.sql`):
+  Spalten sind per UI anlegbar/umbenennbar (Klick auf Titel)/löschbar (mit Warnhinweis, da `column_id`
+  `on delete cascade` hat, also Karten mitreißt)/verschiebbar (◀/▶-Buttons, tauschen `reihenfolge` mit
+  dem Nachbarn – bewusst kein Drag-and-Drop für Spalten, um nicht zwei verschiedene
+  dnd-kit-Draggable-Typen in einem DndContext mischen zu müssen). Diese Verwaltung sitzt bewusst **nicht**
+  in `TodoBoard.tsx` selbst, sondern in einem neuen „ToDo-Board"-Abschnitt in `Settings.tsx` (gemeinsam
+  mit den Checkboxen für Karten-Detail-Sichtbarkeit, `todo_board_settings`-Tabelle,
+  `zeige_termin`/`zeige_zustaendig`) – das Board zeigt nur noch Spalten+Karten+Drag&Drop+Schnell-
+  Erfassung, keine Struktur-Konfiguration mehr. Jeder Nutzer bekommt beim Signup automatisch vier
+  Standard-Spalten (`handle_new_user()`-Trigger erweitert), bestehende Nutzer wurden per Migration
+  nachgerüstet (nur falls sie noch keine eigenen Spalten hatten).
+  - Karten: Schnellerfassung (nur Titel) direkt im Board, volle Bearbeitung als **Overlay/Modal**
+    (`src/components/TodoDetailModal.tsx`, Props: `id`, `onClose`, `onChanged`) – öffnet sich bei Klick
+    auf eine Karte (kein Navigieren weg vom Dashboard mehr; die frühere Standalone-Seite
+    `src/pages/TodoDetail.tsx` unter `/todo/:id` wurde entfernt, es gibt keine Route mehr dafür). Anders
+    als bei `TerminDetailPanel` gibt es hier **keinen** Lese-/Bearbeiten-Umschalter mehr – das Modal zeigt
+    beim Öffnen direkt das editierbare Formular (Titel, Beschreibung, Zuständigkeit als Inputs), kein
+    zusätzlicher „Bearbeiten"-Klick nötig. Inhalt: Titel, Beschreibung, Zuständigkeit (`zustaendig`,
+    aktuell **Freitext**, bewusst noch keine echte Nutzer-Zuweisung, siehe unten), Termin-Verknüpfung
+    (Radio: kein/Datum/eigener Termin/Sitzung – exklusiv, beim Speichern werden die jeweils anderen
+    beiden Felder genullt; darunter ein „Aktuell verknüpft"-Link auf `/termin/:kind/:id`, der den
+    **gespeicherten** Link zeigt, unabhängig vom gerade in Bearbeitung befindlichen Radio-Wert – die
+    Standalone-Seite bleibt dafür also bewusst bestehen), Kommentare (Tabelle `todo_comments`) und
+    Dokumenten-Upload (wiederverwendet `summaries` + Storage-Bucket `zusammenfassungen`, mit `todo_id`-
+    Spalte – bewusst nur Datei-Upload, kein Freitext-Feld dort, um nicht mit den Kommentaren zu
+    überlappen). Backdrop-Klick schließt das Modal (`stopPropagation` auf dem inneren Panel); Speichern/
+    Löschen ruft `onChanged` bzw. schließt via `onClose`, statt zu navigieren. `TodoDetailModal` wird an
+    zwei Stellen instanziiert, jeweils mit eigenem `openTodoId`-State: `TodoBoard.tsx` (Kartenklick, lädt
+    nach Änderungen per `onChanged={load}` neu) und `TerminDetailPanel.tsx` (Klick auf eine „Verknüpfte
+    Aufgabe", siehe oben).
+  - Karte springt beim Verknüpfen eines Datums/Termins automatisch von einer Spalte namens „Neu" in
+    eine Spalte namens „Geplant" (Titel-Matching, case-insensitive – greift nicht mehr, falls der Nutzer
+    die Spalten umbenennt; bewusst so vereinfacht, da Spalten frei umbenennbar sind und es keine
+    stabile ID für „die Neu-Spalte" gibt).
+  - RLS/Sichtbarkeit bleibt unverändert „rein privat" (`todos_manage_own`), da Zuständigkeit nur
+    Freitext ist. `todo_comments`-Policy hängt an der Eigentümerschaft der zugehörigen Karte
+    (`exists (select ... from todos where id = todo_id and user_id = auth.uid())`), nicht an einer
+    eigenen Nutzer-Referenz.
+- **Dashboard-Layout umgebaut** (`Dashboard.tsx`): Kein 2-Spalten-Grid mehr. ToDo-Board sitzt jetzt ganz
+  oben, volle Breite. `CalendarView.tsx` wurde radikal eingedampft – zeigt nur noch den
+  „Nächste Termine"-Block (die alten Sektionen „Eigene Termine" und „Sitzungstermine (importiert)"
+  wurden komplett entfernt, die aggregierte Liste deckt beides ab). Liste ist auf
+  `max-h-72 overflow-y-auto` begrenzt (~5 Einträge sichtbar, Rest scrollbar). Termin-Anlegen-Formular
+  ist jetzt hinter einem „+ Termin"-Button versteckt (`showAddForm`-Toggle) statt permanent sichtbar.
+- **Klick-Interaktionen statt Navigation** (Vorgabe: Karten sollen als Overlay/Modal editierbar sein,
+  Termine sollen Details in einer Split-View rechts daneben zeigen, ohne das Dashboard zu verlassen):
+  ToDo-Karten öffnen `TodoDetailModal` als Overlay, „Nächste Termine"-Einträge öffnen
+  `TerminDetailPanel` in einer zweiten Spalte rechts neben der Liste (`CalendarView.tsx` ist dafür
+  `flex gap-6` mit zwei `flex-1 max-w-md`-Spalten; ausgewählter Eintrag bekommt `ring-2` als
+  Selektions-Indikator). Details zu beiden Komponenten siehe „Termindetails" und „ToDo-Board vollständig
+  ausgebaut" oben.
+- **Nutzerprofil** (`0013_profile_foto.sql`): `profiles` hatte bereits `name`, dazu kam `foto_url` (Pfad
+  im neuen privaten Storage-Bucket `profilbilder`, gleiches `<user_id>/<dateiname>`-Muster wie
+  `zusammenfassungen`, RLS-Policies analog). Profil-Sektion ganz oben in `Settings.tsx`: Avatar (Foto oder
+  Initialen-Fallback aus dem ersten Buchstaben des Namens), Datei-Upload mit separatem „Foto hochladen"-
+  Button (kein Auto-Upload bei Dateiauswahl), Name-Feld mit eigenem „Speichern". Bei neuem Foto wird die
+  alte Datei aus dem Bucket gelöscht (`storage.remove()`), damit dort nicht mehrere alte Profilbilder
+  liegen bleiben. `Dashboard.tsx` lädt `name`/`foto_url` schreibgeschützt fürs Header („MandatsCockpit -
+  Name" statt nur „MandatsCockpit", kleiner Avatar links daneben) – eigener, unabhängiger Ladeaufruf statt
+  einer gemeinsamen Hook/Komponente, konsistent mit dem Rest der Codebase (jede Komponente lädt ihre
+  Daten selbst). Signed URLs für Fotos laufen mit 3600s Gültigkeit (länger als die 60s bei
+  Dokument-Downloads), weil das Foto dauerhaft als `<img>` im Header/in den Settings sichtbar ist statt
+  nur einmalig angeklickt zu werden.
+
+- **Partei-Theming** (`0014_profiles_partei.sql`): Das UI lässt sich je nach Partei des Mandatsträgers
+  im Partei-CI darstellen (CDU/SPD/FDP/Grüne/Linke/AfD + neutral). Architektur:
+  - `profiles.partei` (Text, nullable, bewusst **ohne** CHECK-Constraint und bewusst getrennt von
+    `fraktion`, das RLS-Semantik trägt) speichert die Theme-Id. **Nur Admins setzen sie**, beim Anlegen
+    oder Bearbeiten eines Nutzers in der Benutzerverwaltung (`UserManagement.tsx`/`admin-users`-Function)
+    – Mitglieder sehen ihre Partei im Profil-Bereich der Settings nur noch als reinen Anzeigetext
+    („Wird von einem Admin in der Benutzerverwaltung festgelegt."), ohne Möglichkeit sie selbst zu
+    ändern (bewusste Entscheidung: Partei-Zuordnung ist keine Selbstauskunft). `ThemeLoader.tsx` liest
+    den Wert weiterhin bei jedem Login unverändert aus dem Profil.
+  - Farb-Tokens als CSS-Variablen in `src/index.css` (`:root` = neutral, `[data-theme='cdu']` etc.;
+    RGB-Tripel wegen Tailwind-Alpha), Tailwind-Farben `primary`/`primary-hover`/`accent`/`topbar` in
+    `tailwind.config.js` via `rgb(var(--mc-*) / <alpha-value>)`. Fokus-Ringe und
+    Checkbox/Radio-`accent-color` sind global im `@layer base` von index.css gethemed.
+  - `src/lib/themes.ts`: Registry (Id, Label, Logo-Datei) + `applyTheme()` (setzt `data-theme` auf
+    `<html>`); `src/components/ThemeLoader.tsx` (in App.tsx gemountet) lädt die Partei einmalig aus dem
+    Profil. Neues Theme = CSS-Block + Registry-Eintrag + Logo-SVG, keine Migration nötig.
+  - Partei-Logos (von Wikimedia Commons, offizielle SVGs) unter `public/parteilogos/*.svg`, werden
+    rechts im Dashboard-Header angezeigt. Farbwerte an den echten Partei-Websites verifiziert
+    (cdu-iserlohn.de: Türkis #52b7c1; fdp.de: #2b4b9f/#eb008b/Gelb; SPD-Rot #e3000f). FDP-Topbar ist
+    Gelb, AfD-Primary ist gegenüber dem CI-Hellblau abgedunkelt (AA-Kontrast für weiße Button-Texte).
+  - Alle Primär-Buttons nutzen `bg-primary hover:bg-primary-hover`, Selektions-Ringe `ring-primary`,
+    jede Seite hat eine 1,5px-Akzentleiste (`bg-topbar`) ganz oben.
+- **UX-Feinschliff** (zusammen mit dem Theming): Einträge in „Nächste Termine" sind zweizeilig
+  (Titel+Tags oben, Datum·Ort darunter, `truncate` statt Umbruch-Chaos); Datums-/Zeitangaben laufen
+  zentral über `src/lib/format.ts` (`formatDateTime`/`formatDate`/`formatTime`/`formatDayMonth`,
+  ohne Sekunden).
+- **UI-Redesign** („Wow"-Polish, nach dem ersten Theming-Wurf): Das Partei-Theme trägt jetzt durchs
+  ganze UI, nicht nur Logo+Topbar.
+  - **Schrift:** Inter Variable via `@fontsource-variable/inter` (Import in `main.tsx`,
+    `fontFamily.sans` in `tailwind.config.js`), wird von Vite mit gebündelt (kein CDN, passt zu
+    GitHub-Pages-Hosting).
+  - **Gemeinsames Komponenten-Vokabular** in `src/index.css` `@layer components`: `.mc-card`
+    (rounded-xl, border, shadow-sm), `.mc-input`, `.mc-btn` (Press-Feedback `active:scale(0.97)` bei
+    160ms mit kräftiger ease-out-Kurve `--mc-ease-out`), `.mc-btn-primary`/`-ghost`/`-danger`.
+    Kleine Varianten in Listen per `!px-2 !py-1 !text-xs`-Overrides. Bewusst zentral statt
+    Utility-Wiederholung in jedem JSX, damit alle Flächen identisch aussehen/reagieren; Layout bleibt
+    Utilities im JSX (CLAUDE.md-Konvention „keine CSS-Datei pro Komponente" bleibt gewahrt).
+  - **Entrance-Animationen** (`mc-animate-fade/-pop/-slide`, nur transform+opacity, nie aus scale(0),
+    220-240ms): Modal poppt (Backdrop `bg-slate-900/50` + `backdrop-blur-[2px]` + Fade), Split-View-
+    Panel slidet von rechts ein (per `key` auf dem Panel-Container re-triggert bei Terminwechsel).
+    `prefers-reduced-motion` fällt auf reinen Opacity-Fade zurück.
+  - **App-Bar:** Alle Seiten (Dashboard, Settings, TerminDetail) haben statt des weißen Headers eine
+    Partei-farbige Leiste (`bg-gradient-to-r from-primary to-primary-hover`, weiße Schrift, Avatar mit
+    `ring-white/40`, Partei-Logo auf weißem Chip rechts), darüber weiterhin die `bg-topbar`-Akzentlinie
+    (FDP: Gelb über Blau). Content in `max-w-7xl mx-auto`.
+  - **Terminliste:** Einträge als Karten mit Datums-Chip links (Tag+Kurzmonat, `bg-primary/10
+    text-primary`, abgesagt: rot getönt), Titel + SITZUNG/ABGESAGT-Badges, Zeit·Ort-Zeile;
+    Selektion `ring-2 ring-primary`. Empty-States als gestrichelte Platzhalterflächen.
+  - **Board:** Spalten `bg-slate-200/50 rounded-xl` mit Karten-Count-Badge, Karten mit
+    Hover-Schatten-Lift und Chip-Metadaten (📅 Termin primary-getönt, 👤 Zuständig), Drag-Zustand
+    `ring-primary/40`; „+ Karte hinzufügen" als gestricheltes Ghost-Input.
+  - Modal-/Panel-Innensektionen (Formulare, Kommentar-/Dokument-Listen) als `bg-slate-50`-Karten auf
+    weißem Grund; Login als zentrierte Card. Alle sechs Themes + neutral im Browser verifiziert.
+- **Settings mit Sidebar-Unternavigation** (`Settings.tsx`): Die Seite ist in Sektionen gegliedert
+  (Profil / Kalenderquellen / Meine Gremien / ToDo-Board / Benutzerverwaltung), die über eine linke
+  Sidebar (Lucide-Icons via `lucide-react`, aktiver Punkt `bg-primary/10 text-primary`; mobil
+  horizontal scrollbar) umgeschaltet werden – reines Conditional-Rendering über ein
+  `activeSection`-State, alle Lade-/Speicherlogik blieb unverändert. „Eigene Quelle hinzufügen" lebt
+  im Kalenderquellen-Tab (zwei getrennte Conditional-Blöcke im JSX, Quellcode-Reihenfolge ist durchs
+  Conditional-Rendering fürs UI egal). „Benutzerverwaltung" erscheint nur bei `profiles.rolle='admin'`.
+- **Admin-Benutzerverwaltung** (`src/components/UserManagement.tsx` + Edge Function
+  `supabase/functions/admin-users/index.ts`): Anlegen/Bearbeiten/Löschen von Benutzern läuft komplett
+  über die Edge Function, weil die Auth-Admin-API den Service-Role-Key braucht (bleibt serverseitig).
+  Die Function verifiziert den Caller-JWT und verlangt `profiles.rolle='admin'` (RLS greift bei
+  Service-Role nicht – dieser Check ist die Zugriffskontrolle). API: action `list` (auth.users +
+  profiles gemerged, inkl. `last_sign_in_at`), `create` (email/password/name, `email_confirm: true`,
+  Profil legt der `handle_new_user`-Trigger an, Rolle/Fraktion/Partei werden nachgezogen), `update`
+  (Profilfelder + optional E-Mail/Passwort via `updateUserById`; der letzte Admin kann sich nicht
+  selbst degradieren), `delete` (verboten für sich selbst; bereinigt vorher
+  `calendar_sources.verwaltet_von` → null und biegt `events.erstellt_von` bei Fraktionsbüro-Terminen
+  auf den Termininhaber um – beide FKs sind NICHT on delete cascade und würden sonst blocken – und
+  löscht die Storage-Dateien des Nutzers aus `profilbilder`/`zusammenfassungen`; Rest cascaded über
+  `profiles`). Der Deploy-Workflow (`deploy-edge-functions.yml`) deployt seitdem **alle** Funktionen
+  (`supabase functions deploy` ohne Namen). UI: Nutzerliste mit Rollen-Badges
+  (Admin=primary-getönt, Fraktionsbüro=amber, Mitglied=slate), Partei-Badge, „Du"-Kennzeichnung,
+  Anlege-/Bearbeiten-Formular (`UserForm`, 2-spaltiges Grid), Selbst-Löschen-Button disabled.
+
+- **Quellen-Farben & Ebenen-Kennzeichnung** (`0015_calendar_sources_farbe.sql`):
+  `calendar_sources.farbe` speichert eine Token-Id aus der kuratierten Palette in
+  `src/lib/sourceColors.ts` (sky/emerald/amber/violet/rose/teal als `SOURCE_COLORS`, bewusst gedeckte
+  Töne, die mit jedem Partei-Theme harmonieren; Klassen ausgeschrieben wegen Tailwind-Purge). `null` =
+  `THEME_COLOR` (bg-primary/10) – Quellen ohne Farbe und eigene Termine folgen damit automatisch dem
+  Partei-CI. Farbwahl per Swatch-Reihe in der Quellenzeile der Settings (nur `canManage`, optimistisches
+  Update). In der Dashboard-Terminliste tragen Sitzungen den Datums-Chip und ein **Ebene-Badge**
+  (KOMMUNE/KREIS/LAND/BUND aus `EBENE_LABEL`) in der Quellfarbe – die Ebene ist so auf einen Blick
+  erkennbar; `CalendarView` lädt dafür zusätzlich alle `calendar_sources`. Die Quellenzeile in den
+  Settings ist zweizeilig (Name+Ebene-Badge+Abonniert-Checkbox oben, Farbe+Aktionen unten), damit
+  lange Quellnamen nicht abgeschnitten werden.
+- **Meine Gremien nach Quellen gruppiert**: `loadDistinctGremien()` liefert distinct
+  `(gremium, source_id)`-Paare; die Checkliste rendert pro Quelle eine Gruppe (Header mit Farbpunkt,
+  Quellname, Ebene-Badge), nicht zuordenbare Gremien landen in „Ohne Quelle". Die Auswahl selbst
+  bleibt gremium-Text-basiert (`user_gremien` unverändert).
+- **ToDo-Board ohne Horizontal-Scroll**: Der Spalten-Container ist ein CSS-Grid
+  (`repeat(auto-fill, minmax(272px, 1fr))`) statt `flex overflow-x-auto` – viele Spalten brechen in
+  weitere Zeilen um, wenige teilen sich die Breite. Drag & Drop über Zeilen hinweg funktioniert, weil
+  dnd-kit rein pointer-basiert droppt.
+- **Drag & Drop auf Touch-Geräten (iPad)** (`TodoBoard.tsx`): Karten ließen sich auf dem iPad nicht per
+  Finger ziehen. Zwei Ursachen behoben: (1) `useSensors` nutzte nur `PointerSensor`, der auf iPadOS
+  Safari oft mit der nativen Scroll-Erkennung kollidiert; jetzt `MouseSensor` (Maus, `distance: 8`) +
+  `TouchSensor` (Touch, `delay: 200, tolerance: 8`) – Maus- und Touch-Events feuern nie für dieselbe
+  Interaktion, daher keine Doppel-Aktivierung, und der `delay` gibt Safari kurz Zeit, zwischen Scrollen
+  und Ziehen zu unterscheiden (gleiches Sensor-Paar wie in der offiziellen dnd-kit-Doku für
+  Cross-Device-Support empfohlen). (2) Der Karte fehlte `touch-action: none` – ohne das interpretiert
+  Safari eine Berührung sofort als Scroll-Geste, bevor der Sensor den Drag überhaupt erkennen kann.
+- **Board-Feinschliff** (`TodoBoard.tsx`): Drei Verhaltensänderungen, alle über Titel-Matching der
+  Spalten (case-insensitive, gleiches Muster wie der bestehende „Neu"→„Geplant"-Auto-Move in
+  `TodoDetailModal.tsx` – greift nicht mehr, falls der Nutzer diese Spalten umbenennt):
+  - **Neue Karten nur in der Spalte „Neu"**: Das „+ Karte hinzufügen"-Eingabefeld erscheint nur noch in
+    der Spalte, deren Titel „neu" ist (`neuColumn`); ohne passenden Namen fällt es auf die erste Spalte
+    nach `reihenfolge` zurück, damit Karten-Erfassung nie ganz verschwindet. Andere Spalten zeigen kein
+    Eingabefeld mehr.
+  - **Durchgestrichener Titel in „Fertig"**: Jede `Column` weiß über `istFertig` (Titel-Match), ob sie
+    die Fertig-Spalte ist, und reicht das an `Card` durch – der Kartentitel wird dann durchgestrichen
+    und ausgegraut dargestellt (rein visuell, `todos` selbst hat kein „erledigt"-Feld).
+  - **Termin-Label statt „📅 Termin"**: Karten zeigen jetzt Titel + Datum des verknüpften Termins
+    (`Sportausschuss · 10.09.2026`) statt eines nichtssagenden Chips. Dafür lädt `TodoBoard` gezielt nur
+    die von aktuell sichtbaren Karten referenzierten `events`/`sessions` (per `event_id`/`session_id` in
+    einem `useEffect([todos])`, `.in('id', [...])` statt Volltabellen) in `eventById`/`sessionById`-Maps;
+    `terminLabelFor()` liefert je nach Verknüpfung `"<Titel> · <Datum>"` oder bei reinem Freitextdatum
+    (`faellig_am`, keine Verknüpfung) `"Fällig <Datum>"`.
+- **Termin-Filter + Breitenangleich** (`CalendarView.tsx`): Über der „Nächste Termine"-Liste erscheinen
+  Filter-Chips – „Alle" immer, „Eigene Termine" nur wenn eigene Termine existieren, je eine Ebene
+  (Kommune/Kreis/Land/Bund) nur wenn sie unter den aktuell geladenen Sitzungen tatsächlich vorkommt
+  (keine wirkungslosen Filter). Die beiden Spalten (Terminliste + Detail-Panel) haben ihr `max-w-lg`
+  verloren und sind jetzt reines `flex-1 min-w-0` – dadurch spannt die Sektion exakt so breit wie das
+  ToDo-Board darüber, und die rechte Kante des Detail-Panels liegt auf einer Linie mit der letzten
+  Board-Spalte und dem Partei-Logo im Header (gleicher `mx-auto max-w-7xl px-6`-Container).
+- **Dokumenten-Vorschau** (`src/components/DocumentPreviewModal.tsx`): Klick auf ein hochgeladenes
+  Dokument (in `TodoDetailModal.tsx` und `TerminDetailPanel.tsx`, beide identisch verdrahtet über ein
+  `previewDoc`-State) öffnet ein Modal statt eines Downloads/neuen Tabs. Bilder (`png/jpg/jpeg/gif/
+  webp/svg`) werden als `<img>` gerendert, PDFs im nativen Browser-PDF-Viewer per `<iframe>`; für alle
+  anderen Dateitypen (docx, xlsx, ...) gibt es keine Inline-Vorschau im Browser, stattdessen ein
+  „Datei öffnen"-Link. Signierte URL mit 3600s Gültigkeit statt der sonst bei Downloads üblichen 60s,
+  weil das Dokument während des Lesens länger geöffnet bleiben kann (gleiche Überlegung wie bei
+  Profilfotos). Ersetzt das alte `handleDownload()` (signierte URL + `window.open` in neuem Tab) in
+  beiden Komponenten vollständig.
+- **Archiv** (`src/pages/Archiv.tsx`, Route `/archiv`, verlinkt im Dashboard-Header neben
+  „Einstellungen"): Drei Tabs, kein neues Datenmodell nötig.
+  - **Vergangene Sitzungen**: gleiche Query wie `CalendarView` (Sitzungen der „Meine Gremien"-Auswahl),
+    nur mit `lt('datum', startOfTodayIso())` statt `gte()` und absteigend sortiert. Identisches
+    Karten-Design (Datums-Chip in Quellfarbe, Ebene-Badge, 📎-Notizen-Flag, Abgesagt-Badge) und
+    Split-View mit `TerminDetailPanel` (`onDeleted` bewusst weggelassen – im Archiv gibt es keine
+    Lösch-Aktion, `TerminDetailPanel` zeigt für `kind='session'` ohnehin keine Bearbeiten/Löschen-Buttons,
+    nur für `kind='event'`). `startOfTodayIso()` ist dafür von `CalendarView.tsx` nach `lib/format.ts`
+    gewandert (jetzt von beiden importiert, keine Dopplung mehr).
+  - **Erledigte Aufgaben**: `todos`, deren `column_id` zu einer Spalte mit Titel „Fertig" gehört
+    (gleiches Titel-Matching wie die Fertig-Durchstreichung im Board, siehe oben) – funktioniert ohne
+    Migration, weil Karten beim Ziehen auf „Fertig" nicht aus `todos` verschwinden, nur die
+    `column_id` ändert sich. Klick öffnet die normale `TodoDetailModal` (volle Bearbeitung inkl.
+    Termin-Verknüpfung bleibt möglich, nur die Spalte lässt sich dort nicht ändern – das geht nach wie
+    vor nur per Drag & Drop auf dem Board). `TodoRow` hat dafür ein neues `created_at`-Feld im
+    TS-Typ bekommen (Spalte existierte in der DB schon immer, war im Typ nur nicht abgebildet) – zeigt
+    in der Archiv-Liste als „Erstellt am".
+  - **Dokumente**: Übersicht aller `summaries`-Zeilen mit gesetztem `datei_url` (also echte
+    Datei-Uploads, keine reinen Text-Notizen), absteigend nach `erstellt_am`. Da `summaries` optional an
+    Sitzung, Termin **oder** Aufgabe hängt (`session_id`/`event_id`/`todo_id`), lädt `loadDocuments()`
+    für jede in der Liste tatsächlich vorkommende Referenz gezielt die Titel nach (drei kleine
+    `.in('id', [...])`-Queries statt eines Joins) und baut daraus ein `docLabels`-Map
+    (`"Sitzung: <Titel>"` / `"Termin: <Titel>"` / `"Aufgabe: <Titel>"`, Dokumente ganz ohne Bezug zeigen
+    kein Badge). Klick auf ein Dokument öffnet dieselbe `DocumentPreviewModal` wie überall sonst im
+    UI. `fileNameFromPath()` ist dafür aus `DocumentPreviewModal.tsx` heraus **exportiert** und wird
+    jetzt dort sowie von `TerminDetailPanel.tsx`/`TodoDetailModal.tsx` importiert statt dreifach
+    dupliziert zu sein (bei zwei Stellen war die Dopplung tolerierbar, bei drei nicht mehr).
+  - Bewusst nicht enthalten: eigene vergangene Termine (`events`) als eigener Tab. Der ursprüngliche
+    Wunsch war explizit „zurückliegende Sitzungen und erledigte Tasks"; eigene Termine landen nicht im
+    Archiv, um den Scope nicht stillschweigend zu erweitern.
+- **GitHub-Pages-Routing-Fix** (`.github/workflows/deploy.yml`): Ein Reload oder Direktaufruf einer
+  Unterroute wie `/settings` oder `/archiv` lieferte 404 – GitHub Pages ist ein statischer Host und
+  sucht nach einer echten Datei an diesem Pfad, bevor die SPA (und damit React Router) überhaupt lädt.
+  Fix: Der Deploy-Workflow kopiert nach dem Build `dist/index.html` nach `dist/404.html` (`cp dist/
+  index.html dist/404.html`, direkt vor dem Artifact-Upload). GitHub Pages liefert `404.html` für jeden
+  unbekannten Pfad aus; da Vite mit `base: '/mandatscockpit/'` baut, sind alle Asset-Pfade in `index.html`
+  absolut und laden unabhängig vom Tiefen-Pfad korrekt – React Router übernimmt danach normal anhand der
+  Browser-URL. Kein `HashRouter`/`basename`-Wechsel nötig, nur dieser eine Build-Schritt.
+- **MCP-Server für Claude-Steuerung** (`supabase/functions/mcp-server/index.ts`, Route 9 in README.md):
+  Dritte Edge Function, implementiert das MCP-JSON-RPC-Protokoll (`initialize`/`tools/list`/
+  `tools/call`) von Hand über einen einzigen HTTP-POST-Endpunkt (kein SSE-Streaming nötig, da alle
+  Tools synchron antworten) – es gibt kein fertiges Supabase/Deno-MCP-Template dafür. Tools:
+  `create_todo` (sucht/legt `todo_columns` per Titel case-insensitive an, hängt hinten in der Spalte
+  an), `create_event` (`herkunft = 'privat'`), `list_next_sessions` (zukünftige Sitzungen, optional
+  `gremium`-Teilstring-Filter per `ilike`), `create_session_note` (Nutzerwunsch: „ein Sammeldokument
+  analysieren und zusammenfassen lassen und dann hochladen zu einer bestimmten Sitzung“ – die
+  eigentliche Analyse macht Claude direkt im Chat als LLM, das Tool speichert nur das fertige
+  Ergebnis; ursprünglich `create_session_summary` und reiner Freitext, auf Nutzerwunsch umbenannt und
+  um Datei-Anhänge erweitert). Insert in `summaries` mit `session_id` + `inhalt` und/oder `datei_url`
+  (mindestens eins von beidem erforderlich, gleiche Kombinierbarkeit wie im „Notizen & Dokumente“-
+  Formular in `TerminDetailPanel.tsx`). Datei-Anhänge kommen als `dateiname` + `datei_base64`
+  (Base64-String) im Tool-Argument an, werden per `atob()` zu `Uint8Array` dekodiert und wie bei den
+  Upload-Flows im Frontend unter `<user_id>/<Date.now()>-<dateiname>` in den privaten Storage-Bucket
+  `zusammenfassungen` hochgeladen (Service-Role-Client umgeht die Storage-RLS-Policies dabei bewusst,
+  gleiches Muster wie überall sonst in dieser Function). Praktisches Limit durch das
+  Edge-Function-Request-Limit plus ca. 33 % Base64-Overhead - nicht separat validiert, nur in der
+  Tool-Beschreibung erwähnt. Ob Claude beim Chat-Aufruf tatsächlich die Rohbytes einer im Chat
+  angehängten Datei als Base64 überträgt, war zum Zeitpunkt der Implementierung nicht verifizierbar
+  (kein Testtoken ohne das aktive Nutzer-Token zu gefährden) - noch nicht live erprobt. Prüft vorher
+  per Select, ob die `session_id` existiert, für eine verständliche Fehlermeldung statt eines rohen
+  FK-Constraint-Fehlers), sowie `create_event_note`/`create_todo_note` (Nutzerwunsch: dieselbe
+  Notiz-/Datei-Anhang-Funktionalität auch für eigene Termine und ToDo-Karten, nicht nur Sitzungen -
+  spiegelt genau, was `TerminDetailPanel.tsx`/`TodoDetailModal.tsx` in der Web-UI schon können). Die
+  drei Note-Tools teilen sich eine gemeinsame `createNote()`-Hilfsfunktion (`NoteTargetConfig` mit
+  `idArgName`/`table`/`idColumn`/`ownerScoped`/`label`), um die Text-/Datei-Validierung und den
+  Storage-Upload nicht dreifach zu duplizieren. Wichtiger Unterschied zu `create_session_note`:
+  `events`/`todos` gehören einem einzelnen Nutzer (RLS `events_select_own`/`todos_manage_own`), der
+  Service-Role-Client umgeht diese RLS aber komplett - `createNote()` filtert deshalb bei
+  `ownerScoped: true` zusätzlich per `.eq('user_id', userId)` beim Ziel-Lookup, sonst könnte ein Nutzer
+  über eine erratene UUID Notizen an fremde Termine/ToDos hängen. `sessions` bleibt bei
+  `ownerScoped: false`, da Sitzungen laut `sessions_select_all` ohnehin für alle eingeloggten Nutzer
+  lesbar sind.
+  - **Auth bewusst nicht global, sondern pro Nutzer**: Ursprünglich als Einzelnutzer-Lösung mit einem
+    einzigen `MCP_ACCESS_TOKEN`-Secret geplant, dann auf Nutzerwunsch umgestellt auf **ein persönliches
+    Bearer-Token pro Mitglied**, da die Function für alle Mitglieder nutzbar sein soll, nicht nur für
+    den Repo-Owner. Neue Tabelle `mcp_tokens` (`0016_mcp_tokens.sql`, `user_id` Primary Key, RLS
+    `user_id = auth.uid()` **ohne** die Fraktions-Ausnahme von `profiles_select_own_or_same_fraktion` –
+    ein Fraktionsbüro darf zwar Termine für Kolleg*innen anlegen, aber nicht deren MCP-Token einsehen).
+    Gespeichert wird nur `token_hash` (SHA-256), nie der Klartext – die Function hasht das eingehende
+    Bearer-Token identisch (`crypto.subtle.digest`) und schlägt damit den Nutzer nach; alle
+    DB-Operationen laufen danach über `SUPABASE_SERVICE_ROLE_KEY` im Namen dieses einen Nutzers (RLS
+    wird hier also bewusst durch den Token-Lookup ersetzt, gleiches Muster wie `admin-users`).
+  - **Selbstbedienung in Settings** (`Settings.tsx`, Sidebar-Sektion „MCP Connection“ (ursprünglich
+    „Claude-Integration“, auf Nutzerwunsch umbenannt), Icon
+    `Bot`): Jedes Mitglied erzeugt/erneuert sein Token selbst (`crypto.getRandomValues` → `mck_`-Präfix
+    + Base64url, gleiche `sha256Hex()`-Funktion wie in der Edge Function dupliziert – bewusst wie bei
+    der ICS-Parsing-Logik, da Browser- und Deno-Crypto-API zwar ähnlich, aber unterschiedliche Module
+    sind). Der Klartext-Token wird nur direkt nach dem Erzeugen einmalig angezeigt (State
+    `mcpGeneratedToken`, nicht persistiert) – ein Neuladen der Seite zeigt ihn nicht erneut, nur noch
+    das Erzeugungsdatum. Ein neues Token zu erzeugen macht das alte sofort ungültig (Primary Key
+    `user_id`, `upsert` überschreibt den Hash).
+  - Setup/Custom-Connector-Anleitung für Nutzer in README.md Abschnitt 9. Deploy läuft ohne weitere
+    Anpassung über den bestehenden `deploy-edge-functions.yml`-Workflow mit (deployt alle Functions
+    unter `supabase/functions/` ohne Namen) – bewusst **keine** zweite Workflow-Datei angelegt, das
+    hätte nur doppelte Deploy-Läufe erzeugt.
+  - **Fünf Produktivfehler nach dem ersten Rollout entdeckt und behoben (2026-07-20), alle beim ersten
+    echten Connector-Versuch bzw. bei erneutem Verbinden aufgefallen:**
+    1. Supabase prüft den `Authorization`-Header von Edge Functions standardmäßig selbst als
+       Supabase-Auth-JWT, bevor die Function überhaupt läuft (`verify_jwt`, Default `true`) – jedes
+       eigene Token wurde dadurch schon vom API-Gateway mit `UNAUTHORIZED_INVALID_JWT_FORMAT`
+       abgewiesen. Fix: `supabase/config.toml` mit `[functions.mcp-server] verify_jwt = false` (nur für
+       diese eine Function – `admin-users`/`import-ics-source` bleiben beim Default, da sie mit dem
+       echten Nutzer-JWT aus dem Frontend aufgerufen werden). Per curl gegen die deployte Function
+       verifiziert (`UNAUTHORIZED_INVALID_JWT_FORMAT` vom Gateway davor vs. eigene Fehlermeldung der
+       Function danach).
+    2. **Falsche Annahme im ursprünglichen Auftrag** („Connectors → Custom Connector → Funktions-URL +
+       Bearer-Token“) stimmte nicht mit der echten Claude-UI überein: Der Custom-Connector-Dialog hat
+       nur ein **einzelnes URL-Feld**, kein separates Token-/API-Key-Feld (nur eine optionale
+       OAuth-Client-ID für Server, die echtes OAuth 2.1 mit Dynamic Client Registration sprechen – ein
+       voller OAuth-Server ist für den Scope hier bewusst nicht gebaut worden). Fix: Das Token wird
+       jetzt als `?token=...`-Query-Parameter direkt in die URL codiert; `mcp-server/index.ts` liest es
+       dort aus (Header bleibt zusätzlich als Fallback unterstützt, falls ein anderer MCP-Client ihn
+       setzen kann – Header hat Vorrang). `Settings.tsx` zeigt entsprechend die **komplette Connector-URL
+       mit eingebettetem Token** an (`mcpConnectorUrl()`), nicht mehr den nackten Token – Nutzer fügen
+       diese eine URL 1:1 in das URL-Feld des Custom Connectors ein.
+    3. Trotz korrekter URL+Token weiterhin derselbe Fehler in Claude: „Registrierung beim Anmeldedienst
+       von MandatsCockpit fehlgeschlagen“. Ursache: Claudes MCP-Client startet einen
+       OAuth-Registrierungsversuch, sobald der Server **irgendwann** mit HTTP 401 antwortet (Standard-
+       verhalten laut MCP-Authorization-Spezifikation, unabhängig davon, ob ein späterer Aufruf mit
+       gültigem Token funktioniert hätte) – vermutlich bei einem initialen Capability-Check, der die
+       Query-String-URL nicht wie erwartet weiterreicht. Die Function gab bei fehlendem/ungültigem
+       Token bis dahin `401` + `WWW-Authenticate: Bearer` zurück, was genau dieses OAuth-Discovery
+       auslöst; ein eigener OAuth-Server ist für diesen Scope bewusst nicht gebaut. Fix: `mcp-server`
+       gibt bei Auth-Fehlern jetzt **nie mehr HTTP 401**, sondern immer HTTP 200 mit einem
+       JSON-RPC-Fehler (`code: -32001`) im Body – Body-Parsing läuft daher jetzt **vor** dem
+       Auth-Check (wird für die `id` im Fehlerobjekt gebraucht). Per curl gegenverifiziert: alle
+       Antworten (fehlendes Token, ungültiges Token, GET-Probe) liefern seitdem keinen 401/
+       `WWW-Authenticate` mehr.
+    4. Nach Hinzufügen von `create_session_note` funktionierte das erneute Verbinden trotz nachweislich
+       korrektem Server wieder nicht (per curl mit dem echten Nutzer-Token direkt gegen die deployte
+       Function verifiziert: `initialize`/`tools/list` liefen einwandfrei). Ursache diesmal:
+       `resources/list`, `prompts/list` und andere von uns nicht unterstützte JSON-RPC-Methoden (die
+       Claude beim Verbinden offenbar unabhängig von den in `initialize` deklarierten `capabilities`
+       abfragt) gaben **HTTP 404** zurück – derselbe Fehlerklassen-Bug wie bei Punkt 3 (HTTP-Statuscode
+       an der falschen Stelle bricht die Connector-Verbindung ab, obwohl der JSON-RPC-Fehler im Body
+       korrekt war), nur an einer anderen Stelle im Code. Fix: **jede** Antwort nach erfolgreichem
+       JSON-Parsing liefert jetzt HTTP 200, auch „Invalid Request“, „unbekanntes Tool“ und „Methode
+       nicht gefunden“ – Non-200 bleibt nur für echte Transport-Fehler (falsche HTTP-Methode, kaputtes
+       JSON) reserviert. Per curl mit allen denkbaren Discovery-Methoden (`resources/list`,
+       `prompts/list`, `completion/complete`, `logging/setLevel`) gegenverifiziert: alle liefern jetzt
+       HTTP 200.
+    5. Verbinden schlug **trotzdem weiterhin** fehl, mit identischer Fehlermeldung. Diagnose-Experiment
+       (temporärer, nicht committeter Rollback): der exakt gleiche Code-Stand wie beim einzigen
+       erfolgreichen Connector-Versuch (Commit `f5b8ec3`, per `git checkout f5b8ec3 --
+       supabase/functions/mcp-server/index.ts` + Redeploy, danach wieder auf `HEAD` zurückgesetzt) wurde
+       erneut deployt und schlug beim Nutzer **ebenfalls** fehl – das widerlegte sowohl die
+       „stale Client-Cache"- als auch die „create_session_note-Schema"-Hypothese endgültig, da hier
+       nachweislich exakt der einmal funktionierende Stand erneut nicht funktionierte. Der eigentliche
+       Fund danach: Die `corsHeaders` hatten **kein `Access-Control-Allow-Methods`**. Der POST mit
+       `Content-Type: application/json` ist keine CORS-„simple request" (nicht-simpler Content-Type),
+       Browser lösen deshalb einen Preflight (OPTIONS) aus – ohne `Allow-Methods` in dessen Antwort
+       blockiert der Browser den eigentlichen POST komplett, obwohl OPTIONS selbst mit 200 antwortet.
+       **`curl` simuliert diese Browser-CORS-Prüfung nicht** und hat den Bug deshalb über die gesamte
+       bisherige Diagnose hinweg unsichtbar gemacht – das erklärt zugleich, warum es einmalig „im Chat"
+       funktionierte: Die dort sichtbaren `mcp__...`-Tools kamen aus **dieser Claude-Code-CLI-Session**,
+       einem serverseitigen/nicht-Browser-Client ohne CORS-Durchsetzung, während die claude.ai-Web-/
+       Desktop-App den Aufruf browserseitig macht und daher exakt an dieser Lücke scheiterte. Fix:
+       `Access-Control-Allow-Methods: POST, OPTIONS` (+ `Access-Control-Max-Age`) ergänzt. Per curl mit
+       expliziten Preflight-Headern (`Origin`, `Access-Control-Request-Method`,
+       `Access-Control-Request-Headers`) gegenverifiziert – bringt aber naturgemäß keine
+       Curl-basierte Erfolgsgarantie mehr, da genau diese Prüfung zuvor blind war; die eigentliche
+       Bestätigung musste ein echter Verbindungsversuch in Claude liefern. **Bestätigt (2026-07-20):**
+       Nach dem Deploy verband sich der Connector selbstständig neu (kein manuelles Reconnect nötig -
+       das wiederholte `booted`/`shutdown`-Muster in den Supabase-Function-Logs im
+       ~1-Minuten-Abstand deutete auf periodische Reconnect-Versuche von Claude im Hintergrund hin),
+       alle vier Tools erschienen in einer Claude-Code-Session und `list_next_sessions` lieferte über
+       die echte Claude-MCP-Infrastruktur (nicht curl) reale Sitzungsdaten zurück. Der fehlende
+       `Access-Control-Allow-Methods`-Header war damit der tatsächliche Rootcause des gesamten
+       Connector-Problems, nicht die vorherigen (ebenfalls echten, aber unzureichenden) Fixes 1–4.
+
+- **Eigene Anträge** (`0017_antraege.sql`, seit 2026-07-20): Neue Sektion "Meine Anträge" für selbst
+  verfasste/eingebrachte Anträge – bewusst getrennt vom `documents`-Konzept aus KONZEPT.md Abschnitt 5.1
+  (dort geht es um extern importierte Vorlagen/Anträge aus dem Ratsinformationssystem, hier um eigene,
+  noch unveröffentlichte Anträge mit Workflow-Status). Rein privat (`antraege_manage_own`, gleiches
+  RLS-Muster wie `todos_manage_own`) – bewusste Nutzerentscheidung, keine Fraktions-Sichtbarkeit für den
+  ersten Wurf.
+  - Felder: `titel`, `status` (`entwurf`→`eingereicht`→`in_beratung`→`vertagt`|`beschlossen`|
+    `abgelehnt`|`zurueckgezogen`, zentrales Vokabular in `src/lib/antragStatus.ts` – Label + Badge-Farbe
+    + welche Werte als "aktiv" vs. "abgeschlossen" gelten), `ausschuss` (Freitext mit Autovervollständigung
+    aus den "Meine Gremien"-Einträgen des Nutzers via `<datalist>`, keine feste Werteliste), `inhalt`
+    (Antragstext/Begründung), `mitantragsteller` (Freitext), `session_id` (optionale Verknüpfung zu der
+    Sitzung, in der der Antrag behandelt wird – analog zur Sitzungs-Verknüpfung bei `todos`),
+    `eingereicht_am`.
+  - Kommentare (`antrag_comments`) und Dokumenten-Upload (`summaries.antrag_id`, Storage-Bucket
+    `zusammenfassungen`) sind 1:1 nach dem `todo_comments`/`summaries.todo_id`-Muster aus `0011`
+    dupliziert (bewusst, gleiche Begründung wie bei den anderen dokumentierten Dopplungen in diesem
+    Projekt: kein gemeinsames Backend, das eine Abstraktion rechtfertigen würde).
+  - **Dashboard** (`AntraegeSection.tsx`, zwischen ToDo-Board und "Nächste Termine"): Status-Filter-Chips
+    (nur die im Bestand tatsächlich vorkommenden, gleiches Muster wie die Ebene-Filter in
+    `CalendarView`), zeigt nur "aktive" Anträge. Ein Link ("N entschiedene im Archiv") verweist auf die
+    abgeschlossenen.
+  - **Nachträgliche Klarstellung (noch 2026-07-20):** "Meine Anträge" ist bewusst eine
+    *dokumentenzentrierte* Übersicht – Kernobjekt ist das hochgeladene Antragsdokument (Word/PDF/...),
+    getaggt mit Metadaten wie dem Ausschuss, nicht ein Text-Datensatz mit optional angehängtem Dokument.
+    Deshalb: Titel, Ausschuss **und** Datei sind in der Schnellerfassung Pflichtfelder (kein reines
+    Zweistufen-Muster wie beim ToDo-Board mehr); jede Kachel in der Liste zeigt das erste hochgeladene
+    Dokument direkt als anklickbaren Chip (öffnet `DocumentPreviewModal` sofort, per `stopPropagation`
+    getrennt vom Klick auf die restliche Kachel, der weiterhin das volle `AntragDetailModal` öffnet) statt
+    nur ein 📎-Vorhanden-Flag. Zusätzlich zum Status-Filter gibt es jetzt einen zweiten Filter nach
+    Ausschuss (ebenfalls nur tatsächlich vorkommende Werte) – macht die Übersicht faktisch zu einem
+    privaten Pendant des in KONZEPT.md Abschnitt 5.1 beschriebenen, nie gebauten Dokumenten-Hubs
+    ("filterbar nach Ausschuss"), nur für eigene statt extern importierte Dokumente. Der Archiv-Tab
+    "Anträge" zeigt das erste Dokument je entschiedenem Antrag nach demselben Muster.
+  - **Archiv** bekommt einen vierten Tab "Anträge" (Icon `Gavel`) für `beschlossen`/`abgelehnt`/
+    `zurueckgezogen` – gleiches Modal (`AntragDetailModal`), damit auch entschiedene Anträge weiterhin
+    vollständig einsehbar/nachträglich korrigierbar bleiben (kein separater Read-only-Modus, analog zu
+    "Erledigte Aufgaben").
+  - **Sitzungsdetailsicht** (`TerminDetailPanel`, nur `kind='session'`): neue Sektion "Verknüpfte
+    Anträge" neben "Verknüpfte Aufgaben" – Klick auf eine Sitzung zeigt damit ToDos *und* Anträge dazu
+    auf einen Blick, ohne dass die Sitzungsdetailsicht selbst etwas von `antraege` wissen muss (rein
+    lesende `.eq('session_id', id)`-Query).
+  - Migration wurde direkt gegen das Live-Supabase-Projekt gepusht (`supabase db push`, additiv: neue
+    Tabellen + eine neue Spalte, keine Drops) und per REST-Smoke-Test verifiziert. **Wichtig:** Der
+    Code-Push nach GitHub triggert den Deploy erst separat – ohne `git push` bleibt die Produktivseite
+    auf dem alten Stand, auch wenn die DB-Migration schon lokal getestet wurde (genau das ist beim
+    ersten Rollout dieser Sektion passiert: DB war fertig, GitHub Pages zeigte trotzdem noch die alte
+    Version, bis Code committed und gepusht wurde).
+- **Anträge: Workflow, Teilen, Fristen** (`0023_antraege_sharing_status_fristen.sql`, seit 2026-07-20):
+  Nutzerentscheidung nach dem ersten Rollout - Anlage sollte wieder leichtgewichtig sein (Titel +
+  optional die vorgesehene Sitzung, Status startet immer bei "Entwurf"), Ausschuss+Dokument sind
+  keine Pflichtfelder mehr bei der Anlage. Stattdessen mehrere gezielte Ausbauten:
+  - **Status-Vokabular überarbeitet**: `eingereicht` → `gestellt` (Standard-Sprachgebrauch "einen
+    Antrag stellen"), `beschlossen`/`abgelehnt` → ein gemeinsamer Status `abgestimmt` mit separatem
+    `ergebnis`-Feld (`positiv`/`negativ`) statt zwei Statuswerten - beide waren dieselbe Phase ("im
+    Ausschuss abgestimmt"), unterschieden sich nur im Ausgang. Badge-Farbe (rot/grün) hängt deshalb vom
+    Ergebnis ab, nicht mehr vom Status direkt - `antragBadgeClasses()`/`antragStatusLabel()` in
+    `antragStatus.ts` ersetzen den direkten Map-Zugriff überall. Migration backfillt `ergebnis` aus den
+    alten Statuswerten, bevor sie umbenannt werden (Reihenfolge kritisch). Der Check-Constraint-Name
+    aus `0017` war nicht bekannt (implizit von Postgres vergeben) - per `pg_constraint`/`do $$`-Block
+    dynamisch gefunden statt geraten.
+  - **Dokument-Pflicht verschoben**: nicht mehr bei der Anlage, sondern rein clientseitig erzwungen
+    beim Speichern mit Status `gestellt` (`AntragDetailModal.tsx`, kein DB-Trigger - bewusst wie die
+    übrigen Business-Regeln in dieser App nur clientseitig, kein adversarielles Nutzerumfeld).
+  - **Ebene je Antrag** (`antraege.ebene`) dient zwei Zwecken gleichzeitig: Kandidatenfilter beim
+    Teilen (siehe unten) UND Nachschlage-Schlüssel für die Einreichungsfrist - wird beim Verknüpfen
+    einer Sitzung automatisch aus deren `ebene`/`gremium` in Ausschuss übernommen (nur wenn noch leer,
+    bleibt frei überschreibbar), keine doppelte Ebenen-Abfrage nötig.
+  - **Teilen mit Kolleg*innen** (`antrag_shares`, exakt gleiches Partei+Ebene-Modell wie
+    `todo_placements`/Teilen bei ToDo-Karten, siehe `0021_todo_erledigt_sharing.sql` und
+    `TodoDetailModal.tsx`): volle Gleichberechtigung (jede geteilte Person liest/bearbeitet/kommentiert
+    mit, nur der Ersteller löscht komplett oder ändert die Ebene/Freigabeliste). Anders als beim
+    ToDo-Teilen (dortige `share-todo` Edge Function) reicht hier eine **direkte RLS-Insert-Policy ohne
+    Edge Function** - Anträge haben keine Kanban-Spalten, es muss also keine private
+    Board-Struktur der Ziel-Person aufgelöst werden (das war der einzige Grund für Service-Role bei
+    ToDos). `profiles_select_same_partei_ebene` (0020) reicht dem Ersteller, um Zielprofile für die
+    Kandidatensuche zu lesen. SECURITY DEFINER-Helper (`antrag_gehoert_nutzer`/`antrag_ist_geteilt_mit`)
+    von Anfang an eingebaut, um die in `0021`→`0022` durchlaufene "infinite recursion detected in
+    policy"-Falle (zirkuläre RLS-Abfrage zwischen zwei Tabellen) von vornherein zu vermeiden - inklusive
+    einer Falle beim ersten Anlauf: die Helper-Funktionen sind `language sql` (nicht `plpgsql`) und
+    werden deshalb **beim `CREATE FUNCTION` sofort gegen das Schema geparst**, nicht erst beim ersten
+    Aufruf - `antrag_ist_geteilt_mit` referenzierte `antrag_shares`, das in der ersten Fassung der
+    Migration erst *danach* angelegt wurde (`relation "antrag_shares" does not exist`, Migration lief
+    transaktional komplett zurück, DB blieb sauber). Fix: Tabelle vor den Funktionen anlegen.
+  - **Einreichungsfristen** (`antrag_deadline_settings`, rein privat pro Nutzer+Ebene, Settings-Sektion
+    "Antrags-Fristen"): Tage-vor-der-Sitzung je Ebene (z. B. Kommune = 14), `src/lib/antragDeadline.ts`
+    berechnet daraus `Sitzungsdatum − Tage` für Anträge mit verknüpfter Sitzung + gesetzter Ebene.
+    Anzeige in `AntraegeSection`/`AntragDetailModal` mit Überfällig-Warnung (rot), wenn die Frist
+    verstrichen ist und der Antrag noch im Status "Entwurf" hängt. Bewusst **pro Betrachter** berechnet
+    (die eigenen Settings des gerade eingeloggten Nutzers, nicht die des Ersteller) - bei geteilten
+    Anträgen kann die angezeigte Frist deshalb je nach Person leicht abweichen, das ist beabsichtigt
+    (jede*r hat ggf. andere interne Vorlaufzeiten).
+  - **UI-Feinschliff nach dem Rollout** (`0024_antraege_drop_mitantragsteller.sql`, noch 2026-07-20):
+    Nutzerentscheidung, das Freitext-Feld `mitantragsteller` und das jetzt redundante, manuell
+    editierbare Ausschuss-Textfeld aus dem Formular zu entfernen. Begründung: die Teilen-Funktion
+    (`antrag_shares`) deckt "Mitantragsteller" jetzt strukturiert ab statt als Freitext - der
+    "Teilen"-Bereich im Modal heißt deshalb konsequent "Mitantragsteller" (nicht mehr "Teilen"),
+    Wording durchgängig angepasst ("Du bist Mitantragsteller*in..." statt "wurde mit dir geteilt").
+    Die Spalte wurde komplett gedroppt statt nur im Frontend ausgeblendet (kein totes DB-Feld). Das
+    Ausschuss-Feld (`antraege.ausschuss`) bleibt als Spalte bestehen (weiterhin für Badges/Filter in
+    `AntraegeSection`/Archiv genutzt) - nur das manuelle Text-Eingabefeld im Formular ist weg, da der
+    Wert inzwischen zuverlässig aus der verknüpften Sitzung übernommen wird (`handleSessionChange`).
+
+- **Kalenderquellen nach Nutzern getrennt** (`0018_calendar_sources_privat.sql`, seit 2026-07-20): Bug
+  behoben, der KONZEPT.md Abschnitt 5.1/7 widersprach ("gemeinsame Grundausstattung vom Ratsbüro" +
+  "Mitglied kann zusätzlich eigene Quellen hinzufügen" – letztere sollten nie fremden Mitgliedern
+  sichtbar sein). `calendar_sources_select_all` (0001_init.sql, `using (true)`) machte bislang
+  **jede** Quelle für **jeden** eingeloggten Nutzer sichtbar, auch privat angelegte
+  (`verwaltet_von = <anderer User>`) – dadurch tauchten fremde Quellen in der Kalenderquellen-Liste
+  UND (über die daraus abgeleiteten `sessions.gremium`-Werte) in "Meine Gremien" auf, und deren
+  Sitzungen ließen sich sogar abonnieren. Neue Policy `calendar_sources_select_shared_or_own`:
+  sichtbar sind nur noch gemeinsam verwaltete Quellen (`verwaltet_von is null`, z. B. "Stadtrat
+  Iserlohn") sowie die eigenen; Admins sehen weiterhin alle (konsistent mit den bereits bestehenden
+  `update`/`delete`-Policies aus `0006_calendar_sources_admin.sql`, die Admins schon vorher erlaubten,
+  fremde Quellen zu verwalten). `sessions_select_all` musste dieselbe Regel erben (neue Policy
+  `sessions_select_visible_source`, Join auf `calendar_sources.verwaltet_von`) – sonst wären die
+  Quellen zwar in den Einstellungen versteckt, ihre importierten Sitzungen aber weiterhin für alle im
+  Kalender sichtbar gewesen.
+  - **Tägliche Aktualisierung brauchte keine Änderung**: Der bestehende ICS-Import-Job
+    (`scripts/import-ics.mjs`, GitHub Action täglich 04:00 UTC) und die Einzelquellen-Refresh-Function
+    (`import-ics-source`) laufen beide mit dem Service-Role-Key direkt gegen `calendar_sources` bzw.
+    einen mitgegebenen `source_id` – das umgeht RLS ohnehin komplett und war nie an eine
+    Nutzer-Sichtbarkeit gekoppelt. Private, gemeinsame und admin-verwaltete Quellen werden also
+    weiterhin alle täglich importiert, unabhängig davon, wer sie sehen darf.
+  - **Eine Stelle brauchte trotzdem eine manuelle Anpassung**: `mcp-server/index.ts` liest
+    `sessions`/`calendar_sources` ebenfalls über den Service-Role-Client (siehe oben im MCP-Abschnitt),
+    RLS greift dort also grundsätzlich nicht. `listNextSessions()` filtert seit diesem Fix zusätzlich
+    manuell auf die für die aufrufende `userId` sichtbaren `source_id`s (gleiche Regel wie
+    `calendar_sources_select_shared_or_own`, per `.or('source_id.is.null,source_id.in.(...)')`
+    nachgebildet) – sonst hätte `list_next_sessions` per Claude-Chat weiterhin private Sitzungen
+    fremder Mitglieder ausgegeben, obwohl das Web-UI sie längst korrekt versteckt.
+  - **Nachgebessert (noch 2026-07-20, `0019_calendar_sources_strict_privat.sql`):** 0018 hatte für
+    Admins noch eine Sichtbarkeits-Ausnahme auf fremde private Quellen (konsistent mit den
+    bestehenden update/delete-Policies aus 0006). Live-Test durch den admin-Account (Thorsten Kois)
+    zeigte, dass das nicht gewünscht war – die Trennung soll **strikt** sein, auch für Admins. Fix:
+    SELECT-Policies verlieren die Admin-Ausnahme komplett; die update/delete-Policies aus 0006 behalten
+    eine Admin-Ausnahme **nur noch für die gemeinsam verwaltete Quelle** (`verwaltet_von is null`, z. B.
+    "Stadtrat Iserlohn" – die kann sonst niemand bearbeiten), nicht mehr für fremde private Quellen
+    anderer Mitglieder. Grund für die Mitänderung der write-Policies: nach der strengeren SELECT-Regel
+    wäre die alte "Admin darf jede fremde Quelle bearbeiten/löschen"-Berechtigung nur noch unsichtbar,
+    aber technisch weiterhin nutzbar gewesen (Schreibzugriff per bekannter/erratener UUID, obwohl die
+    Quelle in der UI nicht mehr auftaucht) – das wäre eine stille Sicherheitslücke geblieben.
+
+- **UI-Redesign: einheitliche breite Detail-Modals + Anträge/Termine nebeneinander** (2026-07-21,
+  Nutzerfeedback nach Review): Die ToDo-/Antrag-Modals waren `max-w-lg` (512px) und stapelten
+  Bearbeiten-Formular → Teilen → Kommentare → Dokumente komplett vertikal in einem Scroll-Bereich;
+  Sitzungstermine öffneten sich zudem als Inline-Split-View statt als Modal wie ToDos/Anträge
+  (Konsistenz-Verstoß). Neue gemeinsame Hülle `src/components/DetailModalShell.tsx`
+  (`h-[85vh] max-w-5xl`, 2-Spalten-Grid `grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]`,
+  jede Spalte eigenes `overflow-y-auto` – Kernfelder links bleiben ohne Scrollen sichtbar, nur die
+  Aktivität rechts scrollt) wird von `TodoDetailModal.tsx` und `AntragDetailModal.tsx` genutzt (drittes
+  Vorkommen des Chrome-Musters wäre laut Projekt-Konvention nicht mehr tolerierbar, siehe
+  `fileNameFromPath`-Beispiel oben). Rechte Spalte bekam zusätzlich einen lokalen Tab-Umschalter
+  (Kommentare/Dokumente mit Zählern) statt beide Listen dauerhaft übereinander zu zeigen.
+  - **Termine als Modal statt Split-View**: `TerminDetailPanel.tsx` bekam eine neue optionale Prop
+    `layout?: 'stacked' | 'columns'` (Default `'stacked'` – die Standalone-Seite `TerminDetail.tsx`
+    bleibt unverändert). Neues `src/components/TerminDetailModal.tsx` ist ein dünner Wrapper (eigenes
+    Chrome statt `DetailModalShell`, da der Header hier generisch "Sitzung"/"Termin" bleibt – der
+    echte Titel steht bereits als erste Zeile im Panel-Body). Verschachtelte Modals (Todo/Antrag/
+    Dokument-Vorschau, geöffnet aus "Verknüpfte Aufgaben/Anträge" heraus) bleiben unverändert als
+    Siblings im `TerminDetailPanel`-Return gerendert – per Browser-Test verifiziert, dass
+    `backdrop-filter` auf einem Ancestor **keinen** Containing Block für `position: fixed`-Nachfahren
+    erzeugt (anders als `filter`/`transform`), sie also trotz der neuen Modal-Verschachtelung weiterhin
+    viewport-weit statt nur im Ancestor-Bereich rendern. `CalendarView.tsx` und `Archiv.tsx`
+    ("Vergangene Sitzungen") nutzen jetzt beide `TerminDetailModal` statt der alten Zwei-Spalten-Flex-
+    Split-View.
+  - **Dashboard-Layout**: `Dashboard.tsx` zeigt "Meine Anträge" und "Nächste Termine" jetzt
+    nebeneinander (`grid grid-cols-1 lg:grid-cols-2 gap-6`, ToDo-Board bleibt oben in voller Breite für
+    die Spalten-Grid). `AntraegeSection.tsx`s Liste bekam zur Höhen-Angleichung dasselbe
+    `max-h-[26rem] overflow-y-auto` wie `CalendarView.tsx`s Terminliste.
+  - Verifiziert per `tsc -b`/`vite build` (fehlerfrei) sowie einem statischen Test-Harness mit der
+    tatsächlich kompilierten CSS (unabhängiges Scrollen der Modal-Spalten und Dashboard-Grid per
+    `getBoundingClientRect()`/`scrollHeight` gegengemessen) – ein Login-Test im echten Dev-Server war
+    nicht möglich, da das Eintragen von Passwörtern grundsätzlich tabu ist; ein echter Login-Rundgang
+    im Browser steht daher noch aus.
+  - **Nachbesserung nach Nutzer-Feedback (noch 2026-07-21):** Drei Punkte. (1) Dashboard-Reihenfolge
+    getauscht – `CalendarView` (Termine) steht jetzt links, `AntraegeSection` (Anträge) rechts (vorher
+    umgekehrt), reine JSX-Reihenfolge im Grid in `Dashboard.tsx`. (2) Die linke Spalte von
+    `TodoDetailModal`/`AntragDetailModal` musste trotz des 2-Spalten-Umbaus noch scrollen, sobald
+    "Teilen"/"Mitantragsteller" (Ebene-Select + Kolleg*innen-Chips + Such-Dropdown) sichtbar war – der
+    Block wurde deshalb komplett aus der linken Formular-Spalte in einen dritten Tab der rechten
+    Aktivitäts-Spalte verschoben (`activityTab: 'kommentare' | 'dokumente' | 'teilen'` bzw.
+    `'mitantragsteller'`, Tab-Button zeigt die Anzahl der bereits Geteilten als Badge). Damit enthält
+    die linke Spalte nur noch das reine Bearbeiten-Formular (Titel/Beschreibung/Zuständig/Termin bzw.
+    Titel/Status/Inhalt/Sitzung) und bleibt in der Praxis immer ohne Scrollen sichtbar – per statischem
+    Test-Harness gegengemessen (`scrollHeight === clientHeight`, `needsScroll: false`). (3) Anlegen
+    eines neuen Antrags ist jetzt wie bei Terminen (`CalendarView.tsx`s "+ Termin") ein Button
+    ("+ Antrag"), der ein `mc-animate-pop`-Formular ein-/ausblendet, statt einer permanent sichtbaren
+    Inline-Zeile in `AntraegeSection.tsx` – `showAddForm`-State, Formular schließt sich nach
+    erfolgreichem Anlegen automatisch (gleiches Verhalten wie `handleAddEvent`).
+  - **Zweite Nachbesserung (noch 2026-07-21):** Nutzer mochte den Kommentare/Dokumente/Teilen-Tab-
+    Umschalter aus der ersten Nachbesserung nicht (per `AskUserQuestion` geklärt: "Kommentare &
+    Dokumente wieder untereinander, Teilen separat"). `DetailModalShell.tsx` bekam eine neue
+    `headerActions`-Prop (Slot im Header neben "Schließen"), `TodoDetailModal.tsx`/
+    `AntragDetailModal.tsx` verschieben Speichern+Löschen dorthin (Formular bekam dafür `id`, der
+    Speichern-Button nutzt das HTML-`form`-Attribut, um trotz Position außerhalb des `<form>`-Elements
+    weiter dessen `onSubmit` auszulösen). Rechte Spalte zeigt jetzt wieder alle drei Bereiche
+    permanent untereinander (Kommentare → Dokumente → Teilen/Mitantragsteller), kein `activityTab`-
+    State mehr - die Spalte scrollt dafür bei vielen Kommentaren/Dokumenten wieder als Ganzes, was der
+    Nutzer explizit so wollte (nur das Umschalten störte, nicht das Scrollen der rechten Spalte an
+    sich). Zusätzlich zwei Felder aus den Formularen entfernt, die laut Nutzer nicht gebraucht werden:
+    `AntragDetailModal.tsx` verlor das "Antragstext / Begründung"-Textarea (Anträge werden als Word/PDF
+    hochgeladen, nicht im UI getippt), `TodoDetailModal.tsx` verlor das "Zuständig"-Eingabefeld. Beide
+    Felder wurden bewusst nur aus dem UI entfernt, nicht aus der Datenbank gedroppt (anders als z. B.
+    `mitantragsteller` in `0024`) - der Nutzer bat nur ums Entfernen des Formularfelds, ein
+    Spalten-Drop mit Datenverlust für ggf. bereits befüllte Zeilen ist eine andere, riskantere
+    Entscheidung, die nicht ungefragt getroffen wurde; `todos.zustaendig` wird zudem an anderer Stelle
+    (Board-Karten-Chip, Archiv) weiterhin gelesen und angezeigt.
+  - **Dritte Nachbesserung (noch 2026-07-21):** Nutzer wollte "Teilen"/"Mitantragsteller" doch wieder
+    zurück auf die linke Seite ("da ist Platz") - nachdem Antragstext/Zuständig aus den Formularen
+    entfernt wurden, ist die linke Spalte inzwischen kurz genug, dass der ursprüngliche Scroll-Grund
+    für den Umzug (siehe erste Nachbesserung oben) nicht mehr greift. `teilenTab`/
+    `mitantragstellerTab` mussten dafür in beiden Modals vor `leftColumn` deklariert werden (die
+    Konstanten wurden vorher zwischen `headerActions` und `rightColumn` gebaut, ein direktes Referenzieren
+    aus `leftColumn` heraus hätte einen Temporal-Dead-Zone-Fehler geworfen, da `const`-Deklarationen in
+    JS nicht wie Funktionsdeklarationen gehoisted werden). Rechte Spalte zeigt jetzt nur noch
+    Kommentare + Dokumente untereinander.
+  - **Vierte Nachbesserung (noch 2026-07-21):** Recherche über den 21st.dev-Connector
+    ("dropdown menu with inline delete confirmation", "animated toggle switch") plus `impeccable`-
+    Produkt-Register-Prinzipien ("Error Prevention: Bestätigung vor destruktiven Aktionen", "gleiche
+    Aktion = gleiche UI") flossen in vier gezielte Verbesserungen:
+    - **Dokumente vor Kommentare**: rechte Spalte in `TodoDetailModal.tsx`/`AntragDetailModal.tsx`
+      vertauscht (Nutzerwunsch, keine tiefere Begründung nötig).
+    - **Header-Aktionen neu**: "Speichern"/"Löschen"/"Schließen" als drei gleichwertige Text-Buttons
+      nebeneinander wirkten zusammengewürfelt. Jetzt: "Speichern" bleibt primärer Text-Button, "Löschen"
+      wird ein zurückhaltender Icon-Button (`lucide-react` `Trash2`, rot erst im Hover), "Schließen" wird
+      ein `X`-Icon-Button, per `border-r` optisch von den Inhalts-Aktionen abgesetzt - gleiches Muster in
+      `DetailModalShell.tsx` (neue `headerActions`-Umrandung), `TerminDetailModal.tsx` und
+      `DocumentPreviewModal.tsx` übernommen, damit alle vier Modals im Projekt dasselbe Kopfzeilen-
+      Vokabular teilen (vorher hatte nur `DocumentPreviewModal.tsx` schon ein eigenes, jetzt
+      vereinheitlichtes Muster).
+    - **Löschen fragt nach**: Klick auf den Trash-Icon-Button lässt ihn inline zu "Sicher? Abbrechen /
+      Löschen" aufklappen (`confirmDelete`-State, per `mc-animate-pop`), statt sofort zu löschen oder
+      ein natives `window.confirm()` zu nutzen (wie in `UserManagement.tsx` - dort bewusst nicht
+      angeglichen, das ist ein anderer, älterer Teil der App und nicht Teil dieser Modal-Überarbeitung).
+      `confirmDelete` wird bei jedem `id`-Wechsel per `useEffect` zurückgesetzt, damit ein Reopen mit
+      einer anderen Karte nicht versehentlich im aufgeklappten Zustand startet.
+    - **"Erledigt" als Toggle-Switch** (nur `TodoDetailModal.tsx`, Anträge haben kein Erledigt-Feld):
+      die native Checkbox wirkte klein/beliebig neben ihrem Label. Ersetzt durch einen selbstgebauten
+      iOS-artigen Switch (`role="switch"`, `aria-checked`, 200ms `translate-x`-Animation, Füllfarbe folgt
+      `bg-primary` und damit automatisch dem Partei-Theme) - kein neues Package, reines Tailwind wie der
+      Rest der Komponenten-Bibliothek.
+    - Verifiziert per `tsc -b`/`vite build` sowie einem interaktiven statischen Test-Harness (Toggle-Klick
+      und Löschen-Klick per `element.click()` ausgelöst, Zustandswechsel per Screenshot bestätigt) - ein
+      Login-Rundgang im echten Dev-Server bleibt weiterhin offen (Passwort-Eingabe ist tabu).
+
+- **Erzwungener Passwortwechsel + Gliederung (welche Kommune/welcher Kreis/welches Land)**
+  (`0025_profiles_muss_passwort_aendern.sql`, `0026_profiles_gliederung.sql`, seit 2026-07-21):
+  - **Passwortzwang**: `profiles.muss_passwort_aendern` (Default `true`, bei der Migration für
+    bestehende Nutzer einmalig auf `false` zurückgesetzt - niemand wird rückwirkend gezwungen, nur
+    neue oder per Admin zurückgesetzte Passwörter). `admin-users`-Edge-Function setzt es bei
+    `action: 'create'` implizit über den Spalten-Default und bei `action: 'update'` explizit wieder auf
+    `true`, sobald ein neues `password` mitgeschickt wird (ein Admin-Reset zählt also wie ein
+    Start-Passwort). Neue Komponente `src/components/ForcedPasswordChange.tsx` (Login.tsx-Optik,
+    zwei Passwortfelder, min. 8 Zeichen, `supabase.auth.updateUser()` + `profiles`-Update in einem
+    Rutsch) wird von `ProtectedRoute.tsx` **vor** den eigentlichen Kindern gerendert, sobald das Flag
+    gesetzt ist - blockt dadurch jede geschützte Route unabhängig von der angefragten URL. Bewusst
+    kein Dead-End: ein dezenter "Abmelden"-Link bleibt als Ausweg.
+  - **Gliederung**: `profiles.ebenen` (0020) markierte bisher nur grob die Ebene
+    (kommune/kreis/land/bund) - zwei Mitglieder derselben Partei aus unterschiedlichen Städten wären
+    dadurch fälschlich als Teilen-Kandidaten füreinander erschienen
+    (`TodoDetailModal.tsx`/`AntragDetailModal.tsx`, `loadCandidates()`). Drei neue nullable Spalten
+    `gliederung_kommune`/`gliederung_kreis`/`gliederung_land` (Bund braucht keine weitere Angabe, es
+    gibt nur einen Bundestag). Neue Datei `src/lib/gliederung.ts`: `gliederungFeld(ebene)` mappt Ebene
+    → passende Spalte (oder `null` bei Bund), `gleicheGliederung(a, b, ebene)` vergleicht getrimmt
+    case-insensitive und wertet eine leere Gliederung **nie** als Treffer - bewusst kein hartes
+    Pflichtfeld auf DB-Ebene (analog zur clientseitig durchgesetzten Dokument-Pflicht bei Anträgen),
+    sondern sanft über die Matching-Logik erzwungen: ohne eingetragene Gliederung taucht man für diese
+    Ebene bei niemandem als Kandidat*in auf (Hinweistext in Settings.tsx macht das explizit). RLS
+    (`profiles_select_same_partei_ebene`, 0020) bleibt unverändert als grobe Vorfilterung; die exakte
+    Prüfung passiert weiterhin rein clientseitig in `loadCandidates()` (gleiches Muster wie schon für
+    die Ebene selbst). `Settings.tsx` "Meine Ebenen"-Block zeigt pro angehaktem Nicht-Bund-Eintrag ein
+    Textfeld darunter (Persistenz `onBlur`, analog zum bestehenden `saveEditColumn`-Muster fürs
+    Board-Spalten-Umbenennen). **Rollout-Nebenwirkung:** Bestehende Nutzer mit
+    kommune/kreis/land-Ebenen haben direkt nach der Migration eine leere Gliederung - bestehende
+    Teilen-Verbindungen auf diesen Ebenen pausieren, bis beide Seiten ihre Gliederung nachtragen
+    (beabsichtigt, verhindert falsche Querverbindungen).
+  - `UserManagement.tsx` bleibt unverändert außer einem ergänzten Hinweistext beim Anlegen ("... muss
+    es beim ersten Login zwingend selbst ändern") - Ebenen/Gliederung sind weiterhin bewusst
+    Selbstauskunft, keine Admin-Pflege.
+  - Verifiziert per `tsc -b`/`vite build`, `deno check` (admin-users), `supabase db push` gegen das
+    Live-Projekt sowie einem statischen Test-Harness für `ForcedPasswordChange` und die neuen
+    Gliederung-Felder - ein echter Login-Rundgang bleibt offen (Passwort-Eingabe ist tabu).
+
+- **"Meine Anträge" → "Antrags-Dokumente"** (`AntraegeSection.tsx`, seit 2026-07-21): Nutzerwunsch,
+  die Dashboard-Sektion konsequent dokumentenzentriert nach Sitzung zu filtern statt nach Status/
+  Ausschuss. Die Status-/Ausschuss-Filter-Chips sind komplett durch einen Sitzungs-Filter ersetzt:
+  "Alle" + ein Chip pro Sitzung, die unter den aktiven Anträgen tatsächlich vorkommt (chronologisch,
+  `vorkommendeSitzungen`) + "Eigene Anträge" für Anträge ohne `session_id` (nur wenn es welche gibt,
+  `hatEigeneOhneSitzung`) - Filter-State-Typ `SitzungFilter = 'alle' | 'eigene' | <session_id>`. Jede
+  Karte zeigt jetzt immer einen Sitzungs-Hinweis, auch wenn keiner besteht (`"Ohne Sitzungsbezug"`
+  statt einfach nichts anzuzeigen) - macht "mit welcher Sitzung verknüpft" für jedes Dokument explizit
+  sichtbar. Klick-Verhalten bewusst unverändert gelassen (Klick auf die Karte öffnet weiterhin das
+  volle `AntragDetailModal`, Klick auf den Dokument-Chip separat per `stopPropagation` die
+  `DocumentPreviewModal`) - der Nutzer wollte weiterhin vollen Zugriff auf Status/Kommentare/
+  Mitantragsteller, nicht nur eine reine Dokumentenliste.
+  - **Erweiterung auf Sitzungsdokumente** (noch 2026-07-21, Überschrift jetzt "Meine Dokumente"):
+    Nutzerwunsch, hier auch Dokumente/Notizen zu sehen, die direkt an einer Sitzung hochgeladen
+    wurden (vorbereitete Redebeiträge, Analysen, Zusammenfassungen - über "Notizen & Dokumente" in
+    `TerminDetailPanel.tsx`), nicht nur Antrags-Dokumente. Neuer Typ `DokumentItem` vereinheitlicht
+    beide Quellen zu einer chronologischen Liste (sortiert nach `erstellt`/`created_at` bzw.
+    `erstellt_am`): `kind: 'antrag'` (unverändertes Verhalten) und `kind: 'sitzungsdokument'` (neu,
+    aus `summaries` mit gesetztem `session_id` **und** `antrag_id is null`, RLS
+    `summaries_manage_own` scoped bereits auf eigene Einträge). Sitzungsdokument-Zeilen haben kein
+    Titel-Feld wie ein Antrag - die Zeile zeigt stattdessen den Dateinamen (Badge "Dokument") oder,
+    falls nur eine Text-Notiz ohne Datei vorliegt, einen Schnipsel des Notiztexts (Badge "Notiz");
+    Klick auf die Zeile öffnet `TerminDetailModal` für die verknüpfte Sitzung (analog zum
+    `AntragDetailModal` bei Antrag-Zeilen), Klick auf den Dateinamen separat per `stopPropagation`
+    die `DocumentPreviewModal`. Der Sitzungs-Filter (`vorkommendeSitzungen`) berücksichtigt jetzt
+    Sitzungen aus beiden Quellen; "Eigene Anträge" bleibt spezifisch für Anträge ohne Sitzungsbezug,
+    da Sitzungsdokumente per Definition immer eine Sitzung haben.
+  - **Dritte Quelle: Dokumente an ToDo-Karten** (noch 2026-07-21): `DokumentItem` bekam einen dritten
+    `kind: 'todo'` (aus `summaries` mit gesetztem `todo_id`, gruppiert nach Karte wie Anträge nach
+    `docsByAntrag` - mehrere Dokumente derselben Karte landen in einer Zeile mit "+N"). Die
+    zugehörigen ToDo-Karten werden gezielt nachgeladen (`todoById`, gleiches Muster wie
+    `eventById`/`sessionById` in `TodoBoard.tsx`), deren `session_id` fließt ebenfalls in den
+    Sitzungs-Filter ein. Badge zeigt "Erledigt" (grün, durchgestrichener Titel) oder "ToDo" (analog
+    zur Card-Darstellung im Board); Klick öffnet `TodoDetailModal`. Damit deckt die Sektion jetzt alle
+    drei Stellen ab, an denen im Projekt Dokumente hochgeladen werden können (Antrag, Sitzung, ToDo).
+  - **📎-Flag auf den Board-Karten** (noch 2026-07-21, `TodoBoard.tsx`): Nutzerwunsch, das "Enthält
+    Dokumente"-Symbol auch direkt auf den ToDo-Karten zu sehen, nicht nur in "Meine Dokumente" bzw.
+    im geöffneten Kartendetail. Gleiches Nachlade-Muster wie `eventById`/`sessionById` (nur für die
+    aktuell sichtbaren Karten, kein Volltabellen-Join): `dokumentIds`-Set aus
+    `summaries.select('todo_id').in('todo_id', ...)`. Icon sitzt bewusst als **Präfix** vor dem
+    Kartentitel (wie das bestehende 🔗-Symbol für geteilte Karten), nicht als Suffix danach - ein
+    Suffix mit vorangestelltem Leerzeichen konnte bei langen Titeln in eine eigene Zeile umbrechen
+    und wirkte dann verwaist (per Test-Harness-Screenshot entdeckt und korrigiert).
+
+- **Impressum, Datenschutzerklärung, Kontaktformular** (`0027_kontakt_anfragen.sql`, seit 2026-07-22):
+  Da mehrere Ratsmitglieder das Cockpit mitnutzen (öffentliches GitHub-Repo, GitHub-Pages-Hosting),
+  geht der Betrieb über eine rein private/familiäre Nutzung hinaus - Impressumspflicht nach § 5 DDG.
+  Neue Seiten `src/pages/Impressum.tsx` und `src/pages/Datenschutz.tsx`, als einzige Routen bewusst
+  **außerhalb** von `ProtectedRoute` (siehe `App.tsx`) - müssen ohne Login erreichbar sein. Von
+  `Login.tsx` (Footer, für nicht angemeldete Besucher*innen) und `Dashboard.tsx` (Footer, für
+  angemeldete Nutzer*innen) verlinkt. Angaben (Name/Anschrift/Kontakt) direkt vom Nutzer erhalten;
+  die Datenschutzerklärung ist inhaltlich an der tatsächlichen Datenverarbeitung im Schema orientiert
+  (Supabase EU-Hosting Frankfurt, GitHub Pages fürs Frontend, private Storage-Buckets), nicht aus
+  einem generischen Template - ersetzt aber keine rechtliche Prüfung im Einzelfall.
+  - **Kontaktformular** (`src/components/KontaktFormular.tsx`, auf der Impressum-Seite): erste Stelle
+    im Projekt mit einer **anonymen Insert-Policy** (`kontakt_anfragen_insert_all`, `to anon,
+    authenticated`) - alle anderen Tabellen verlangen Login. Enthält ein unsichtbares Honeypot-Feld
+    (`website`, per CSS `absolute left-[-9999px]` ausgeblendet) als einfache, kostenlose Bot-Abwehr
+    ohne Captcha-Dienst - kein Ersatz für echten Spam-Schutz, hält aber naive Formular-Bots ab.
+  - **Zustellung bewusst als In-App-Postfach statt E-Mail-Versand** (Nutzerentscheidung nach
+    Rückfrage): ein echter E-Mail-Versand hätte einen externen Dienst (z. B. Resend) samt neuem
+    API-Key-Secret gebraucht. Stattdessen neue Tabelle `kontakt_anfragen` (Name, E-Mail, Nachricht,
+    `gelesen`-Flag) und ein neuer Admin-Bereich "Kontaktanfragen" in `Settings.tsx`
+    (`src/components/KontaktAnfragenListe.tsx`, RLS `kontakt_anfragen_select_admin` auf `rolle =
+    'admin'` beschränkt) - gleiches Muster wie die bestehende Benutzerverwaltung.
+  - Verifiziert per `tsc -b`/`vite build`, `supabase db push` gegen das Live-Projekt sowie einem
+    echten End-to-End-Test im Dev-Server: `/impressum` und `/datenschutz` sind ohne Login erreichbar
+    (im Gegensatz zu den anderen Seiten kein Passwort nötig, daher hier ausnahmsweise ein echter
+    Browser-Rundgang statt nur ein statischer Test-Harness), Kontaktformular erfolgreich gegen die
+    Live-Datenbank abgesendet (eine Test-Nachricht "Testabsender" liegt entsprechend im
+    Kontaktanfragen-Postfach und kann dort gelöscht werden).
+
+- **Bugfix: `webcal://`-Quellen ließen den täglichen ICS-Import deterministisch scheitern**
+  (seit 2026-07-23): Der tägliche Import-Job (`import-ics.yml`) war zwei Tage in Folge (2026-07-22
+  und 2026-07-23) rot. Root Cause: die von Benjamin Korte angelegte Quelle "Kreistag" nutzt ein
+  `webcal://`-URL-Schema (eine reine Client-Konvention "das hier ist ein abonnierbarer Kalender",
+  von iCal/Outlook/Google Calendar traditionell 1:1 zu `http(s)://` aufgelöst) - Node/undicis
+  natives `fetch` (das `ical.async.fromURL()` intern nutzt) kennt dieses Schema nicht und wirft
+  dafür bei **jedem einzelnen Aufruf** "fetch failed" (kein Netzwerkfehler, kein Flackern - lokal
+  reproduziert und verifiziert: derselbe Request funktioniert sofort fehlerfrei, sobald man
+  `webcal://` durch `https://` ersetzt). Da `scripts/import-ics.mjs` bei mindestens einer
+  fehlgeschlagenen Quelle mit `process.exit(1)` abbricht, färbte diese eine kaputte private Quelle
+  den gesamten täglichen Job für alle Quellen rot, obwohl die anderen drei (inkl. "Stadtrat
+  Iserlohn") jeden Tag anstandslos durchliefen.
+  - Fix: neue Hilfsfunktion `normalizeIcsUrl()` (in `scripts/import-ics.mjs` **und**
+    `supabase/functions/import-ics-source/index.ts`, gleiche bewusste Dopplung wie bei der
+    Gremium-Extraktion) mappt `webcal://`/`webcals://` vor dem Fetch auf `https://` - lokal mit der
+    echten, betroffenen URL gegenverifiziert (vorher: "fetch failed" bei jedem Versuch, nachher: 26
+    VEVENTs korrekt geparst).
+  - Nebenbefund beim Debuggen, bewusst nicht automatisch "repariert": zwei weitere private Quellen
+    hatten eigene, unabhängige Probleme. "Kreistag MK" (Stefan Woelk) zeigt auf
+    `https://www.sitzungsdienst-maerkischer-kreis.de/ri/si010_i.asp` - liefert HTTP 403 (auch per
+    curl reproduzierbar) und hat keine `template=ical`-Query-Parameter wie die funktionierende
+    Schwester-Quelle "Kreistag" vom selben Anbieter; sieht nach einer falsch kopierten
+    Seiten-URL statt eines echten ICS-Exportlinks aus - node-ical wirft dafür keinen Fehler
+    (leeres, aber parsbares HTML), sondern liefert nur 0 Termine, war also nie Teil des roten
+    Job-Status. "LWL" (Benjamin Korte) nutzt `http://` statt `https://` und braucht dadurch einen
+    301-Redirect vor dem eigentlichen ICS-Feed - lief in den beiden untersuchten Läufen einmal durch
+    und einmal mit "fetch failed" fehl (vermutlich netzwerkbedingtes Flackern auf GitHub-Actions-
+    Runnern beim Redirect-Hop, nicht reproduzierbar vom lokalen Rechner aus). Beides sind private
+    Quellen anderer Mitglieder (nicht meine) - die Korrektur der URLs selbst wurde bewusst nicht
+    automatisiert vorgenommen (auch von der Auto-Mode-Berechtigungsprüfung blockiert, als ein
+    direktes `UPDATE` auf `calendar_sources` versucht wurde), sondern den jeweiligen Besitzern zur
+    eigenständigen Korrektur in ihren Settings überlassen.
