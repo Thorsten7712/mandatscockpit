@@ -39,6 +39,7 @@ export default function Archiv() {
   const [newEbene, setNewEbene] = useState<Ebene>('kommune')
   const [newDatum, setNewDatum] = useState('')
   const [newOrt, setNewOrt] = useState('')
+  const [newSourceId, setNewSourceId] = useState('')
   const [newSaving, setNewSaving] = useState(false)
   const [newError, setNewError] = useState<string | null>(null)
 
@@ -98,23 +99,26 @@ export default function Archiv() {
     setSessions(data ?? [])
   }
 
-  // Manuell nachgetragene Sitzung (supabase/migrations/0020) - für Gremien
-  // ohne ICS-Feed bzw. um vergangene, nie importierte Sitzungen zu erfassen,
-  // damit sich dort im Anschluss Dokumente/Notizen verknüpfen lassen. Öffnet
-  // danach direkt die Detailansicht, statt nur die Liste zu aktualisieren.
+  // Manuell nachgetragene Sitzung (supabase/migrations/0028, source_id-Wahl
+  // seit 0029) - für Gremien ohne ICS-Feed bzw. um vergangene, nie
+  // importierte Sitzungen zu erfassen, damit sich dort im Anschluss
+  // Dokumente/Notizen verknüpfen lassen. Öffnet danach direkt die
+  // Detailansicht, statt nur die Liste zu aktualisieren.
   async function handleCreateSession(e: FormEvent) {
     e.preventDefault()
     if (!userId || !newDatum) return
     setNewSaving(true)
     setNewError(null)
+    const source = sources.find((s) => s.id === newSourceId)
     const { data, error } = await supabase
       .from('sessions')
       .insert({
         titel: newTitel,
         gremium: newGremium || null,
-        ebene: newEbene,
+        ebene: source?.ebene ?? newEbene,
         datum: new Date(newDatum).toISOString(),
         ort: newOrt || null,
+        source_id: newSourceId || null,
         erstellt_von: userId,
       })
       .select('id')
@@ -135,6 +139,7 @@ export default function Archiv() {
     setNewEbene('kommune')
     setNewDatum('')
     setNewOrt('')
+    setNewSourceId('')
     setShowNewSession(false)
     setNewSaving(false)
     await loadSessions()
@@ -281,6 +286,30 @@ export default function Archiv() {
                   className="mc-input w-full"
                   required
                 />
+                <div>
+                  <label className="mb-1 block text-xs text-slate-500" htmlFor="new-session-source">
+                    Kalenderquelle (optional – für einheitliche Farbe/Bezeichnung wie importierte
+                    Sitzungen derselben Quelle)
+                  </label>
+                  <select
+                    id="new-session-source"
+                    value={newSourceId}
+                    onChange={(e) => {
+                      const id = e.target.value
+                      setNewSourceId(id)
+                      const source = sources.find((s) => s.id === id)
+                      if (source) setNewEbene(source.ebene)
+                    }}
+                    className="mc-input w-full"
+                  >
+                    <option value="">Keine – eigenständige Sitzung</option>
+                    {sources.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -292,7 +321,8 @@ export default function Archiv() {
                   <select
                     value={newEbene}
                     onChange={(e) => setNewEbene(e.target.value as Ebene)}
-                    className="mc-input flex-1"
+                    disabled={!!newSourceId}
+                    className="mc-input flex-1 disabled:opacity-60"
                   >
                     {EBENEN.map((o) => (
                       <option key={o.value} value={o.value}>
@@ -360,7 +390,7 @@ export default function Archiv() {
                           <span
                             className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
                           >
-                            {source ? (EBENE_LABEL[source.ebene] ?? 'Sitzung') : 'Sitzung'}
+                            {EBENE_LABEL[source?.ebene ?? s.ebene ?? ''] ?? 'Sitzung'}
                           </span>
                           {abgesagt && (
                             <span className="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-500 no-underline">

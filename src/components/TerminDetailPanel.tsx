@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, Ebene, EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
+import type { AntragRow, CalendarSource, Ebene, EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
 import { AntragDetailModal } from './AntragDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
@@ -46,6 +46,8 @@ export function TerminDetailPanel({
   const [editOrt, setEditOrt] = useState('')
   const [editGremium, setEditGremium] = useState('')
   const [editEbene, setEditEbene] = useState<Ebene>('kommune')
+  const [editSourceId, setEditSourceId] = useState('')
+  const [sources, setSources] = useState<CalendarSource[]>([])
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -119,12 +121,18 @@ export function TerminDetailPanel({
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id)
     })
+    if (kind === 'session') {
+      supabase
+        .from('calendar_sources')
+        .select('*')
+        .then(({ data }) => setSources(data ?? []))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, id])
 
   // Sitzungen sind nur bearbeitbar/löschbar, wenn sie vom aktuellen Nutzer
   // selbst manuell nachgetragen wurden (sessions_update_own_manuell/
-  // sessions_delete_own_manuell, supabase/migrations/0020) - importierte
+  // sessions_delete_own_manuell, supabase/migrations/0028+0029) - importierte
   // Sitzungen (erstellt_von = null) bleiben read-only.
   const canManageSession = kind === 'session' && session?.erstellt_von === userId
 
@@ -141,6 +149,7 @@ export function TerminDetailPanel({
       setEditOrt(session.ort ?? '')
       setEditGremium(session.gremium ?? '')
       setEditEbene(session.ebene ?? 'kommune')
+      setEditSourceId(session.source_id ?? '')
     } else {
       return
     }
@@ -170,7 +179,8 @@ export function TerminDetailPanel({
               datum: new Date(editStart).toISOString(),
               ort: editOrt || null,
               gremium: editGremium || null,
-              ebene: editEbene,
+              ebene: sources.find((s) => s.id === editSourceId)?.ebene ?? editEbene,
+              source_id: editSourceId || null,
             })
             .eq('id', session!.id)
     if (error) {
@@ -328,26 +338,46 @@ export function TerminDetailPanel({
                 className="mc-input w-full"
               />
               {kind === 'session' && (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Gremium"
-                    value={editGremium}
-                    onChange={(e) => setEditGremium(e.target.value)}
-                    className="mc-input flex-1"
-                  />
+                <>
                   <select
-                    value={editEbene}
-                    onChange={(e) => setEditEbene(e.target.value as Ebene)}
-                    className="mc-input flex-1"
+                    value={editSourceId}
+                    onChange={(e) => {
+                      const sid = e.target.value
+                      setEditSourceId(sid)
+                      const source = sources.find((s) => s.id === sid)
+                      if (source) setEditEbene(source.ebene)
+                    }}
+                    className="mc-input w-full"
                   >
-                    {EBENEN.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
+                    <option value="">Keine Kalenderquelle – eigenständige Sitzung</option>
+                    {sources.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
                       </option>
                     ))}
                   </select>
-                </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Gremium"
+                      value={editGremium}
+                      onChange={(e) => setEditGremium(e.target.value)}
+                      className="mc-input flex-1"
+                    />
+                    <select
+                      value={editEbene}
+                      onChange={(e) => setEditEbene(e.target.value as Ebene)}
+                      disabled={!!editSourceId}
+                      className="mc-input flex-1 disabled:opacity-60"
+                    >
+                      {EBENEN.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
               {editError && <p className="text-red-600 text-sm">{editError}</p>}
               <div className="flex gap-2">

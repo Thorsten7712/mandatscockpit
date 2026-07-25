@@ -14,8 +14,10 @@ interface AggregatedItem {
   start: string
   ort: string | null
   abgesagt: boolean
-  /** Kalenderquelle der Sitzung (null bei eigenen Terminen) */
+  /** Kalenderquelle der Sitzung (null bei eigenen Terminen UND bei manuell nachgetragenen Sitzungen ohne Quelle) */
   source_id: string | null
+  /** Ebene der Sitzung direkt aus sessions.ebene (null bei eigenen Terminen) - Fallback, falls keine Quelle verknüpft ist */
+  ebene: Ebene | null
 }
 
 type TerminFilter = 'alle' | 'eigene' | Ebene
@@ -117,6 +119,7 @@ export function CalendarView() {
       ort: e.ort,
       abgesagt: e.status === 'abgesagt',
       source_id: null,
+      ebene: null,
     })),
     ...sessions.map((s) => ({
       key: `sitzung-${s.id}`,
@@ -127,6 +130,7 @@ export function CalendarView() {
       ort: s.ort,
       abgesagt: s.status === 'abgesagt',
       source_id: s.source_id,
+      ebene: s.ebene,
     })),
   ].sort((a, b) => a.start.localeCompare(b.start))
 
@@ -137,7 +141,7 @@ export function CalendarView() {
   // keine leeren/wirkungslosen Filter anzeigen.
   const ebenenPresent = new Set(
     sessions
-      .map((s) => sourceById.get(s.source_id ?? '')?.ebene)
+      .map((s) => sourceById.get(s.source_id ?? '')?.ebene ?? s.ebene)
       .filter((e): e is Ebene => Boolean(e)),
   )
   const EBENEN_ORDER: Ebene[] = ['kommune', 'kreis', 'land', 'bund']
@@ -154,7 +158,7 @@ export function CalendarView() {
     if (filter === 'alle') return true
     if (filter === 'eigene') return item.kind === 'event'
     if (item.kind !== 'session') return false
-    return sourceById.get(item.source_id ?? '')?.ebene === filter
+    return (sourceById.get(item.source_id ?? '')?.ebene ?? item.ebene) === filter
   })
 
   return (
@@ -238,7 +242,7 @@ export function CalendarView() {
           const source = item.source_id ? sourceById.get(item.source_id) : undefined
           const farbe = item.kind === 'session' ? sourceColorById(source?.farbe) : THEME_COLOR
           const badgeText =
-            item.kind === 'session' ? (source ? (EBENE_LABEL[source.ebene] ?? 'Sitzung') : 'Sitzung') : null
+            item.kind === 'session' ? (EBENE_LABEL[source?.ebene ?? item.ebene ?? ''] ?? 'Sitzung') : null
           return (
             <li key={item.key}>
               <button

@@ -924,3 +924,32 @@ gefragt.
     `table_schema = 'public'` muss immer mit angegeben werden).
   - Verifiziert per `tsc -b`/`vite build` sowie direkt gegen die Live-DB: Migration gepusht, neue
     Spalte/Policies per `pg_policies`-Query bestätigt.
+
+- **Nachbesserung: manuell nachgetragene Sitzungen sahen anders aus als importierte** (seit
+  2026-07-25, `0029_sessions_manuell_quelle.sql`): Nutzer-Feedback direkt nach dem ersten Test von
+  0028 - eine rückwirkend erfasste "Rat der Stadt Iserlohn"-Sitzung zeigte in `Archiv.tsx` einen
+  grauen "SITZUNG"-Badge statt des blauen "KOMMUNE"-Badges der importierten Sitzungen derselben
+  Quelle. Root Cause, zwei Teile: (1) Badge-Text/-Farbe hingen ausschließlich an einer verknüpften
+  `calendar_sources`-Zeile (`source ? EBENE_LABEL[source.ebene] : 'Sitzung'`), obwohl `sessions.ebene`
+  längst direkt auf der Zeile selbst steht - bei `source_id = null` (jede manuelle Sitzung nach 0028)
+  fiel das also immer auf den generischen Text/die Theme-Farbe zurück. (2) 0028 erzwang `source_id is
+  null` beim manuellen Anlegen strikt, es gab also gar keine Möglichkeit, sich bewusst optisch in eine
+  bestehende Quelle einzureihen.
+  - Fix Teil 1 (überall, wo Sitzungs-Badges gerendert werden - `Archiv.tsx`, `CalendarView.tsx`
+    Dashboard "Nächste Termine"): Fallback von `source?.ebene` auf `s.ebene`/`item.ebene` statt auf den
+    hartkodierten String `'Sitzung'`. In `CalendarView.tsx` zusätzlich `AggregatedItem` um `ebene`
+    erweitert, da auch die Ebenen-Filter-Chips (`ebenenPresent`/`filtered`) bisher ausschließlich über
+    die Quelle liefen und manuelle Sitzungen dadurch in keinem Ebene-Filter auftauchten, nur unter
+    "Alle".
+  - Fix Teil 2 (`0029_sessions_manuell_quelle.sql`): `sessions_insert_manuell`/
+    `sessions_update_own_manuell` erlauben jetzt `source_id` auf eine für den Nutzer sichtbare Quelle
+    (gemeinsam verwaltet ODER eigene) zu setzen, statt nur `null`. Neues Auswahlfeld "Kalenderquelle"
+    im "Sitzung nachtragen"-Formular (`Archiv.tsx`) und im Bearbeiten-Formular
+    (`TerminDetailPanel.tsx`) - bei Auswahl wird `ebene` automatisch von der Quelle übernommen (Select
+    dafür deaktiviert, um Inkonsistenzen zu vermeiden). `ics_uid` bleibt weiterhin ausschließlich dem
+    Import-Job vorbehalten, keine RLS-Sonderbehandlung nötig, da das Frontend es nie setzt.
+  - Das vom Nutzer in der Rückmeldung gezeigte Beispiel (Sitzung "Rat der Stadt Iserlohn" am
+    2025-11-11, eigene Zeile, `erstellt_von` = Thorsten Kois) direkt per SQL auf `source_id` von
+    "Stadtrat Iserlohn" nachgezogen, damit es nicht zusätzlich manuell in der UI nachgepflegt werden
+    muss.
+  - Verifiziert per `tsc -b`/`vite build`, Migration gegen die Live-DB gepusht.
