@@ -1,11 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
+import type { AntragRow, Ebene, EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
 import { AntragDetailModal } from './AntragDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDateTime } from '../lib/format'
 import { antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
+
+// Gleiche Liste wie in Settings.tsx/Archiv.tsx (Kalenderquellen- bzw.
+// Sitzung-nachtragen-Formular) - bewusst dupliziert, siehe CLAUDE.md.
+const EBENEN: { value: Ebene; label: string }[] = [
+  { value: 'kommune', label: 'Kommune' },
+  { value: 'kreis', label: 'Kreis' },
+  { value: 'land', label: 'Land' },
+  { value: 'bund', label: 'Bund' },
+]
 
 function toDatetimeLocalValue(iso: string): string {
   const d = new Date(iso)
@@ -35,6 +44,8 @@ export function TerminDetailPanel({
   const [editStart, setEditStart] = useState('')
   const [editEnde, setEditEnde] = useState('')
   const [editOrt, setEditOrt] = useState('')
+  const [editGremium, setEditGremium] = useState('')
+  const [editEbene, setEditEbene] = useState<Ebene>('kommune')
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -111,30 +122,57 @@ export function TerminDetailPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, id])
 
+  // Sitzungen sind nur bearbeitbar/löschbar, wenn sie vom aktuellen Nutzer
+  // selbst manuell nachgetragen wurden (sessions_update_own_manuell/
+  // sessions_delete_own_manuell, supabase/migrations/0020) - importierte
+  // Sitzungen (erstellt_von = null) bleiben read-only.
+  const canManageSession = kind === 'session' && session?.erstellt_von === userId
+
   function startEdit() {
-    if (!event) return
-    setEditTitel(event.titel)
-    setEditStart(toDatetimeLocalValue(event.start))
-    setEditEnde(event.ende ? toDatetimeLocalValue(event.ende) : '')
-    setEditOrt(event.ort ?? '')
+    if (kind === 'event' && event) {
+      setEditTitel(event.titel)
+      setEditStart(toDatetimeLocalValue(event.start))
+      setEditEnde(event.ende ? toDatetimeLocalValue(event.ende) : '')
+      setEditOrt(event.ort ?? '')
+    } else if (kind === 'session' && session) {
+      setEditTitel(session.titel)
+      setEditStart(toDatetimeLocalValue(session.datum))
+      setEditEnde('')
+      setEditOrt(session.ort ?? '')
+      setEditGremium(session.gremium ?? '')
+      setEditEbene(session.ebene ?? 'kommune')
+    } else {
+      return
+    }
     setEditError(null)
     setEditing(true)
   }
 
   async function handleSaveEdit(e: FormEvent) {
     e.preventDefault()
-    if (!event) return
     setEditSaving(true)
     setEditError(null)
-    const { error } = await supabase
-      .from('events')
-      .update({
-        titel: editTitel,
-        start: new Date(editStart).toISOString(),
-        ende: editEnde ? new Date(editEnde).toISOString() : null,
-        ort: editOrt || null,
-      })
-      .eq('id', event.id)
+    const { error } =
+      kind === 'event' && event
+        ? await supabase
+            .from('events')
+            .update({
+              titel: editTitel,
+              start: new Date(editStart).toISOString(),
+              ende: editEnde ? new Date(editEnde).toISOString() : null,
+              ort: editOrt || null,
+            })
+            .eq('id', event.id)
+        : await supabase
+            .from('sessions')
+            .update({
+              titel: editTitel,
+              datum: new Date(editStart).toISOString(),
+              ort: editOrt || null,
+              gremium: editGremium || null,
+              ebene: editEbene,
+            })
+            .eq('id', session!.id)
     if (error) {
       setEditError(error.message)
     } else {
@@ -145,9 +183,11 @@ export function TerminDetailPanel({
   }
 
   async function handleDelete() {
-    if (!event) return
     setDeleteError(null)
-    const { error } = await supabase.from('events').delete().eq('id', event.id)
+    const { error } =
+      kind === 'event' && event
+        ? await supabase.from('events').delete().eq('id', event.id)
+        : await supabase.from('sessions').delete().eq('id', session!.id)
     if (error) {
       setDeleteError(error.message)
       return
@@ -232,18 +272,20 @@ export function TerminDetailPanel({
               {event?.herkunft === 'fraktionsbuero' && (
                 <p className="text-sm text-slate-600">Angelegt vom Fraktionsbüro</p>
               )}
-              {event && (
+              {(event || canManageSession) && (
                 <div className="flex gap-2 pt-2">
                   <button type="button" onClick={startEdit} className="mc-btn-ghost !px-2 !py-1 !text-xs">
                     Bearbeiten
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleToggleAbsage}
-                    className="mc-btn-ghost !px-2 !py-1 !text-xs"
-                  >
-                    {event.status === 'abgesagt' ? 'Reaktivieren' : 'Absagen'}
-                  </button>
+                  {event && (
+                    <button
+                      type="button"
+                      onClick={handleToggleAbsage}
+                      className="mc-btn-ghost !px-2 !py-1 !text-xs"
+                    >
+                      {event.status === 'abgesagt' ? 'Reaktivieren' : 'Absagen'}
+                    </button>
+                  )}
                   <button type="button" onClick={handleDelete} className="mc-btn-danger !px-2 !py-1 !text-xs">
                     Löschen
                   </button>
@@ -269,12 +311,14 @@ export function TerminDetailPanel({
                   className="mc-input flex-1"
                   required
                 />
-                <input
-                  type="datetime-local"
-                  value={editEnde}
-                  onChange={(e) => setEditEnde(e.target.value)}
-                  className="mc-input flex-1"
-                />
+                {kind === 'event' && (
+                  <input
+                    type="datetime-local"
+                    value={editEnde}
+                    onChange={(e) => setEditEnde(e.target.value)}
+                    className="mc-input flex-1"
+                  />
+                )}
               </div>
               <input
                 type="text"
@@ -283,6 +327,28 @@ export function TerminDetailPanel({
                 onChange={(e) => setEditOrt(e.target.value)}
                 className="mc-input w-full"
               />
+              {kind === 'session' && (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Gremium"
+                    value={editGremium}
+                    onChange={(e) => setEditGremium(e.target.value)}
+                    className="mc-input flex-1"
+                  />
+                  <select
+                    value={editEbene}
+                    onChange={(e) => setEditEbene(e.target.value as Ebene)}
+                    className="mc-input flex-1"
+                  >
+                    {EBENEN.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {editError && <p className="text-red-600 text-sm">{editError}</p>}
               <div className="flex gap-2">
                 <button

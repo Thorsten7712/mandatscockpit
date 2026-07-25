@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckSquare, FileText, Gavel, History } from 'lucide-react'
+import { CheckSquare, FileText, Gavel, History, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, CalendarSource, SessionRow, SummaryRow, TodoRow } from '../lib/types'
+import type { AntragRow, CalendarSource, Ebene, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TerminDetailModal } from '../components/TerminDetailModal'
 import { TodoDetailModal } from '../components/TodoDetailModal'
 import { AntragDetailModal } from '../components/AntragDetailModal'
@@ -13,14 +13,34 @@ import { ANTRAG_STATUS_ABGESCHLOSSEN, antragBadgeClasses, antragStatusLabel } fr
 
 type Tab = 'sitzungen' | 'aufgaben' | 'dokumente' | 'antraege'
 
+// Gleiche Liste wie in Settings.tsx (Kalenderquellen-Formular) und
+// TerminDetailPanel.tsx (Sitzung bearbeiten) - bewusst dupliziert, siehe
+// CLAUDE.md.
+const EBENEN: { value: Ebene; label: string }[] = [
+  { value: 'kommune', label: 'Kommune' },
+  { value: 'kreis', label: 'Kreis' },
+  { value: 'land', label: 'Land' },
+  { value: 'bund', label: 'Bund' },
+]
+
 export default function Archiv() {
   const [tab, setTab] = useState<Tab>('sitzungen')
 
+  const [userId, setUserId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [sources, setSources] = useState<CalendarSource[]>([])
   const [notizenIds, setNotizenIds] = useState<Set<string>>(new Set())
   const [meineGremien, setMeineGremien] = useState<string[] | null>(null)
   const [selectedSession, setSelectedSession] = useState<string | null>(null)
+
+  const [showNewSession, setShowNewSession] = useState(false)
+  const [newTitel, setNewTitel] = useState('')
+  const [newGremium, setNewGremium] = useState('')
+  const [newEbene, setNewEbene] = useState<Ebene>('kommune')
+  const [newDatum, setNewDatum] = useState('')
+  const [newOrt, setNewOrt] = useState('')
+  const [newSaving, setNewSaving] = useState(false)
+  const [newError, setNewError] = useState<string | null>(null)
 
   const [completedTodos, setCompletedTodos] = useState<TodoRow[]>([])
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
@@ -58,6 +78,7 @@ export default function Archiv() {
   async function loadSessions() {
     const { data: mine } = await supabase.auth.getUser()
     if (!mine.user) return
+    setUserId(mine.user.id)
     const { data: gremienRows } = await supabase
       .from('user_gremien')
       .select('gremium')
@@ -75,6 +96,49 @@ export default function Archiv() {
       .lt('datum', startOfTodayIso())
       .order('datum', { ascending: false })
     setSessions(data ?? [])
+  }
+
+  // Manuell nachgetragene Sitzung (supabase/migrations/0020) - für Gremien
+  // ohne ICS-Feed bzw. um vergangene, nie importierte Sitzungen zu erfassen,
+  // damit sich dort im Anschluss Dokumente/Notizen verknüpfen lassen. Öffnet
+  // danach direkt die Detailansicht, statt nur die Liste zu aktualisieren.
+  async function handleCreateSession(e: FormEvent) {
+    e.preventDefault()
+    if (!userId || !newDatum) return
+    setNewSaving(true)
+    setNewError(null)
+    const { data, error } = await supabase
+      .from('sessions')
+      .insert({
+        titel: newTitel,
+        gremium: newGremium || null,
+        ebene: newEbene,
+        datum: new Date(newDatum).toISOString(),
+        ort: newOrt || null,
+        erstellt_von: userId,
+      })
+      .select('id')
+      .single()
+    if (error || !data) {
+      setNewError(error?.message ?? 'Sitzung konnte nicht angelegt werden.')
+      setNewSaving(false)
+      return
+    }
+    // Neues Gremium automatisch zu "Meine Gremien" hinzufügen, sonst würde
+    // die eben angelegte Sitzung durch den .in('gremium', gremien)-Filter
+    // oben sofort wieder aus der Liste herausfallen.
+    if (newGremium && !(meineGremien ?? []).includes(newGremium)) {
+      await supabase.from('user_gremien').insert({ user_id: userId, gremium: newGremium })
+    }
+    setNewTitel('')
+    setNewGremium('')
+    setNewEbene('kommune')
+    setNewDatum('')
+    setNewOrt('')
+    setShowNewSession(false)
+    setNewSaving(false)
+    await loadSessions()
+    setSelectedSession(data.id)
   }
 
   async function loadNotizenFlags() {
@@ -198,6 +262,72 @@ export default function Archiv() {
 
         {tab === 'sitzungen' && (
           <section className="mc-animate-fade max-w-2xl">
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowNewSession((v) => !v)}
+                className="mc-btn-ghost !text-xs"
+              >
+                <Plus size={14} /> Sitzung nachtragen
+              </button>
+            </div>
+            {showNewSession && (
+              <form onSubmit={handleCreateSession} className="mc-card mb-4 space-y-2 p-4">
+                <input
+                  type="text"
+                  placeholder="Titel (z. B. Bauausschuss – Sitzung)"
+                  value={newTitel}
+                  onChange={(e) => setNewTitel(e.target.value)}
+                  className="mc-input w-full"
+                  required
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Gremium"
+                    value={newGremium}
+                    onChange={(e) => setNewGremium(e.target.value)}
+                    className="mc-input flex-1"
+                  />
+                  <select
+                    value={newEbene}
+                    onChange={(e) => setNewEbene(e.target.value as Ebene)}
+                    className="mc-input flex-1"
+                  >
+                    {EBENEN.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="datetime-local"
+                    value={newDatum}
+                    onChange={(e) => setNewDatum(e.target.value)}
+                    className="mc-input flex-1"
+                    required
+                  />
+                  <input
+                    type="text"
+                    placeholder="Ort (optional)"
+                    value={newOrt}
+                    onChange={(e) => setNewOrt(e.target.value)}
+                    className="mc-input flex-1"
+                  />
+                </div>
+                {newError && <p className="text-red-600 text-sm">{newError}</p>}
+                <div className="flex gap-2">
+                  <button type="submit" disabled={newSaving} className="mc-btn-primary">
+                    {newSaving ? 'Speichern...' : 'Anlegen'}
+                  </button>
+                  <button type="button" onClick={() => setShowNewSession(false)} className="mc-btn-ghost">
+                    Abbrechen
+                  </button>
+                </div>
+              </form>
+            )}
             <ul className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
               {sessions.map((s) => {
                 const { day, month } = formatDayMonth(s.datum)

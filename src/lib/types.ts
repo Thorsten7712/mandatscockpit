@@ -59,6 +59,8 @@ export interface SessionRow {
   ort: string | null
   quelle_url: string | null
   status: SessionStatus
+  /** Nur bei manuell nachgetragenen Sitzungen gesetzt (nicht via ICS-Import) - bestimmt Bearbeiten/Löschen-Rechte. */
+  erstellt_von: string | null
 }
 
 export interface DocumentRow {

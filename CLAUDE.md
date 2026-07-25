@@ -41,7 +41,9 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   verwaltete, strikt privat pro Nutzer getrennt), Meine Gremien/Ebenen/Gliederung, ToDo-Board-Struktur,
   Antrags-Fristen, MCP Connection (persönliches Bearer-Token), Benutzerverwaltung + Kontaktanfragen
   (nur `rolle = 'admin'`).
-- **Archiv**: vergangene Sitzungen, erledigte Aufgaben, hochgeladene Dokumente, entschiedene Anträge.
+- **Archiv**: vergangene Sitzungen (inkl. manuell nachtragbar, z. B. für Gremien ohne ICS-Feed - nur
+  der erstellende Nutzer darf seine eigene nachgetragene Sitzung bearbeiten/löschen), erledigte
+  Aufgaben, hochgeladene Dokumente, entschiedene Anträge.
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),

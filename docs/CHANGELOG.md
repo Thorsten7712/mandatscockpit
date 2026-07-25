@@ -884,3 +884,43 @@ gefragt.
     automatisiert vorgenommen (auch von der Auto-Mode-Berechtigungsprüfung blockiert, als ein
     direktes `UPDATE` auf `calendar_sources` versucht wurde), sondern den jeweiligen Besitzern zur
     eigenständigen Korrektur in ihren Settings überlassen.
+
+- **Sitzungen manuell nachtragen** (`0028_sessions_manuell_anlegen.sql`, seit 2026-07-25):
+  Nutzerwunsch, rückwirkend Gremiensitzungen erfassen zu können, um im Nachhinein noch Dokumente
+  hochzuladen und zu verknüpfen (z. B. Sitzungen aus der Zeit vor Einrichtung eines ICS-Feeds oder
+  aus Gremien ganz ohne ICS-Feed). Bisher gab es dafür **keine** Möglichkeit: `sessions` hatte seit
+  `0001_init.sql` nie eine INSERT/UPDATE/DELETE-Policy für eingeloggte Nutzer, nur der ICS-Import-Job
+  (Service Role) konnte Zeilen schreiben (Kommentar dort: "Schreiben später nur via Service Role /
+  Import-Job"). Die "Notizen & Dokumente"-Sektion in `TerminDetailPanel.tsx` funktionierte für
+  Sitzungen zwar schon (identisches Muster wie bei Terminen, siehe `.claude/skills/document-feature`),
+  lief aber ins Leere, weil sich gar keine passende Sitzung anlegen ließ.
+  - Neue Spalte `sessions.erstellt_von` (nullable, nur bei manuell angelegten Sitzungen gesetzt) plus
+    drei neue Policies: `sessions_insert_manuell` (`source_id is null and erstellt_von = auth.uid()`
+    - verhindert, dass sich ein Nutzer als ICS-Quelle ausgibt), `sessions_update_own_manuell` und
+    `sessions_delete_own_manuell` (beide auf `erstellt_von = auth.uid()` beschränkt). Importierte
+    Sitzungen (`erstellt_von is null`) bleiben dadurch wie bisher für alle unveränderbar - nur der
+    Import-Job selbst (Service Role, RLS-unabhängig) kann sie schreiben.
+  - **UI**: neuer Button "Sitzung nachtragen" im Tab "Vergangene Sitzungen" in `Archiv.tsx` (Titel,
+    Gremium, Ebene, Datum, Ort). Nach dem Anlegen öffnet sich direkt die Detailansicht der neuen
+    Sitzung, damit sofort Dokumente/Notizen hochgeladen werden können, statt nur die Liste zu
+    aktualisieren. Das neue Gremium wird automatisch zu `user_gremien` hinzugefügt (sonst würde die
+    gerade angelegte Sitzung durch den bestehenden `.in('gremium', meineGremien)`-Filter in
+    `loadSessions()` sofort wieder aus der Liste herausfallen).
+  - **`TerminDetailPanel.tsx`** generalisiert: das bisher nur für `kind='event'` sichtbare
+    Bearbeiten/Löschen-UI (inkl. Formular) ist jetzt auch für `kind='session'` sichtbar, aber nur wenn
+    `session.erstellt_von === userId` (`canManageSession`) - importierte Sitzungen zeigen weiterhin
+    keine Bearbeiten/Löschen-Buttons. Das Bearbeiten-Formular zeigt kind-abhängig unterschiedliche
+    Felder (Sitzungen: Gremium + Ebene statt Ende-Datum, das Sitzungen nicht haben). Der
+    "Absagen/Reaktivieren"-Toggle bleibt bewusst event-exklusiv (für eine rückwirkend erfasste,
+    bereits stattgefundene Sitzung ergibt eine nachträgliche Absage keinen Sinn).
+  - Migration mit einer Nummer-Kollision gepusht: beim Erstellen lokal als `0020_...sql` angelegt,
+    aber `0020_profiles_ebenen.sql` existierte auf der Live-DB bereits (zwischen den Sessions waren
+    dort bereits Migrationen bis `0027` gelandet) - `supabase db push` bricht in diesem Fall vorher
+    mit einer klaren Fehlermeldung ab, statt still zu kollidieren. Umbenannt auf `0028_...sql`, vor
+    dem erneuten Push per SQL-Query gegen `information_schema.columns`/`pg_policies` verifiziert,
+    dass `sessions.erstellt_von` und die drei neuen Policy-Namen auf der Live-DB noch nicht existieren
+    (Fallstrick dabei: eine ungefilterte `information_schema.columns`-Abfrage nach `table_name =
+    'sessions'` liefert zusätzlich Treffer aus `auth.sessions`, Supabases eigener Session-Tabelle -
+    `table_schema = 'public'` muss immer mit angegeben werden).
+  - Verifiziert per `tsc -b`/`vite build` sowie direkt gegen die Live-DB: Migration gepusht, neue
+    Spalte/Policies per `pg_policies`-Query bestätigt.
