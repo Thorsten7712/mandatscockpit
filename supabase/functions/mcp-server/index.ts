@@ -116,15 +116,50 @@ const TOOLS = [
     },
   },
   {
-    name: 'list_next_sessions',
+    name: 'list_sessions',
     description:
-      'Listet zukünftige Sitzungstermine (importiert aus den Kalenderquellen) auf, optional gefiltert nach Gremium.',
+      'Listet Sitzungstermine (importiert aus den Kalenderquellen oder manuell nachgetragen) auf - wahlweise zukünftige, vergangene oder alle. Für Rückblicke ("worüber wurde im letzten Verkehrsausschuss gesprochen") zeitraum="vergangenheit" verwenden. Liefert je Sitzung auch die id, die für create_session_note gebraucht wird.',
     inputSchema: {
       type: 'object',
       properties: {
+        zeitraum: {
+          type: 'string',
+          enum: ['zukunft', 'vergangenheit', 'alle'],
+          description:
+            'Welche Sitzungen: "zukunft" (Standard, nächste zuerst), "vergangenheit" (jüngste zuerst) oder "alle" (neueste zuerst).',
+        },
         gremium: {
           type: 'string',
           description: "Filtert per Teilstring-Suche nach Gremium/Ausschuss, z. B. 'Verkehrsausschuss' (optional).",
+        },
+        nur_meine_gremien: {
+          type: 'boolean',
+          description:
+            'true = nur Sitzungen der Gremien, in denen der Nutzer ein Mandat hat (plus reine Terminkalender-Quellen) - entspricht der Filterung im Dashboard/Archiv der Web-App. Standard false (alle sichtbaren Sitzungen). Bei Formulierungen wie "meine Sitzungen" true setzen.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximale Anzahl Sitzungen (Standard 20, Maximum 100).',
+        },
+      },
+    },
+  },
+  {
+    name: 'list_events',
+    description:
+      'Listet die eigenen Termine des angemeldeten Nutzers (persönlicher Kalender, keine Gremiensitzungen) auf - wahlweise zukünftige, vergangene oder alle. Liefert je Termin auch die id, die für create_event_note gebraucht wird.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        zeitraum: {
+          type: 'string',
+          enum: ['zukunft', 'vergangenheit', 'alle'],
+          description:
+            'Welche Termine: "zukunft" (Standard, nächste zuerst), "vergangenheit" (jüngste zuerst) oder "alle" (neueste zuerst).',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximale Anzahl Termine (Standard 20, Maximum 100).',
         },
       },
     },
@@ -329,7 +364,45 @@ async function createEvent(supabase: SupabaseClient, userId: string, args: Recor
   return toolTextResult(`Termin "${titel}" am ${formatDateTime(start)} wurde angelegt (id: ${event.id}).`)
 }
 
-async function listNextSessions(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+type Zeitraum = 'zukunft' | 'vergangenheit' | 'alle'
+
+function parseZeitraum(value: unknown): Zeitraum {
+  return value === 'vergangenheit' || value === 'alle' ? value : 'zukunft'
+}
+
+/** Nur "zukunft" sortiert aufsteigend (nächster Termin zuerst); Vergangenheit und
+ *  "alle" absteigend, damit das Limit die jüngsten Einträge behält statt der ältesten. */
+function sortAscending(zeitraum: Zeitraum): boolean {
+  return zeitraum === 'zukunft'
+}
+
+function parseLimit(value: unknown): number {
+  const n = typeof value === 'number' ? Math.floor(value) : 20
+  return Math.min(Math.max(Number.isFinite(n) ? n : 20, 1), 100)
+}
+
+function zeitraumLabel(zeitraum: Zeitraum): string {
+  if (zeitraum === 'vergangenheit') return 'vergangene'
+  if (zeitraum === 'alle') return ''
+  return 'zukünftige'
+}
+
+interface SessionListRow {
+  id: string
+  titel: string
+  gremium: string | null
+  datum: string
+  ort: string | null
+  status: string
+}
+
+async function listSessions(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const zeitraum = parseZeitraum(args.zeitraum)
+  const gremium = typeof args.gremium === 'string' ? args.gremium.trim() : ''
+  const nurMeineGremien = args.nur_meine_gremien === true
+  const limit = parseLimit(args.limit)
+  const jetzt = new Date().toISOString()
+
   // supabase läuft hier mit dem Service-Role-Key (siehe Datei-Kopfkommentar),
   // RLS greift also nicht automatisch - die Sichtbarkeitsregel aus
   // "sessions_select_visible_source"/"calendar_sources_select_shared_or_own"
@@ -338,35 +411,97 @@ async function listNextSessions(supabase: SupabaseClient, userId: string, args: 
   // anderer Mitglieder mit auflisten.
   const { data: visibleSources } = await supabase
     .from('calendar_sources')
-    .select('id')
+    .select('id, art')
     .or(`verwaltet_von.is.null,verwaltet_von.eq.${userId}`)
   const visibleSourceIds = (visibleSources ?? []).map((s) => s.id as string)
+  const terminSourceIds = (visibleSources ?? []).filter((s) => s.art === 'termin').map((s) => s.id as string)
 
-  const gremium = typeof args.gremium === 'string' ? args.gremium.trim() : ''
-  let query = supabase
-    .from('sessions')
-    .select('id, titel, gremium, ebene, datum, ort, status')
-    .gte('datum', new Date().toISOString())
-    .order('datum', { ascending: true })
-    .limit(20)
-  query =
-    visibleSourceIds.length > 0
-      ? query.or(`source_id.is.null,source_id.in.(${visibleSourceIds.join(',')})`)
-      : query.is('source_id', null)
-  if (gremium) query = query.ilike('gremium', `%${gremium}%`)
+  const baseQuery = () => {
+    let q = supabase.from('sessions').select('id, titel, gremium, datum, ort, status')
+    if (zeitraum === 'zukunft') q = q.gte('datum', jetzt)
+    else if (zeitraum === 'vergangenheit') q = q.lt('datum', jetzt)
+    q =
+      visibleSourceIds.length > 0
+        ? q.or(`source_id.is.null,source_id.in.(${visibleSourceIds.join(',')})`)
+        : q.is('source_id', null)
+    if (gremium) q = q.ilike('gremium', `%${gremium}%`)
+    return q.order('datum', { ascending: sortAscending(zeitraum) }).limit(limit)
+  }
 
-  const { data, error } = await query
-  if (error) return toolTextResult(`Fehler beim Laden der Sitzungen: ${error.message}`, true)
-  if (!data || data.length === 0) {
+  let rows: SessionListRow[]
+  if (nurMeineGremien) {
+    // Gleiche Vereinigungs-Semantik wie CalendarView.tsx/Archiv.tsx: Sitzungen der
+    // eigenen Gremien PLUS alles aus reinen Terminkalender-Quellen (art='termin',
+    // dort gibt es keine Gremien-Zuordnung). Bewusst zwei .in()-Abfragen statt
+    // eines rohen .or()-Strings, weil Gremiennamen Kommas/Klammern enthalten und
+    // damit das PostgREST-Filterformat brechen würden (siehe CLAUDE.md).
+    const { data: gremienRows } = await supabase.from('user_gremien').select('gremium').eq('user_id', userId)
+    const meineGremien = (gremienRows ?? []).map((g) => g.gremium as string)
+    if (meineGremien.length === 0 && terminSourceIds.length === 0) {
+      return toolTextResult(
+        'Keine Gremien ausgewählt - unter Einstellungen -> Meine Gremien festlegen oder nur_meine_gremien weglassen.',
+      )
+    }
+    const [byGremium, byTerminSource] = await Promise.all([
+      meineGremien.length > 0 ? baseQuery().in('gremium', meineGremien) : Promise.resolve({ data: [], error: null }),
+      terminSourceIds.length > 0
+        ? baseQuery().in('source_id', terminSourceIds)
+        : Promise.resolve({ data: [], error: null }),
+    ])
+    if (byGremium.error) return toolTextResult(`Fehler beim Laden der Sitzungen: ${byGremium.error.message}`, true)
+    if (byTerminSource.error) {
+      return toolTextResult(`Fehler beim Laden der Sitzungen: ${byTerminSource.error.message}`, true)
+    }
+    const byId = new Map<string, SessionListRow>()
+    ;[...(byGremium.data ?? []), ...(byTerminSource.data ?? [])].forEach((s) => byId.set(s.id, s as SessionListRow))
+    rows = Array.from(byId.values())
+      .sort((a, b) => (sortAscending(zeitraum) ? a.datum.localeCompare(b.datum) : b.datum.localeCompare(a.datum)))
+      .slice(0, limit)
+  } else {
+    const { data, error } = await baseQuery()
+    if (error) return toolTextResult(`Fehler beim Laden der Sitzungen: ${error.message}`, true)
+    rows = (data ?? []) as SessionListRow[]
+  }
+
+  if (rows.length === 0) {
+    const label = zeitraumLabel(zeitraum)
     return toolTextResult(
-      gremium ? `Keine zukünftigen Sitzungen für "${gremium}" gefunden.` : 'Keine zukünftigen Sitzungen gefunden.',
+      gremium
+        ? `Keine ${label} Sitzungen für "${gremium}" gefunden.`.replace('  ', ' ')
+        : `Keine ${label} Sitzungen gefunden.`.replace('  ', ' '),
     )
   }
 
-  const lines = data.map((s) => {
+  const lines = rows.map((s) => {
     const status = s.status === 'abgesagt' ? ' [ABGESAGT]' : ''
     const ort = s.ort ? `, ${s.ort}` : ''
     return `- ${s.titel} (${s.gremium ?? 'ohne Gremium'}) am ${formatDateTime(s.datum)}${ort} — id: ${s.id}${status}`
+  })
+  return toolTextResult(lines.join('\n'))
+}
+
+async function listEvents(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const zeitraum = parseZeitraum(args.zeitraum)
+  const limit = parseLimit(args.limit)
+  const jetzt = new Date().toISOString()
+
+  // events gehören immer genau einem Nutzer (RLS events_select_own) - der
+  // Service-Role-Client umgeht RLS, daher hier manuell auf user_id filtern.
+  let query = supabase.from('events').select('id, titel, start, ende, ort, status, herkunft').eq('user_id', userId)
+  if (zeitraum === 'zukunft') query = query.gte('start', jetzt)
+  else if (zeitraum === 'vergangenheit') query = query.lt('start', jetzt)
+
+  const { data, error } = await query.order('start', { ascending: sortAscending(zeitraum) }).limit(limit)
+  if (error) return toolTextResult(`Fehler beim Laden der Termine: ${error.message}`, true)
+  if (!data || data.length === 0) {
+    return toolTextResult(`Keine ${zeitraumLabel(zeitraum)} Termine gefunden.`.replace('  ', ' '))
+  }
+
+  const lines = data.map((e) => {
+    const status = e.status === 'abgesagt' ? ' [ABGESAGT]' : ''
+    const ort = e.ort ? `, ${e.ort}` : ''
+    const herkunft = e.herkunft === 'fraktionsbuero' ? ' (vom Fraktionsbüro eingetragen)' : ''
+    return `- ${e.titel} am ${formatDateTime(e.start)}${ort}${herkunft} — id: ${e.id}${status}`
   })
   return toolTextResult(lines.join('\n'))
 }
@@ -378,9 +513,11 @@ interface NoteTargetConfig {
   table: 'sessions' | 'events' | 'todos'
   /** Spalte in summaries, die auf das Ziel zeigt. */
   idColumn: 'session_id' | 'event_id' | 'todo_id'
-  /** events/todos gehören einem Nutzer (RLS todos_manage_own/events_select_own) - Service-Role-Client
-   *  umgeht RLS, daher hier manuell auf user_id prüfen. sessions sind dagegen für alle
-   *  eingeloggten Nutzer lesbar (sessions_select_all), keine Ownership-Prüfung nötig. */
+  /** events/todos gehören einem Nutzer (RLS events_select_own/todos_select_own_or_placed) -
+   *  Service-Role-Client umgeht RLS, daher hier manuell auf user_id prüfen. sessions gehören
+   *  dagegen keinem einzelnen Nutzer und werden nicht ownership-geprüft (Sichtbarkeit hängt an
+   *  der Kalenderquelle, siehe sessions_select_visible_source - hier bewusst nicht nachgebildet,
+   *  da eine Notiz am fremden Sitzungs-Datensatz nur im eigenen summaries-Bestand landet). */
   ownerScoped: boolean
   /** Für Fehlermeldungen/Bestätigungstext, z. B. "Sitzung", "Termin", "ToDo". */
   label: string
@@ -589,8 +726,11 @@ Deno.serve(async (req) => {
         case 'create_event':
           result = await createEvent(supabase, user.id, args)
           break
-        case 'list_next_sessions':
-          result = await listNextSessions(supabase, user.id, args)
+        case 'list_sessions':
+          result = await listSessions(supabase, user.id, args)
+          break
+        case 'list_events':
+          result = await listEvents(supabase, user.id, args)
           break
         case 'create_session_note':
           result = await createSessionNote(supabase, user.id, args)

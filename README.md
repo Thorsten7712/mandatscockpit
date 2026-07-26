@@ -123,15 +123,20 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt und stellt sechs Tools bereit: `create_todo`,
-`create_event`, `list_next_sessions`, sowie `create_session_note`/`create_event_note`/
+`tools/call`) über einen einzigen HTTP-Endpunkt und stellt sieben Tools bereit: `create_todo`,
+`create_event`, `list_sessions`/`list_events` (Sitzungen bzw. eigene Termine auflisten – per
+`zeitraum` wahlweise `zukunft` (Standard), `vergangenheit` oder `alle`; `list_sessions` kennt
+zusätzlich `gremium` als Teilstring-Filter und `nur_meine_gremien`, das die Gremien-Auswahl aus
+Einstellungen → Meine Gremien anwendet, analog zum Dashboard/Archiv), sowie
+`create_session_note`/`create_event_note`/
 `create_todo_note` (speichern eine Notiz zu einer bestimmten Sitzung/einem eigenen Termin/einer
 ToDo-Karte – Freitext, z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten
 Sammeldokuments, ein Datei-Anhang als Base64, oder beides zusammen; taucht danach in der
 Termindetailsicht bzw. im ToDo-Karten-Modal wie eine manuell eingetragene Notiz/ein manuell
 hochgeladenes Dokument auf). `create_event_note`/`create_todo_note` prüfen zusätzlich, dass der
-Termin/die ToDo-Karte dem angemeldeten Nutzer gehört (Sitzungen sind dagegen für alle Nutzer
-lesbar, keine Ownership-Prüfung nötig). Der Datei-Anhang läuft über denselben privaten
+Termin/die ToDo-Karte dem angemeldeten Nutzer gehört (Sitzungen gehören dagegen keinem einzelnen
+Nutzer – deren Sichtbarkeit hängt an der Kalenderquelle, siehe `list_sessions`). Der Datei-Anhang
+läuft über denselben privaten
 Storage-Bucket `zusammenfassungen` wie Uploads aus der Web-UI; ob Claude beim Chat-Aufruf
 tatsächlich die Rohbytes einer im Chat angehängten Datei als Base64 überträgt, ist nicht
 abschließend erprobt – im Zweifel einfach ausprobieren.

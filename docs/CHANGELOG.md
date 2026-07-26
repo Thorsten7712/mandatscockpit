@@ -1022,3 +1022,43 @@ gefragt.
     Last-Minute-Absage zu diesem Zeitpunkt keinen operativen Sinn mehr ergäbe - eine Verwaltung sagt
     keine Sitzung ab, die vor Wochen schon hätte stattfinden sollen).
   - Verifiziert per `node -c`/`deno check`, Fix gegen die Live-Funktionen deployt.
+
+## MCP-Server: Vergangenheits-Abfragen (`list_sessions`, `list_events`)
+
+Nutzerwunsch: „den MCP Server erweitern, um auch Sitzungen/Termine aus der Vergangenheit abrufen zu
+können" – bis dahin gab es mit `list_next_sessions` nur eine einzige Lese-Funktion, und die war fest
+auf `datum >= now()` verdrahtet. Rückblick-Fragen („worüber wurde im letzten Verkehrsausschuss
+gesprochen") waren damit nicht beantwortbar, und eigene Termine (`events`) waren über MCP überhaupt
+nicht lesbar – nur anlegbar.
+
+- `list_next_sessions` → **`list_sessions`** umbenannt und um Parameter erweitert:
+  - `zeitraum`: `zukunft` (Standard, verhält sich exakt wie vorher) | `vergangenheit` | `alle`.
+  - `nur_meine_gremien`: spiegelt die Vereinigungs-Semantik aus `CalendarView.tsx`/`Archiv.tsx`
+    (Sitzungen der eigenen `user_gremien` **plus** alles aus Quellen mit `art = 'termin'`, die keine
+    Gremien-Zuordnung haben). Bewusst **Standard `false`**, nicht `true`: ein Profil ohne ausgewählte
+    Gremien (aktuell einer von vier Accounts) bekäme sonst kommentarlos eine leere Liste, und das
+    bisherige Verhalten bliebe nicht erhalten. Bei leerer Auswahl *und* gesetztem Flag gibt es
+    stattdessen einen erklärenden Hinweis statt „nichts gefunden".
+  - `limit` (Standard 20, hart auf 100 gedeckelt).
+- Neues Tool **`list_events`** (eigene Termine, gleiche `zeitraum`/`limit`-Parameter). Filtert
+  manuell auf `user_id`, da der Service-Role-Client `events_select_own` umgeht. Kennzeichnet
+  `herkunft = 'fraktionsbuero'` im Output.
+- Sortierrichtung hängt am Zeitraum: `zukunft` aufsteigend (nächster Termin zuerst), sonst
+  absteigend – sonst würde das Limit bei Vergangenheits-Abfragen die ältesten statt der jüngsten
+  Einträge behalten.
+- Die Vereinigungs-Abfrage bei `nur_meine_gremien` nutzt bewusst zwei `.in()`-Abfragen statt eines
+  rohen `.or()`-Strings: Gremiennamen enthalten Kommas/Klammern und würden das PostgREST-Filterformat
+  brechen (gleiche Begründung wie in `CalendarView.tsx`).
+- Die manuell nachgebildete Quellen-Sichtbarkeit aus `sessions_select_visible_source` (Service-Role
+  umgeht RLS) gilt unverändert für **alle** Zeiträume – ohne das hätte die Vergangenheits-Abfrage die
+  208 Sitzungen der privaten Quelle „CDU Fraktion Iserlohn intern" eines anderen Mitglieds
+  mitgeliefert.
+- Verifiziert per `deno check` + direkten SQL-Gegenproben gegen die Live-DB (für den Account
+  Thorsten Kois: 1 sichtbare Quelle von 4, 88 sichtbare vergangene Sitzungen, davon 70 nach
+  Gremien-Filter, 1 vergangener/0 zukünftige eigene Termine). Ein Ende-zu-Ende-Test über den echten
+  Connector stand zum Commit-Zeitpunkt noch aus, da Claude die Tool-Liste erst beim nächsten
+  Verbindungsaufbau neu einliest.
+- Nebenbei zwei veraltete Kommentare/Doku-Stellen korrigiert, die sich noch auf die in
+  `0018_calendar_sources_privat.sql` **gelöschte** Policy `sessions_select_all` beriefen
+  („Sitzungen sind für alle eingeloggten Nutzer lesbar") – Sitzungs-Sichtbarkeit hängt seitdem an der
+  Kalenderquelle.
