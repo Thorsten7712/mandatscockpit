@@ -262,13 +262,13 @@ const TOOLS = [
   {
     name: 'create_todo_note',
     description:
-      'Speichert eine Notiz zu einer bestimmten ToDo-Karte im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort im Karten-Detail-Modal, wie ein manuell hochgeladenes Dokument - reiner Freitext ohne Datei landet ebenfalls dort, auch wenn die Web-UI für Karten primär Datei-Uploads zeigt). Nur für ToDo-Karten, die dem angemeldeten Nutzer gehören. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich.',
+      'Speichert eine Notiz zu einer bestimmten ToDo-Karte im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort im Karten-Detail-Modal, wie ein manuell hochgeladenes Dokument - reiner Freitext ohne Datei landet ebenfalls dort, auch wenn die Web-UI für Karten primär Datei-Uploads zeigt). Nur für ToDo-Karten, die dem Nutzer gehören oder mit ihm geteilt sind. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich.',
     inputSchema: {
       type: 'object',
       properties: {
         todo_id: {
           type: 'string',
-          description: 'UUID der eigenen ToDo-Karte, zu der die Notiz gehört.',
+          description: 'UUID der ToDo-Karte, zu der die Notiz gehört.',
         },
         inhalt: {
           type: 'string',
@@ -284,6 +284,159 @@ const TOOLS = [
         },
       },
       required: ['todo_id'],
+    },
+  },
+  {
+    name: 'complete_todo',
+    description:
+      'Hakt eine ToDo-Karte ab oder macht das rückgängig. Für Karten, die dem Nutzer gehören oder mit ihm geteilt sind.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        todo_id: { type: 'string', description: 'UUID der ToDo-Karte.' },
+        erledigt: {
+          type: 'boolean',
+          description: 'true = abhaken (Standard), false = wieder auf offen setzen.',
+        },
+      },
+      required: ['todo_id'],
+    },
+  },
+  {
+    name: 'update_todo',
+    description:
+      'Ändert Titel, Beschreibung, Fälligkeitsdatum, Zuständigkeit und/oder Board-Spalte einer ToDo-Karte. Für Karten, die dem Nutzer gehören oder mit ihm geteilt sind - "spalte" verschiebt dabei nur die eigene Platzierung des Nutzers (jede Person hat ein eigenes Board), nicht die der anderen. Nur angegebene Felder werden geändert.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        todo_id: { type: 'string', description: 'UUID der ToDo-Karte.' },
+        titel: { type: 'string', description: 'Neuer Titel (optional).' },
+        beschreibung: { type: 'string', description: 'Neue Beschreibung (optional).' },
+        faellig_am: { type: 'string', description: 'Neues Fälligkeitsdatum im Format YYYY-MM-DD (optional).' },
+        zustaendig: { type: 'string', description: 'Neue Zuständigkeit als Freitext (optional).' },
+        spalte: {
+          type: 'string',
+          description:
+            'Board-Spalte, in die die Karte (auf dem eigenen Board des Nutzers) verschoben werden soll - wird angelegt, falls sie noch nicht existiert (optional).',
+        },
+      },
+      required: ['todo_id'],
+    },
+  },
+  {
+    name: 'create_antrag',
+    description:
+      'Legt einen neuen eigenen Antrag an (Status startet immer bei "entwurf"). Wird eine session_id angegeben, werden ausschuss und ebene automatisch aus deren Gremium/Ebene übernommen, sofern nicht explizit gesetzt (wie im "+ Antrag"-Formular der Web-App).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        titel: { type: 'string', description: 'Titel des Antrags' },
+        inhalt: { type: 'string', description: 'Antragstext (optional).' },
+        ausschuss: { type: 'string', description: 'Vorgesehener Ausschuss (optional, sonst aus session_id übernommen).' },
+        ebene: {
+          type: 'string',
+          enum: ['kommune', 'kreis', 'land', 'bund'],
+          description: 'Ebene, für Fristen-Nachschlag und Teilen-Filter (optional, sonst aus session_id übernommen).',
+        },
+        session_id: {
+          type: 'string',
+          description: 'UUID der vorgesehenen Sitzung, an die der Antrag geknüpft werden soll (optional).',
+        },
+      },
+      required: ['titel'],
+    },
+  },
+  {
+    name: 'list_antraege',
+    description:
+      'Listet Anträge auf - eigene und mit dem Nutzer geteilte. Liefert je Antrag auch die id, die für update_antrag_status und create_antrag_note gebraucht wird.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['aktiv', 'entwurf', 'gestellt', 'in_beratung', 'vertagt', 'abgestimmt', 'zurueckgezogen', 'alle'],
+          description:
+            '"aktiv" (Standard) = entwurf/gestellt/in_beratung/vertagt (noch nicht final entschieden), ein einzelner Status, oder "alle".',
+        },
+        ausschuss: {
+          type: 'string',
+          description: 'Filtert per Teilstring-Suche nach Ausschuss (optional).',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximale Anzahl Anträge (Standard 20, Maximum 100).',
+        },
+      },
+    },
+  },
+  {
+    name: 'update_antrag_status',
+    description:
+      'Ändert den Status eines Antrags (z. B. von "entwurf" auf "gestellt", oder auf "abgestimmt" mit Ergebnis). Für Anträge, die dem Nutzer gehören oder mit ihm geteilt sind. Beim Übergang auf "gestellt" wird eingereicht_am automatisch auf heute gesetzt, falls nicht bereits vorhanden oder explizit angegeben.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        antrag_id: { type: 'string', description: 'UUID des Antrags.' },
+        status: {
+          type: 'string',
+          enum: ['entwurf', 'gestellt', 'in_beratung', 'vertagt', 'abgestimmt', 'zurueckgezogen'],
+          description: 'Neuer Status.',
+        },
+        ergebnis: {
+          type: 'string',
+          enum: ['positiv', 'negativ'],
+          description: 'Erforderlich, wenn status="abgestimmt" gesetzt wird.',
+        },
+        eingereicht_am: {
+          type: 'string',
+          description: 'Einreichungsdatum im Format YYYY-MM-DD, überschreibt die Automatik (optional).',
+        },
+      },
+      required: ['antrag_id', 'status'],
+    },
+  },
+  {
+    name: 'create_antrag_note',
+    description:
+      'Speichert eine Notiz zu einem bestimmten Antrag (Freitext, ein Datei-Anhang als Base64, oder beides). Für Anträge, die dem Nutzer gehören oder mit ihm geteilt sind. Mindestens eins von Text oder Datei ist erforderlich.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        antrag_id: { type: 'string', description: 'UUID des Antrags, zu dem die Notiz gehört.' },
+        inhalt: { type: 'string', description: 'Freitext-Notiz (optional).' },
+        dateiname: {
+          type: 'string',
+          description: 'Dateiname inkl. Endung für einen Datei-Anhang (optional, nur zusammen mit datei_base64).',
+        },
+        datei_base64: {
+          type: 'string',
+          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname).',
+        },
+      },
+      required: ['antrag_id'],
+    },
+  },
+  {
+    name: 'list_antrag_fristen',
+    description:
+      'Berechnet die Einreichungsfristen (Sitzungsdatum minus die für die Ebene konfigurierte Vorlaufzeit aus Einstellungen -> Antrags-Fristen) für die eigenen aktiven Anträge mit verknüpfter Sitzung, sortiert nach Frist. Nur berechenbar, wenn Antrag, verknüpfte Sitzung UND eine Fristen-Einstellung für die jeweilige Ebene vorhanden sind.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'search',
+    description:
+      'Durchsucht Titel/Inhalte von ToDo-Karten, Anträgen und Notizen (Freitext-Suche, Groß-/Kleinschreibung egal) - berücksichtigt dabei nur für den Nutzer sichtbare Einträge (eigene und geteilte). Für Fragen wie "wo ging es um XY".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Suchbegriff.' },
+        limit: {
+          type: 'number',
+          description: 'Maximale Anzahl Treffer je Kategorie (Standard 10, Maximum 50).',
+        },
+      },
+      required: ['query'],
     },
   },
 ] as const
@@ -738,20 +891,382 @@ async function listNotes(supabase: SupabaseClient, userId: string, args: Record<
   return toolTextResult(lines.join('\n\n'))
 }
 
+/** Prüft, ob eine ToDo-Karte dem Nutzer gehört oder mit ihm geteilt ist (RLS
+ *  todos_update_own_or_placed - Service-Role-Client umgeht RLS, daher hier manuell). */
+async function todoIstZugreifbar(supabase: SupabaseClient, userId: string, todoId: string): Promise<boolean> {
+  const { data: todo } = await supabase.from('todos').select('user_id').eq('id', todoId).maybeSingle()
+  if (!todo) return false
+  if (todo.user_id === userId) return true
+  const { data: placement } = await supabase
+    .from('todo_placements')
+    .select('id')
+    .eq('todo_id', todoId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  return Boolean(placement)
+}
+
+async function completeTodo(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const todoId = typeof args.todo_id === 'string' ? args.todo_id.trim() : ''
+  if (!todoId) return toolTextResult('Fehler: todo_id ist erforderlich.', true)
+  const erledigt = args.erledigt === false ? false : true
+
+  if (!(await todoIstZugreifbar(supabase, userId, todoId))) {
+    return toolTextResult(`ToDo mit id ${todoId} wurde nicht gefunden (oder gehört nicht zu diesem Konto).`, true)
+  }
+
+  const { data: current } = await supabase.from('todos').select('erledigt, erledigt_am, titel').eq('id', todoId).single()
+  // erledigt_am nur beim Übergang false->true neu setzen (gleiche Logik wie
+  // TodoDetailModal.tsx), damit ein erneutes Abhaken einen bereits gesetzten
+  // Zeitpunkt nicht verändert.
+  const wurdeGesetzt = erledigt && !current?.erledigt
+  const erledigtAm = erledigt ? (wurdeGesetzt ? new Date().toISOString() : current?.erledigt_am ?? null) : null
+
+  const { error } = await supabase.from('todos').update({ erledigt, erledigt_am: erledigtAm }).eq('id', todoId)
+  if (error) return toolTextResult(`Fehler beim Aktualisieren: ${error.message}`, true)
+
+  return toolTextResult(
+    `ToDo "${current?.titel ?? todoId}" wurde als ${erledigt ? 'erledigt' : 'offen'} markiert.`,
+  )
+}
+
+async function updateTodo(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const todoId = typeof args.todo_id === 'string' ? args.todo_id.trim() : ''
+  if (!todoId) return toolTextResult('Fehler: todo_id ist erforderlich.', true)
+
+  if (!(await todoIstZugreifbar(supabase, userId, todoId))) {
+    return toolTextResult(`ToDo mit id ${todoId} wurde nicht gefunden (oder gehört nicht zu diesem Konto).`, true)
+  }
+
+  const updates: Record<string, unknown> = {}
+  if (typeof args.titel === 'string' && args.titel.trim()) updates.titel = args.titel.trim()
+  if (typeof args.beschreibung === 'string') updates.beschreibung = args.beschreibung.trim() || null
+  if (typeof args.faellig_am === 'string') updates.faellig_am = args.faellig_am.trim() || null
+  if (typeof args.zustaendig === 'string') updates.zustaendig = args.zustaendig.trim() || null
+
+  const spalte = typeof args.spalte === 'string' ? args.spalte.trim() : ''
+  let spaltenHinweis = ''
+  if (spalte) {
+    const { data: columns } = await supabase.from('todo_columns').select('id, titel, reihenfolge').eq('user_id', userId)
+    let column = (columns ?? []).find((c) => c.titel.trim().toLowerCase() === spalte.toLowerCase())
+    if (!column) {
+      const maxOrder = (columns ?? []).reduce((max, c) => Math.max(max, c.reihenfolge), -1)
+      const { data: created, error: createError } = await supabase
+        .from('todo_columns')
+        .insert({ user_id: userId, titel: spalte, reihenfolge: maxOrder + 1 })
+        .select('id, titel, reihenfolge')
+        .single()
+      if (createError || !created) return toolTextResult(`Fehler beim Anlegen der Spalte "${spalte}": ${createError?.message}`, true)
+      column = created
+    }
+    const { data: last } = await supabase
+      .from('todo_placements')
+      .select('position')
+      .eq('column_id', column.id)
+      .order('position', { ascending: false })
+      .limit(1)
+    const position = last && last.length > 0 ? last[0].position + 1 : 0
+    // Eigene Platzierung des Nutzers verschieben (nicht die anderer Personen auf
+    // geteilten Karten - jede Person hat ein eigenes Board, siehe todo_placements).
+    const { error: placementError } = await supabase
+      .from('todo_placements')
+      .upsert({ todo_id: todoId, user_id: userId, column_id: column.id, position }, { onConflict: 'todo_id,user_id' })
+    if (placementError) return toolTextResult(`Fehler beim Verschieben auf die Spalte: ${placementError.message}`, true)
+    spaltenHinweis = ` und in Spalte "${column.titel}" verschoben`
+  }
+
+  if (Object.keys(updates).length === 0 && !spalte) {
+    return toolTextResult('Fehler: mindestens ein zu änderndes Feld (oder spalte) angeben.', true)
+  }
+
+  if (Object.keys(updates).length > 0) {
+    const { error } = await supabase.from('todos').update(updates).eq('id', todoId)
+    if (error) return toolTextResult(`Fehler beim Aktualisieren: ${error.message}`, true)
+  }
+
+  return toolTextResult(`ToDo aktualisiert${spaltenHinweis}.`)
+}
+
+async function createAntrag(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const titel = typeof args.titel === 'string' ? args.titel.trim() : ''
+  if (!titel) return toolTextResult('Fehler: titel ist erforderlich.', true)
+  const inhalt = typeof args.inhalt === 'string' && args.inhalt.trim() ? args.inhalt.trim() : null
+  const sessionId = typeof args.session_id === 'string' && args.session_id.trim() ? args.session_id.trim() : null
+  let ausschuss = typeof args.ausschuss === 'string' && args.ausschuss.trim() ? args.ausschuss.trim() : null
+  let ebene = typeof args.ebene === 'string' && args.ebene.trim() ? args.ebene.trim() : null
+
+  // Wie im "+ Antrag"-Formular der Web-App: ausschuss/ebene aus der Sitzung
+  // übernehmen, sofern nicht explizit angegeben.
+  if (sessionId && (!ausschuss || !ebene)) {
+    const { data: session } = await supabase.from('sessions').select('gremium, ebene').eq('id', sessionId).maybeSingle()
+    if (session) {
+      ausschuss = ausschuss ?? (session.gremium as string | null)
+      ebene = ebene ?? (session.ebene as string | null)
+    }
+  }
+
+  const { data: antrag, error } = await supabase
+    .from('antraege')
+    .insert({ user_id: userId, titel, inhalt, session_id: sessionId, ausschuss, ebene })
+    .select('id')
+    .single()
+  if (error || !antrag) return toolTextResult(`Fehler beim Anlegen des Antrags: ${error?.message}`, true)
+
+  return toolTextResult(`Antrag "${titel}" wurde als Entwurf angelegt (id: ${antrag.id}).`)
+}
+
+const ANTRAG_STATUS_AKTIV = ['entwurf', 'gestellt', 'in_beratung', 'vertagt']
+
+interface AntragListRow {
+  id: string
+  titel: string
+  status: string
+  ergebnis: string | null
+  ausschuss: string | null
+  ebene: string | null
+  session_id: string | null
+  eingereicht_am: string | null
+  user_id: string
+}
+
+async function listAntraege(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const status = typeof args.status === 'string' && args.status ? args.status : 'aktiv'
+  const ausschuss = typeof args.ausschuss === 'string' ? args.ausschuss.trim() : ''
+  const limit = parseLimit(args.limit)
+
+  const { data: shares } = await supabase.from('antrag_shares').select('antrag_id').eq('user_id', userId)
+  const sharedIds = (shares ?? []).map((s) => s.antrag_id as string)
+
+  const baseQuery = () => {
+    let q = supabase
+      .from('antraege')
+      .select('id, titel, status, ergebnis, ausschuss, ebene, session_id, eingereicht_am, user_id')
+    if (status === 'aktiv') q = q.in('status', ANTRAG_STATUS_AKTIV)
+    else if (status !== 'alle') q = q.eq('status', status)
+    if (ausschuss) q = q.ilike('ausschuss', `%${ausschuss}%`)
+    return q
+  }
+  const [own, shared] = await Promise.all([
+    baseQuery().eq('user_id', userId),
+    sharedIds.length > 0 ? baseQuery().in('id', sharedIds) : Promise.resolve({ data: [], error: null }),
+  ])
+  if (own.error) return toolTextResult(`Fehler beim Laden der Anträge: ${own.error.message}`, true)
+  if (shared.error) return toolTextResult(`Fehler beim Laden der Anträge: ${shared.error.message}`, true)
+
+  const byId = new Map<string, AntragListRow>()
+  ;[...(own.data ?? []), ...(shared.data ?? [])].forEach((a) => byId.set(a.id, a as AntragListRow))
+  const rows = Array.from(byId.values())
+    .sort((a, b) => b.id.localeCompare(a.id))
+    .slice(0, limit)
+
+  if (rows.length === 0) return toolTextResult('Keine Anträge gefunden.')
+
+  const lines = rows.map((a) => {
+    const statusLabel =
+      a.status === 'abgestimmt' && a.ergebnis ? `Abgestimmt · ${a.ergebnis === 'positiv' ? 'Positiv' : 'Negativ'}` : a.status
+    const details: string[] = [statusLabel]
+    if (a.ausschuss) details.push(a.ausschuss)
+    if (a.eingereicht_am) details.push(`eingereicht ${formatDate(a.eingereicht_am)}`)
+    if (a.user_id !== userId) details.push('geteilt')
+    return `- ${a.titel} (${details.join(' · ')}) — id: ${a.id}`
+  })
+  return toolTextResult(lines.join('\n'))
+}
+
+/** Prüft, ob ein Antrag dem Nutzer gehört oder mit ihm geteilt ist. */
+async function antragIstZugreifbar(
+  supabase: SupabaseClient,
+  userId: string,
+  antragId: string,
+): Promise<{ ok: boolean; titel?: string; status?: string }> {
+  const { data: antrag } = await supabase.from('antraege').select('user_id, titel, status').eq('id', antragId).maybeSingle()
+  if (!antrag) return { ok: false }
+  if (antrag.user_id === userId) return { ok: true, titel: antrag.titel, status: antrag.status }
+  const { data: share } = await supabase
+    .from('antrag_shares')
+    .select('id')
+    .eq('antrag_id', antragId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  return share ? { ok: true, titel: antrag.titel, status: antrag.status } : { ok: false }
+}
+
+async function updateAntragStatus(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const antragId = typeof args.antrag_id === 'string' ? args.antrag_id.trim() : ''
+  const status = typeof args.status === 'string' ? args.status.trim() : ''
+  if (!antragId || !status) return toolTextResult('Fehler: antrag_id und status sind erforderlich.', true)
+  const ergebnis = typeof args.ergebnis === 'string' && args.ergebnis ? args.ergebnis : null
+  if (status === 'abgestimmt' && !ergebnis) {
+    return toolTextResult('Fehler: bei status="abgestimmt" ist ergebnis ("positiv" oder "negativ") erforderlich.', true)
+  }
+
+  const { ok, titel, status: bisherigerStatus } = await antragIstZugreifbar(supabase, userId, antragId)
+  if (!ok) return toolTextResult(`Antrag mit id ${antragId} wurde nicht gefunden (oder gehört nicht zu diesem Konto).`, true)
+
+  // eingereicht_am nur beim Übergang auf "gestellt" automatisch auf heute setzen
+  // (gleiche Logik wie AntragDetailModal.tsx), falls nicht explizit angegeben.
+  const explizitesDatum = typeof args.eingereicht_am === 'string' && args.eingereicht_am.trim() ? args.eingereicht_am.trim() : null
+  const wirdGestellt = status === 'gestellt' && bisherigerStatus !== 'gestellt'
+  const eingereichtAm = explizitesDatum ?? (wirdGestellt ? new Date().toISOString().slice(0, 10) : undefined)
+
+  const updates: Record<string, unknown> = { status, ergebnis: status === 'abgestimmt' ? ergebnis : null }
+  if (eingereichtAm !== undefined) updates.eingereicht_am = eingereichtAm
+
+  const { error } = await supabase.from('antraege').update(updates).eq('id', antragId)
+  if (error) return toolTextResult(`Fehler beim Aktualisieren: ${error.message}`, true)
+
+  return toolTextResult(`Antrag "${titel}" wurde auf Status "${status}" gesetzt.`)
+}
+
+async function listAntragFristen(supabase: SupabaseClient, userId: string) {
+  const { data: antraege } = await supabase
+    .from('antraege')
+    .select('id, titel, status, ebene, session_id')
+    .eq('user_id', userId)
+    .in('status', ANTRAG_STATUS_AKTIV)
+    .not('session_id', 'is', null)
+    .not('ebene', 'is', null)
+  if (!antraege || antraege.length === 0) return toolTextResult('Keine aktiven Anträge mit Sitzungsbezug gefunden.')
+
+  const { data: fristen } = await supabase.from('antrag_deadline_settings').select('ebene, tage_vor_sitzung').eq('user_id', userId)
+  const tageByEbene = new Map((fristen ?? []).map((f) => [f.ebene as string, f.tage_vor_sitzung as number]))
+
+  const sessionIds = Array.from(new Set(antraege.map((a) => a.session_id as string)))
+  const { data: sessions } = await supabase.from('sessions').select('id, titel, datum').in('id', sessionIds)
+  const sessionById = new Map((sessions ?? []).map((s) => [s.id as string, s]))
+
+  // Gleiche Formel wie computeAntragDeadline() in src/lib/antragDeadline.ts:
+  // Sitzungsdatum minus die für die Ebene konfigurierte Vorlaufzeit.
+  const zeilen = antraege
+    .map((a) => {
+      const tage = tageByEbene.get(a.ebene as string)
+      const session = sessionById.get(a.session_id as string)
+      if (tage === undefined || !session) return null
+      const frist = new Date(session.datum as string)
+      frist.setDate(frist.getDate() - tage)
+      const ueberfaellig = a.status === 'entwurf' && frist.getTime() < Date.now()
+      return { antrag: a, session, frist, ueberfaellig }
+    })
+    .filter((z): z is NonNullable<typeof z> => z !== null)
+    .sort((a, b) => a.frist.getTime() - b.frist.getTime())
+
+  if (zeilen.length === 0) {
+    return toolTextResult(
+      'Keine Frist berechenbar - dafür braucht jeder Antrag eine verknüpfte Sitzung, eine Ebene und eine passende Fristen-Einstellung unter Einstellungen -> Antrags-Fristen.',
+    )
+  }
+
+  const lines = zeilen.map(
+    (z) =>
+      `- ${z.antrag.titel}: Frist ${formatDate(z.frist.toISOString().slice(0, 10))}${z.ueberfaellig ? ' [ÜBERFÄLLIG]' : ''} (Sitzung "${z.session.titel}" am ${formatDate((z.session.datum as string).slice(0, 10))}) — id: ${z.antrag.id}`,
+  )
+  return toolTextResult(lines.join('\n'))
+}
+
+async function search(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const query = typeof args.query === 'string' ? args.query.trim() : ''
+  if (!query) return toolTextResult('Fehler: query ist erforderlich.', true)
+  const limit = Math.min(Math.max(typeof args.limit === 'number' ? Math.floor(args.limit) : 10, 1), 50)
+  const like = `%${query}%`
+
+  const { data: placements } = await supabase.from('todo_placements').select('todo_id').eq('user_id', userId)
+  const placedTodoIds = (placements ?? []).map((p) => p.todo_id as string)
+  const { data: shares } = await supabase.from('antrag_shares').select('antrag_id').eq('user_id', userId)
+  const sharedAntragIds = (shares ?? []).map((s) => s.antrag_id as string)
+
+  // Bewusst KEIN .or('titel.ilike.X,beschreibung.ilike.Y') mit eingesetztem
+  // Suchbegriff: Kommas/Klammern im Suchbegriff würden das PostgREST-Filterformat
+  // brechen (gleiches Problem wie Gremiennamen in list_sessions/CalendarView.tsx) -
+  // stattdessen je Spalte eine eigene Abfrage und in JS per Map mergen.
+  const todoById = new Map<string, string>()
+  const addTodos = (rows: { id: string; titel: string }[] | null) => (rows ?? []).forEach((t) => todoById.set(t.id, t.titel))
+  addTodos((await supabase.from('todos').select('id, titel').eq('user_id', userId).ilike('titel', like).limit(limit)).data)
+  addTodos((await supabase.from('todos').select('id, titel').eq('user_id', userId).ilike('beschreibung', like).limit(limit)).data)
+  if (placedTodoIds.length > 0) {
+    addTodos((await supabase.from('todos').select('id, titel').in('id', placedTodoIds).ilike('titel', like).limit(limit)).data)
+    addTodos((await supabase.from('todos').select('id, titel').in('id', placedTodoIds).ilike('beschreibung', like).limit(limit)).data)
+  }
+
+  const antragById = new Map<string, string>()
+  const addAntraege = (rows: { id: string; titel: string }[] | null) => (rows ?? []).forEach((a) => antragById.set(a.id, a.titel))
+  addAntraege((await supabase.from('antraege').select('id, titel').eq('user_id', userId).ilike('titel', like).limit(limit)).data)
+  addAntraege((await supabase.from('antraege').select('id, titel').eq('user_id', userId).ilike('inhalt', like).limit(limit)).data)
+  if (sharedAntragIds.length > 0) {
+    addAntraege((await supabase.from('antraege').select('id, titel').in('id', sharedAntragIds).ilike('titel', like).limit(limit)).data)
+    addAntraege((await supabase.from('antraege').select('id, titel').in('id', sharedAntragIds).ilike('inhalt', like).limit(limit)).data)
+  }
+
+  interface NoteHit {
+    id: string
+    inhalt: string | null
+    session_id: string | null
+    event_id: string | null
+    todo_id: string | null
+    antrag_id: string | null
+  }
+  const noteById = new Map<string, NoteHit>()
+  const addNotes = (rows: NoteHit[] | null) => (rows ?? []).forEach((n) => noteById.set(n.id, n))
+  addNotes(
+    (
+      await supabase
+        .from('summaries')
+        .select('id, inhalt, session_id, event_id, todo_id, antrag_id')
+        .eq('user_id', userId)
+        .ilike('inhalt', like)
+        .limit(limit)
+    ).data,
+  )
+  if (placedTodoIds.length > 0) {
+    addNotes(
+      (
+        await supabase
+          .from('summaries')
+          .select('id, inhalt, session_id, event_id, todo_id, antrag_id')
+          .in('todo_id', placedTodoIds)
+          .ilike('inhalt', like)
+          .limit(limit)
+      ).data,
+    )
+  }
+
+  const abschnitte: string[] = []
+  if (todoById.size > 0) {
+    abschnitte.push(`ToDos:\n${Array.from(todoById.entries()).map(([id, titel]) => `- ${titel} — id: ${id}`).join('\n')}`)
+  }
+  if (antragById.size > 0) {
+    abschnitte.push(`Anträge:\n${Array.from(antragById.entries()).map(([id, titel]) => `- ${titel} — id: ${id}`).join('\n')}`)
+  }
+  if (noteById.size > 0) {
+    abschnitte.push(
+      `Notizen:\n${Array.from(noteById.values())
+        .map((n) => `- ${truncate(n.inhalt ?? '', 200)} — id des Ziels: ${n.session_id ?? n.event_id ?? n.todo_id ?? n.antrag_id}`)
+        .join('\n')}`,
+    )
+  }
+
+  if (abschnitte.length === 0) return toolTextResult(`Keine Treffer für "${query}".`)
+  return toolTextResult(abschnitte.join('\n\n'))
+}
+
 interface NoteTargetConfig {
-  /** Name des Arguments, das die UUID des Ziels trägt (session_id/event_id/todo_id). */
+  /** Name des Arguments, das die UUID des Ziels trägt (session_id/event_id/todo_id/antrag_id). */
   idArgName: string
   /** Tabelle des Ziels. */
-  table: 'sessions' | 'events' | 'todos'
+  table: 'sessions' | 'events' | 'todos' | 'antraege'
   /** Spalte in summaries, die auf das Ziel zeigt. */
-  idColumn: 'session_id' | 'event_id' | 'todo_id'
-  /** events/todos gehören einem Nutzer (RLS events_select_own/todos_select_own_or_placed) -
-   *  Service-Role-Client umgeht RLS, daher hier manuell auf user_id prüfen. sessions gehören
-   *  dagegen keinem einzelnen Nutzer und werden nicht ownership-geprüft (Sichtbarkeit hängt an
-   *  der Kalenderquelle, siehe sessions_select_visible_source - hier bewusst nicht nachgebildet,
-   *  da eine Notiz am fremden Sitzungs-Datensatz nur im eigenen summaries-Bestand landet). */
+  idColumn: 'session_id' | 'event_id' | 'todo_id' | 'antrag_id'
+  /** events/todos/antraege gehören einem Nutzer (RLS events_select_own/
+   *  todos_select_own_or_placed/antraege_select_own_or_shared) - Service-Role-Client umgeht RLS,
+   *  daher hier manuell auf user_id prüfen. sessions gehören dagegen keinem einzelnen Nutzer und
+   *  werden nicht ownership-geprüft (Sichtbarkeit hängt an der Kalenderquelle, siehe
+   *  sessions_select_visible_source - hier bewusst nicht nachgebildet, da eine Notiz am fremden
+   *  Sitzungs-Datensatz nur im eigenen summaries-Bestand landet). */
   ownerScoped: boolean
-  /** Für Fehlermeldungen/Bestätigungstext, z. B. "Sitzung", "Termin", "ToDo". */
+  /** Zusätzlicher Zugriffsweg neben user_id = userId (Teilen), z. B. todo_placements für ToDos
+   *  oder antrag_shares für Anträge - Tabelle hat eine Spalte namens idColumn mit der Ziel-id und
+   *  eine Spalte user_id. */
+  sharedVia?: { table: string; idColumn: string }
+  /** Für Fehlermeldungen/Bestätigungstext, z. B. "Sitzung", "Termin", "ToDo", "Antrag". */
   label: string
 }
 
@@ -775,15 +1290,32 @@ async function createNote(
     return toolTextResult('Fehler: dateiname und datei_base64 müssen zusammen angegeben werden.', true)
   }
 
-  let targetQuery = supabase.from(target.table).select('id, titel').eq('id', targetId)
-  if (target.ownerScoped) targetQuery = targetQuery.eq('user_id', userId)
-  const { data: targetRow, error: targetError } = await targetQuery.maybeSingle()
+  // Immer dieselbe, konstante Spaltenliste abfragen (nicht abhängig von
+  // ownerScoped) - sessions hat z. B. gar keine user_id-Spalte, und ein
+  // laufzeitabhängiger Select-String verwirrt außerdem supabase-js' Typinferenz.
+  const { data: targetRow, error: targetError } = await supabase
+    .from(target.table)
+    .select('id, titel')
+    .eq('id', targetId)
+    .maybeSingle()
   if (targetError) return toolTextResult(`Fehler beim Prüfen (${target.label}): ${targetError.message}`, true)
-  if (!targetRow) {
-    return toolTextResult(
-      `${target.label} mit id ${targetId} wurde nicht gefunden${target.ownerScoped ? ' (oder gehört nicht zu diesem Konto)' : ''}.`,
-      true,
-    )
+  if (!targetRow) return toolTextResult(`${target.label} mit id ${targetId} wurde nicht gefunden.`, true)
+
+  if (target.ownerScoped) {
+    const { data: ownerRow } = await supabase.from(target.table).select('user_id').eq('id', targetId).maybeSingle()
+    let erlaubt = ownerRow?.user_id === userId
+    if (!erlaubt && target.sharedVia) {
+      const { data: shareRow } = await supabase
+        .from(target.sharedVia.table)
+        .select('id')
+        .eq(target.sharedVia.idColumn, targetId)
+        .eq('user_id', userId)
+        .maybeSingle()
+      erlaubt = Boolean(shareRow)
+    }
+    if (!erlaubt) {
+      return toolTextResult(`${target.label} mit id ${targetId} gehört nicht zu diesem Konto (auch nicht per Teilen).`, true)
+    }
   }
 
   let dateiUrl: string | null = null
@@ -839,7 +1371,19 @@ function createTodoNote(supabase: SupabaseClient, userId: string, args: Record<s
     table: 'todos',
     idColumn: 'todo_id',
     ownerScoped: true,
+    sharedVia: { table: 'todo_placements', idColumn: 'todo_id' },
     label: 'ToDo',
+  })
+}
+
+function createAntragNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  return createNote(supabase, userId, args, {
+    idArgName: 'antrag_id',
+    table: 'antraege',
+    idColumn: 'antrag_id',
+    ownerScoped: true,
+    sharedVia: { table: 'antrag_shares', idColumn: 'antrag_id' },
+    label: 'Antrag',
   })
 }
 
@@ -978,6 +1522,30 @@ Deno.serve(async (req) => {
           break
         case 'create_todo_note':
           result = await createTodoNote(supabase, user.id, args)
+          break
+        case 'complete_todo':
+          result = await completeTodo(supabase, user.id, args)
+          break
+        case 'update_todo':
+          result = await updateTodo(supabase, user.id, args)
+          break
+        case 'create_antrag':
+          result = await createAntrag(supabase, user.id, args)
+          break
+        case 'list_antraege':
+          result = await listAntraege(supabase, user.id, args)
+          break
+        case 'update_antrag_status':
+          result = await updateAntragStatus(supabase, user.id, args)
+          break
+        case 'create_antrag_note':
+          result = await createAntragNote(supabase, user.id, args)
+          break
+        case 'list_antrag_fristen':
+          result = await listAntragFristen(supabase, user.id)
+          break
+        case 'search':
+          result = await search(supabase, user.id, args)
           break
         default:
           return respond(jsonRpcError(id, -32602, `Unbekanntes Tool: ${name}`))

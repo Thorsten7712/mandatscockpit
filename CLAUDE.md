@@ -50,9 +50,9 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude: `create_todo`,
-  `create_event`, `list_todos`, `list_sessions`, `list_events`, `list_notes`, `create_session_note`,
-  `create_event_note`, `create_todo_note`).
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 17 Tools über
+  ToDos/Termine/Sitzungen/Anträge/Notizen – volle Liste + Details in README.md Abschnitt 9 und
+  `docs/CHANGELOG.md`).
 - **GitHub-Actions-Workflows**: Deploy nach GitHub Pages (inkl. `404.html`-Kopie fürs SPA-Routing),
   Supabase-Keep-Alive, täglicher ICS-Import (`import-ics.yml`, 04:00 UTC), Edge-Function-Deploy
   (`deploy-edge-functions.yml`, deployt bei jeder Änderung unter `supabase/functions/**` alle

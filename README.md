@@ -123,28 +123,28 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt und stellt neun Tools bereit: `create_todo`,
-`create_event`, `list_todos` (eigene + mit dem Nutzer geteilte Karten, Filter `status`
-offen/erledigt/alle und `spalte`), `list_sessions`/`list_events` (Sitzungen bzw. eigene Termine auflisten – per
-`zeitraum` wahlweise `zukunft` (Standard), `vergangenheit` oder `alle`; `list_sessions` kennt
-zusätzlich `gremium` als Teilstring-Filter und `nur_meine_gremien`, das die Gremien-Auswahl aus
-Einstellungen → Meine Gremien anwendet, analog zum Dashboard/Archiv), `list_notes` (liest zurück,
-was `create_session_note`/`create_event_note`/`create_todo_note` gespeichert haben – ohne Filter die
-zuletzt gespeicherten Einträge, mit genau einem der `*_id`-Filter alle Einträge zu diesem einen
-Objekt; Datei-Anhänge werden nur mit Dateinamen genannt, der Inhalt selbst ist über MCP nicht
-herunterladbar), sowie
-`create_session_note`/`create_event_note`/
-`create_todo_note` (speichern eine Notiz zu einer bestimmten Sitzung/einem eigenen Termin/einer
-ToDo-Karte – Freitext, z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten
-Sammeldokuments, ein Datei-Anhang als Base64, oder beides zusammen; taucht danach in der
-Termindetailsicht bzw. im ToDo-Karten-Modal wie eine manuell eingetragene Notiz/ein manuell
-hochgeladenes Dokument auf). `create_event_note`/`create_todo_note` prüfen zusätzlich, dass der
-Termin/die ToDo-Karte dem angemeldeten Nutzer gehört (Sitzungen gehören dagegen keinem einzelnen
-Nutzer – deren Sichtbarkeit hängt an der Kalenderquelle, siehe `list_sessions`). Der Datei-Anhang
-läuft über denselben privaten
-Storage-Bucket `zusammenfassungen` wie Uploads aus der Web-UI; ob Claude beim Chat-Aufruf
-tatsächlich die Rohbytes einer im Chat angehängten Datei als Base64 überträgt, ist nicht
-abschließend erprobt – im Zweifel einfach ausprobieren.
+`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 17 Tools:
+
+**Anlegen:**
+- `create_todo(titel, spalte, faellig_am?, session_id?)` – Spalte wird angelegt, falls sie noch nicht existiert.
+- `create_event(titel, start, ende?)` – eigener Termin, `herkunft='privat'`.
+- `create_antrag(titel, inhalt?, ausschuss?, ebene?, session_id?)` – Status startet immer bei `entwurf`; `ausschuss`/`ebene` werden aus `session_id` übernommen, falls nicht explizit gesetzt.
+
+**Lesen:**
+- `list_todos(status?, spalte?, limit?)` – eigene + mit dem Nutzer geteilte Karten.
+- `list_sessions(zeitraum?, gremium?, nur_meine_gremien?, limit?)` – `zeitraum`: `zukunft` (Standard)/`vergangenheit`/`alle`; `nur_meine_gremien` spiegelt die Gremien-Auswahl aus Einstellungen → Meine Gremien (analog Dashboard/Archiv).
+- `list_events(zeitraum?, limit?)` – eigene Termine, gleiche `zeitraum`-Semantik.
+- `list_antraege(status?, ausschuss?, limit?)` – eigene + geteilte; `status` Standard `aktiv` (entwurf/gestellt/in_beratung/vertagt).
+- `list_antrag_fristen()` – errechnet Einreichungsfristen (Sitzungsdatum minus die unter Einstellungen → Antrags-Fristen konfigurierte Vorlaufzeit je Ebene) für aktive eigene Anträge mit Sitzungsbezug.
+- `list_notes(session_id?, event_id?, todo_id?, limit?)` – liest zurück, was die `create_*_note`-Tools gespeichert haben; ohne Filter die zuletzt gespeicherten Einträge, mit genau einem `*_id`-Filter alle Einträge zu diesem Objekt. Datei-Anhänge werden nur mit Dateinamen genannt, der Inhalt selbst ist über MCP nicht herunterladbar.
+- `search(query, limit?)` – Volltextsuche über Titel/Beschreibung von ToDos, Titel/Inhalt von Anträgen und Notiz-Texten (eigene + geteilte).
+
+**Bearbeiten:**
+- `complete_todo(todo_id, erledigt?)` – abhaken/rückgängig machen.
+- `update_todo(todo_id, titel?, beschreibung?, faellig_am?, zustaendig?, spalte?)` – `spalte` verschiebt nur die eigene Platzierung des aufrufenden Nutzers.
+- `update_antrag_status(antrag_id, status, ergebnis?, eingereicht_am?)` – `ergebnis` (`positiv`/`negativ`) ist bei `status="abgestimmt"` Pflicht; `eingereicht_am` wird beim Übergang auf `gestellt` automatisch auf heute gesetzt, falls nicht angegeben.
+
+**Notizen/Dokumente** (`create_session_note`/`create_event_note`/`create_todo_note`/`create_antrag_note`, jeweils `*_id`, `inhalt?`, `dateiname?`, `datei_base64?`): speichern Freitext (z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten Sammeldokuments), einen Datei-Anhang als Base64, oder beides zusammen – mindestens eins von beidem ist Pflicht. Erscheinen danach in der Termindetailsicht bzw. im ToDo-Karten-/Antrags-Detail-Modal wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument. `create_event_note`/`create_todo_note`/`create_antrag_note` erlauben das für Objekte, die dem Nutzer gehören **oder** mit ihm geteilt sind (`todo_placements`/`antrag_shares`); `create_session_note` prüft keine Ownership, da Sitzungen keinem einzelnen Nutzer gehören (Sichtbarkeit hängt an der Kalenderquelle, siehe `list_sessions`). Der Datei-Anhang läuft über denselben privaten Storage-Bucket `zusammenfassungen` wie Uploads aus der Web-UI; ob Claude beim Chat-Aufruf tatsächlich die Rohbytes einer im Chat angehängten Datei als Base64 überträgt, ist nicht abschließend erprobt – im Zweifel einfach ausprobieren.
 
 **Auth-Modell:** Kein OAuth, sondern ein **persönliches Token pro Mitglied** – jeder Nutzer erzeugt es
 sich selbst, die Function agiert dann über den `SUPABASE_SERVICE_ROLE_KEY` im Namen genau dieses

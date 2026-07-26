@@ -1094,3 +1094,54 @@ Lese-Tools als nächsten Schritt entschieden.
   den Account Thorsten Kois; alle erwarteten `summaries`-Spalten inkl. `antrag_id` vorhanden). Ein
   Ende-zu-Ende-Test über den echten Connector stand zum Commit-Zeitpunkt noch aus (Tool-Liste wird
   erst beim nächsten Verbindungsaufbau neu eingelesen, siehe die MCP-Connector-Historie weiter oben).
+
+## MCP-Server: Anträge komplett, ToDos bearbeiten, Fristen, Volltextsuche
+
+Nutzerwunsch „mach das alles" nach einem Befund beim Durchgehen der App: der Connector deckte
+Anträge (kompletter App-Bereich mit Status-Workflow, Teilen, Fristen) überhaupt nicht ab, ToDos
+waren nur anlegbar/lesbar, aber nicht bearbeitbar/abhakbar, und es gab keine Fristen-Berechnung
+oder Volltextsuche. Acht neue Tools ergänzt, macht 17 insgesamt.
+
+- **Anträge**: `create_antrag` (übernimmt `ausschuss`/`ebene` aus `session_id`, wie das
+  „+ Antrag"-Formular in `AntraegeSection.tsx`), `list_antraege` (Status-Filter inkl. `aktiv` =
+  `ANTRAG_STATUS_AKTIV`), `update_antrag_status` (repliziert die `eingereicht_am`-Automatik aus
+  `AntragDetailModal.tsx`: nur beim Übergang auf `gestellt` automatisch auf heute setzen, `ergebnis`
+  bei `status="abgestimmt"` Pflicht), `create_antrag_note`.
+- **ToDos bearbeiten**: `complete_todo` (repliziert die `erledigt_am`-Automatik aus
+  `TodoDetailModal.tsx`: nur beim Übergang false→true neu setzen), `update_todo` (Titel/Beschreibung/
+  Fälligkeit/Zuständigkeit/Spalte - "spalte" verschiebt nur die eigene `todo_placements`-Zeile des
+  aufrufenden Nutzers, nicht die anderer Personen auf geteilten Karten, da jede Person ein eigenes
+  Board hat).
+- **`list_antrag_fristen`**: rechnet `computeAntragDeadline()` aus `src/lib/antragDeadline.ts` nach
+  (Sitzungsdatum minus die für die Ebene konfigurierte Vorlaufzeit aus
+  `antrag_deadline_settings`) - per SQL-Gegenprobe exakt verifiziert (14 Tage vor einer Sitzung am
+  02.09. ergibt korrekt 19.08.).
+- **`search`**: Volltextsuche über ToDos (Titel/Beschreibung), Anträge (Titel/Inhalt) und Notizen
+  (Inhalt), jeweils eigene + geteilte Einträge. Bewusst **kein** `.or('titel.ilike.X,beschreibung.
+  ilike.X')` mit eingesetztem Suchbegriff - ein Komma oder eine Klammer im Suchbegriff hätte das
+  PostgREST-Filterformat gebrochen (gleiche Fehlerklasse wie Gremiennamen in
+  `list_sessions`/`CalendarView.tsx`). Stattdessen je Spalte eine eigene, einfache `.ilike()`-Abfrage
+  und Merge per `Map` in JS. Ein erster Anlauf mit generischen Helper-Funktionen (eine Funktion, die
+  je nach Aufrufer verschiedene `.eq()`/`.in()`-Filter auf denselben Query-Builder anwendet) scheiterte
+  an TypeScript: `ReturnType<typeof supabase.from>` lässt sich nicht sinnvoll weiterverketten, und ein
+  `Promise.all()` über ein Array mit **unterschiedlich typisierten** Query-Ergebnissen (Todos vs.
+  Anträge vs. Notizen) inferiert einen Common-Type über alle Elemente, der keine der ursprünglichen
+  Feldnamen mehr kennt - am Ende explizit ausgeschriebene, sequenzielle Abfragen statt der cleveren
+  Abstraktion (etwas langsamer, aber typsicher und nachvollziehbar).
+- **`NoteTargetConfig`/`createNote()`** (bisher nur `sessions`/`events`/`todos`) um `antraege` und ein
+  neues Feld `sharedVia` erweitert (Zusatz-Zugriffsweg neben `user_id = userId`, z. B.
+  `todo_placements`/`antrag_shares`) - `create_todo_note`/`create_antrag_note` erlauben Notizen jetzt
+  auch auf geteilten Karten/Anträgen, nicht nur eigenen. Dabei zwei Stolperfallen gefixt, bevor
+  `deno check` grün war:
+  1. Ein laufzeitabhängiger `select()`-String (unterschiedliche Spalten je nach `ownerScoped`)
+     verwirrte supabase-js' Typinferenz zu einem `ParserError`-Typ - Fix: immer dieselbe konstante
+     Spaltenliste abfragen (`id, titel`), Ownership separat in einer zweiten, eigenen Abfrage prüfen.
+  2. `sessions` hat gar keine `user_id`-Spalte (anders als `events`/`todos`/`antraege`) - ein
+     einheitliches `select('id, titel, user_id')` über alle vier Zieltabellen hinweg hätte für
+     `create_session_note` einen Laufzeitfehler ausgelöst.
+- Verifiziert per `deno check`, Deploy, und einer temporären, anschließend wieder gelöschten
+  Test-Fixtur direkt in der Live-DB (Test-Antrag mit Sitzungsbezug + temporäre
+  `antrag_deadline_settings`-Zeile: Sichtbarkeitsfilter, Fristen-Formel, `search`-Treffer und die
+  `eingereicht_am`-Automatik einzeln nachgerechnet, danach beide Testzeilen gelöscht - kein
+  Ende-zu-Ende-Test über den echten Connector, da dessen Tool-Liste erst beim nächsten
+  Verbindungsaufbau neu eingelesen wird).
