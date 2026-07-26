@@ -187,8 +187,11 @@ MCP-Client das unterstützt). Zwei weitere Stolpersteine, die dabei aufgetreten 
    - Danach stehen die drei Tools in Claude-Chats zur Verfügung.
 
 Jedes Mitglied verwaltet seine eigene Zugangs-URL selbst; es gibt keine globale, gemeinsam genutzte
-Zugangskennung. Lokal typprüfbar mit `deno check --config supabase/functions/mcp-server/deno.json
-supabase/functions/mcp-server/index.ts`.
+Zugangskennung. Der Code ist nach Domäne in Module aufgeteilt (`shared.ts` für Helfer,
+`tools_schema.ts` für die JSON-Schemas, `tools/*.ts` für die Implementierungen je Bereich, `index.ts`
+nur noch für die JSON-RPC-Hülle) – lokal typprüfbar mit `deno check --config
+supabase/functions/mcp-server/deno.json supabase/functions/mcp-server/index.ts` (prüft alle
+importierten Module mit).
 
 ## 10. Weiterentwicklung mit Claude Code
 

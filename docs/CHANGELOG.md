@@ -1145,3 +1145,22 @@ oder Volltextsuche. Acht neue Tools ergänzt, macht 17 insgesamt.
   `eingereicht_am`-Automatik einzeln nachgerechnet, danach beide Testzeilen gelöscht - kein
   Ende-zu-Ende-Test über den echten Connector, da dessen Tool-Liste erst beim nächsten
   Verbindungsaufbau neu eingelesen wird).
+
+## MCP-Server: in Module aufgeteilt (reine Umstrukturierung)
+
+`supabase/functions/mcp-server/index.ts` war auf 1560 Zeilen gewachsen (17 Tools in einer Datei) -
+für eine Edge Function unhandlich groß geworden. Aufgeteilt, ohne das Verhalten zu ändern:
+
+- `shared.ts` - JSON-RPC-Helfer, Auth (`resolveUser`/`sha256Hex`), Format-/Pagination-Helfer
+  (`formatDateTime`, `formatDate`, `truncate`, `fileNameFromPath`, `parseLimit`,
+  `parseZeitraum`/`sortAscending`/`zeitraumLabel`), `corsHeaders`.
+- `tools_schema.ts` - das `TOOLS`-Array (reine JSON-Schema-Deklarationen).
+- `tools/todos.ts`, `tools/events.ts`, `tools/sessions.ts`, `tools/antraege.ts`, `tools/notes.ts`,
+  `tools/search.ts` - je Domäne eine Datei mit den Implementierungen.
+- `index.ts` - nur noch `Deno.serve`, JSON-RPC-Parsing/Auth/Dispatch (221 Zeilen).
+
+Supabase Edge Functions unterstützen relative Imports innerhalb des Funktionsordners problemlos -
+`supabase functions deploy` erkennt und lädt automatisch alle importierten Dateien mit hoch (im
+Deploy-Log einzeln aufgelistet). Nach dem Deploy dieselben Prüfungen wie beim letzten CORS-Fix
+wiederholt (Preflight-Header, `verify_jwt=false`, HTTP 200 statt 401 bei Auth-Fehlern) - alle
+identisch zum Stand vor der Aufteilung, wie erwartet bei einer reinen Umstrukturierung.
