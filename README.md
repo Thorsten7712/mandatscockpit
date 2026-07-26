@@ -123,11 +123,16 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt und stellt sieben Tools bereit: `create_todo`,
-`create_event`, `list_sessions`/`list_events` (Sitzungen bzw. eigene Termine auflisten – per
+`tools/call`) über einen einzigen HTTP-Endpunkt und stellt neun Tools bereit: `create_todo`,
+`create_event`, `list_todos` (eigene + mit dem Nutzer geteilte Karten, Filter `status`
+offen/erledigt/alle und `spalte`), `list_sessions`/`list_events` (Sitzungen bzw. eigene Termine auflisten – per
 `zeitraum` wahlweise `zukunft` (Standard), `vergangenheit` oder `alle`; `list_sessions` kennt
 zusätzlich `gremium` als Teilstring-Filter und `nur_meine_gremien`, das die Gremien-Auswahl aus
-Einstellungen → Meine Gremien anwendet, analog zum Dashboard/Archiv), sowie
+Einstellungen → Meine Gremien anwendet, analog zum Dashboard/Archiv), `list_notes` (liest zurück,
+was `create_session_note`/`create_event_note`/`create_todo_note` gespeichert haben – ohne Filter die
+zuletzt gespeicherten Einträge, mit genau einem der `*_id`-Filter alle Einträge zu diesem einen
+Objekt; Datei-Anhänge werden nur mit Dateinamen genannt, der Inhalt selbst ist über MCP nicht
+herunterladbar), sowie
 `create_session_note`/`create_event_note`/
 `create_todo_note` (speichern eine Notiz zu einer bestimmten Sitzung/einem eigenen Termin/einer
 ToDo-Karte – Freitext, z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten

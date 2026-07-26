@@ -165,6 +165,47 @@ const TOOLS = [
     },
   },
   {
+    name: 'list_todos',
+    description:
+      'Listet die ToDo-Karten des angemeldeten Nutzers auf (eigene und mit ihm geteilte), sortiert nach Fälligkeitsdatum. Für Fragen wie "was steht noch offen" oder "was ist diese Woche fällig". Liefert je Karte auch die id, die für create_todo_note gebraucht wird.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['offen', 'erledigt', 'alle'],
+          description: 'Welche Karten: "offen" (Standard), "erledigt" oder "alle".',
+        },
+        spalte: {
+          type: 'string',
+          description:
+            'Filtert auf eine Board-Spalte des Nutzers, z. B. "Wartet" (optional, Teilstring-Vergleich ohne Groß-/Kleinschreibung).',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximale Anzahl Karten (Standard 20, Maximum 100).',
+        },
+      },
+    },
+  },
+  {
+    name: 'list_notes',
+    description:
+      'Liest gespeicherte Notizen und hochgeladene Dokumente wieder aus (das Gegenstück zu create_session_note/create_event_note/create_todo_note). Ohne Filter kommen die zuletzt gespeicherten Einträge über alle Sitzungen/Termine/ToDos hinweg; mit genau einem der *_id-Filter alle Einträge zu diesem einen Objekt. Für Fragen wie "was habe ich zur letzten Ratssitzung notiert". Bei Datei-Anhängen wird nur der Dateiname genannt - der Dateiinhalt selbst kann über MCP nicht heruntergeladen werden.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string', description: 'Nur Notizen zu dieser Sitzung (optional).' },
+        event_id: { type: 'string', description: 'Nur Notizen zu diesem eigenen Termin (optional).' },
+        todo_id: { type: 'string', description: 'Nur Notizen zu dieser ToDo-Karte (optional).' },
+        limit: {
+          type: 'number',
+          description: 'Maximale Anzahl Notizen (Standard 20, Maximum 100).',
+        },
+      },
+    },
+  },
+  {
     name: 'create_session_note',
     description:
       'Speichert eine Notiz zu einer bestimmten Sitzung im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort in der Termindetailsicht der Sitzung, wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument). Unterstützt Freitext (z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten Sammeldokuments), einen Datei-Anhang (Base64-kodiert, z. B. das Sammeldokument selbst) oder beides zusammen. Mindestens eins von beidem ist erforderlich. Für den Datei-Anhang gilt ein praktisches Limit von einigen MB (Base64 vergrößert die Originaldatei um ca. 33%, das Edge-Function-Request-Limit greift zuerst).',
@@ -506,6 +547,197 @@ async function listEvents(supabase: SupabaseClient, userId: string, args: Record
   return toolTextResult(lines.join('\n'))
 }
 
+/** `faellig_am` ist ein reines Datum (date, kein timestamptz) - hier ohne Uhrzeit und
+ *  ohne Zeitzonen-Umrechnung formatieren, sonst kippt das Datum je nach Zeitzone. */
+function formatDate(isoDate: string): string {
+  const [jahr, monat, tag] = isoDate.split('-')
+  return tag && monat && jahr ? `${tag}.${monat}.${jahr}` : isoDate
+}
+
+/** Storage-Pfade sind `<user_id>/<timestamp>-<dateiname>` - für die Anzeige nur den Dateinamen. */
+function fileNameFromPath(path: string): string {
+  return path.split('/').pop() ?? path
+}
+
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max)}… [gekürzt, ${text.length} Zeichen gesamt]`
+}
+
+interface TodoListRow {
+  id: string
+  titel: string
+  faellig_am: string | null
+  zustaendig: string | null
+  erledigt: boolean
+  erledigt_am: string | null
+  user_id: string
+}
+
+async function listTodos(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const status = args.status === 'erledigt' || args.status === 'alle' ? args.status : 'offen'
+  const spalte = typeof args.spalte === 'string' ? args.spalte.trim().toLowerCase() : ''
+  const limit = parseLimit(args.limit)
+
+  // Die Platzierungen des Nutzers liefern beides: die Menge der für ihn sichtbaren
+  // Karten (eigene UND mit ihm geteilte, vgl. todos_select_own_or_placed - der
+  // Service-Role-Client umgeht RLS) und die Board-Spalte je Karte.
+  const { data: placements } = await supabase
+    .from('todo_placements')
+    .select('todo_id, column_id')
+    .eq('user_id', userId)
+  const columnIdByTodo = new Map((placements ?? []).map((p) => [p.todo_id as string, p.column_id as string]))
+  const placedTodoIds = (placements ?? []).map((p) => p.todo_id as string)
+
+  const { data: columns } = await supabase.from('todo_columns').select('id, titel').eq('user_id', userId)
+  const columnTitleById = new Map((columns ?? []).map((c) => [c.id as string, c.titel as string]))
+
+  const baseQuery = () => {
+    let q = supabase.from('todos').select('id, titel, faellig_am, zustaendig, erledigt, erledigt_am, user_id')
+    if (status === 'offen') q = q.eq('erledigt', false)
+    else if (status === 'erledigt') q = q.eq('erledigt', true)
+    return q
+  }
+  const [own, placed] = await Promise.all([
+    baseQuery().eq('user_id', userId),
+    placedTodoIds.length > 0 ? baseQuery().in('id', placedTodoIds) : Promise.resolve({ data: [], error: null }),
+  ])
+  if (own.error) return toolTextResult(`Fehler beim Laden der ToDos: ${own.error.message}`, true)
+  if (placed.error) return toolTextResult(`Fehler beim Laden der ToDos: ${placed.error.message}`, true)
+
+  const byId = new Map<string, TodoListRow>()
+  ;[...(own.data ?? []), ...(placed.data ?? [])].forEach((t) => byId.set(t.id, t as TodoListRow))
+  let rows = Array.from(byId.values())
+
+  if (spalte) {
+    rows = rows.filter((t) => {
+      const titel = columnTitleById.get(columnIdByTodo.get(t.id) ?? '')
+      return titel ? titel.toLowerCase().includes(spalte) : false
+    })
+  }
+
+  rows.sort((a, b) =>
+    status === 'erledigt'
+      ? (b.erledigt_am ?? '').localeCompare(a.erledigt_am ?? '')
+      : // Karten ohne Fälligkeit ans Ende statt an den Anfang sortieren.
+        (a.faellig_am ?? '9999-12-31').localeCompare(b.faellig_am ?? '9999-12-31'),
+  )
+  rows = rows.slice(0, limit)
+
+  if (rows.length === 0) {
+    const was = status === 'erledigt' ? 'erledigten' : status === 'alle' ? '' : 'offenen'
+    return toolTextResult(
+      (spalte ? `Keine ${was} ToDos in einer Spalte mit "${spalte}" gefunden.` : `Keine ${was} ToDos gefunden.`)
+        .replace('  ', ' '),
+    )
+  }
+
+  const lines = rows.map((t) => {
+    const box = t.erledigt ? '[x]' : '[ ]'
+    const details: string[] = []
+    if (t.erledigt && t.erledigt_am) details.push(`erledigt am ${formatDate(t.erledigt_am.slice(0, 10))}`)
+    else if (t.faellig_am) details.push(`fällig ${formatDate(t.faellig_am)}`)
+    const spaltenTitel = columnTitleById.get(columnIdByTodo.get(t.id) ?? '')
+    if (spaltenTitel) details.push(`Spalte: ${spaltenTitel}`)
+    if (t.zustaendig) details.push(`zuständig: ${t.zustaendig}`)
+    if (t.user_id !== userId) details.push('geteilt')
+    const suffix = details.length > 0 ? ` — ${details.join(' · ')}` : ''
+    return `- ${box} ${t.titel}${suffix} — id: ${t.id}`
+  })
+  return toolTextResult(lines.join('\n'))
+}
+
+interface NoteListRow {
+  id: string
+  session_id: string | null
+  event_id: string | null
+  todo_id: string | null
+  antrag_id: string | null
+  inhalt: string | null
+  datei_url: string | null
+  erstellt_am: string
+  user_id: string
+}
+
+async function listNotes(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const sessionId = typeof args.session_id === 'string' && args.session_id.trim() ? args.session_id.trim() : null
+  const eventId = typeof args.event_id === 'string' && args.event_id.trim() ? args.event_id.trim() : null
+  const todoId = typeof args.todo_id === 'string' && args.todo_id.trim() ? args.todo_id.trim() : null
+  const limit = parseLimit(args.limit)
+
+  const gesetzteFilter = [sessionId, eventId, todoId].filter(Boolean)
+  if (gesetzteFilter.length > 1) {
+    return toolTextResult('Fehler: bitte höchstens einen der Filter session_id, event_id, todo_id setzen.', true)
+  }
+
+  // Sichtbarkeit wie in der Web-UI: eigene Notizen (summaries_manage_own) plus
+  // Notizen anderer auf ToDo-Karten, auf denen der Nutzer eine Platzierung hat
+  // (summaries_select_via_todo_placement). Anträge bleiben außen vor, solange es
+  // keine Antrags-Tools gibt.
+  const { data: placements } = await supabase.from('todo_placements').select('todo_id').eq('user_id', userId)
+  const placedTodoIds = (placements ?? []).map((p) => p.todo_id as string)
+
+  const baseQuery = () => {
+    let q = supabase
+      .from('summaries')
+      .select('id, session_id, event_id, todo_id, antrag_id, inhalt, datei_url, erstellt_am, user_id')
+    if (sessionId) q = q.eq('session_id', sessionId)
+    if (eventId) q = q.eq('event_id', eventId)
+    if (todoId) q = q.eq('todo_id', todoId)
+    return q.order('erstellt_am', { ascending: false }).limit(limit)
+  }
+  const [own, viaTodo] = await Promise.all([
+    baseQuery().eq('user_id', userId),
+    placedTodoIds.length > 0 ? baseQuery().in('todo_id', placedTodoIds) : Promise.resolve({ data: [], error: null }),
+  ])
+  if (own.error) return toolTextResult(`Fehler beim Laden der Notizen: ${own.error.message}`, true)
+  if (viaTodo.error) return toolTextResult(`Fehler beim Laden der Notizen: ${viaTodo.error.message}`, true)
+
+  const byId = new Map<string, NoteListRow>()
+  ;[...(own.data ?? []), ...(viaTodo.data ?? [])].forEach((n) => byId.set(n.id, n as NoteListRow))
+  const rows = Array.from(byId.values())
+    .sort((a, b) => b.erstellt_am.localeCompare(a.erstellt_am))
+    .slice(0, limit)
+
+  if (rows.length === 0) return toolTextResult('Keine Notizen/Dokumente gefunden.')
+
+  // Titel der verknüpften Objekte in je einer Sammelabfrage nachladen.
+  const idsOf = (key: 'session_id' | 'event_id' | 'todo_id') =>
+    Array.from(new Set(rows.map((r) => r[key]).filter((v): v is string => Boolean(v))))
+  const [sessions, events, todos] = await Promise.all([
+    idsOf('session_id').length > 0
+      ? supabase.from('sessions').select('id, titel').in('id', idsOf('session_id'))
+      : Promise.resolve({ data: [] }),
+    idsOf('event_id').length > 0
+      ? supabase.from('events').select('id, titel').in('id', idsOf('event_id'))
+      : Promise.resolve({ data: [] }),
+    idsOf('todo_id').length > 0
+      ? supabase.from('todos').select('id, titel').in('id', idsOf('todo_id'))
+      : Promise.resolve({ data: [] }),
+  ])
+  const titelById = new Map<string, string>()
+  ;[...(sessions.data ?? []), ...(events.data ?? []), ...(todos.data ?? [])].forEach((r) =>
+    titelById.set(r.id as string, r.titel as string),
+  )
+
+  // Bei einem gesetzten Filter ist der Kontext eng - dann den vollen Text zeigen,
+  // sonst kürzen, damit eine breite Liste die Antwort nicht sprengt.
+  const maxLen = gesetzteFilter.length === 1 ? 4000 : 500
+
+  const lines = rows.map((n) => {
+    let ziel = 'ohne Zuordnung'
+    if (n.session_id) ziel = `Sitzung "${titelById.get(n.session_id) ?? n.session_id}"`
+    else if (n.event_id) ziel = `Termin "${titelById.get(n.event_id) ?? n.event_id}"`
+    else if (n.todo_id) ziel = `ToDo "${titelById.get(n.todo_id) ?? n.todo_id}"`
+    else if (n.antrag_id) ziel = 'Antrag'
+    const teile: string[] = []
+    if (n.inhalt) teile.push(truncate(n.inhalt, maxLen))
+    if (n.datei_url) teile.push(`[Datei: ${fileNameFromPath(n.datei_url)}]`)
+    if (n.user_id !== userId) teile.push('(von einer geteilten Karte)')
+    return `- ${formatDateTime(n.erstellt_am)} · ${ziel}: ${teile.join(' ')}`
+  })
+  return toolTextResult(lines.join('\n\n'))
+}
+
 interface NoteTargetConfig {
   /** Name des Arguments, das die UUID des Ziels trägt (session_id/event_id/todo_id). */
   idArgName: string
@@ -731,6 +963,12 @@ Deno.serve(async (req) => {
           break
         case 'list_events':
           result = await listEvents(supabase, user.id, args)
+          break
+        case 'list_todos':
+          result = await listTodos(supabase, user.id, args)
+          break
+        case 'list_notes':
+          result = await listNotes(supabase, user.id, args)
           break
         case 'create_session_note':
           result = await createSessionNote(supabase, user.id, args)

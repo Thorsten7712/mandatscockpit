@@ -1062,3 +1062,35 @@ nicht lesbar – nur anlegbar.
   `0018_calendar_sources_privat.sql` **gelöschte** Policy `sessions_select_all` beriefen
   („Sitzungen sind für alle eingeloggten Nutzer lesbar") – Sitzungs-Sichtbarkeit hängt seitdem an der
   Kalenderquelle.
+
+## MCP-Server: Lese-Tools für ToDos und Notizen (`list_todos`, `list_notes`)
+
+Der Connector war bis hierhin stark schreiblastig: 5 von 7 Tools schrieben, gelesen wurde nur
+`list_sessions`/`list_events`. Fragen wie „was steht noch offen" oder „was habe ich zur letzten
+Ratssitzung notiert" waren nicht beantwortbar, obwohl `create_todo` und `create_*_note` genau diese
+Daten längst anlegen konnten. Auf Vorschlag (nach Durchsicht der App: Anträge, ToDo-Bearbeiten,
+Fristen, Volltextsuche standen ebenfalls zur Auswahl) hat sich der Nutzer für diese beiden
+Lese-Tools als nächsten Schritt entschieden.
+
+- **`list_todos`**: eigene UND mit dem Nutzer geteilte Karten (`todo_placements`, seit
+  `0021_todo_erledigt_sharing.sql` - Service-Role-Client umgeht `todos_select_own_or_placed`, daher
+  zwei separate Abfragen `eq('user_id', userId)` + `in('id', placedTodoIds)` und Merge per Map statt
+  eines RLS-äquivalenten Filters). Parameter `status` (offen/erledigt/alle), `spalte`
+  (Teilstring-Filter auf den Spaltentitel des Nutzers - jede Person hat eigene `todo_columns`, auch
+  für geteilte Karten) und `limit`. Sortierung: offen/alle nach `faellig_am` (ohne Fälligkeit ans
+  Ende), erledigt nach `erledigt_am` absteigend.
+- **`list_notes`**: liest `summaries` zurück - das Gegenstück zu den drei `create_*_note`-Tools.
+  Ohne Filter die zuletzt gespeicherten Einträge über alle Ziele hinweg, mit genau einem der
+  `session_id`/`event_id`/`todo_id`-Filter (mehr als einer gleichzeitig ist ein Fehler) alle
+  Einträge zu genau diesem Objekt. Titel der verknüpften Sitzung/Termin/ToDo werden in je einer
+  Sammelabfrage nachgeladen (`in('id', [...])` statt N+1). Text wird bei ungefiltertem Aufruf auf
+  500 Zeichen gekürzt (sonst sprengt eine breite Liste die Chat-Antwort), bei genau einem Filter auf
+  4000 Zeichen (enger Kontext, dort ist der volle Text meist gewollt). Datei-Anhänge werden nur mit
+  Dateinamen genannt (`fileNameFromPath()`, gleiche Logik wie `DocumentPreviewModal.tsx`) - der
+  Dateiinhalt ist über MCP nicht herunterladbar, das wäre eine zusätzliche Signed-URL-Erzeugung, die
+  hier bewusst nicht gebaut wurde. Anträge (`antrag_id`) bleiben außen vor, solange es keine
+  Antrags-Tools gibt.
+- Verifiziert per `deno check` + SQL-Gegenproben gegen die Live-DB (4 offene ToDos, 3 Notizen für
+  den Account Thorsten Kois; alle erwarteten `summaries`-Spalten inkl. `antrag_id` vorhanden). Ein
+  Ende-zu-Ende-Test über den echten Connector stand zum Commit-Zeitpunkt noch aus (Tool-Liste wird
+  erst beim nächsten Verbindungsaufbau neu eingelesen, siehe die MCP-Connector-Historie weiter oben).
