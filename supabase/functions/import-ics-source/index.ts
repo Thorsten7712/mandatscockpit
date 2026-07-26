@@ -40,10 +40,20 @@ function normalizeIcsUrl(url: string): string {
 }
 
 // Nutzerentscheidung: der Kalender-Horizont beginnt am 11.11.2025 - ältere
-// Feed-Einträge werden nicht importiert, bereits vorher importierte
-// Sitzungen VOR diesem Datum bleiben unangetastet im Archiv erhalten.
+// Feed-Einträge werden nicht (neu) importiert.
 // WICHTIG: identischer Wert in scripts/import-ics.mjs nachziehen.
 const MIN_IMPORT_DATUM = new Date('2025-11-11T00:00:00Z')
+
+// Bug gefunden am 2026-07-26 (identische Begründung wie in
+// scripts/import-ics.mjs, dort ausführlich kommentiert): ALLRIS-Feeds liefern
+// nur ein rollierendes Zeitfenster, ältere Termine fallen mit der Zeit aus
+// dem Feed heraus, unabhängig davon ob sie stattfanden oder abgesagt wurden.
+// Die Absage-/Reaktivierungs-Erkennung darf deshalb nur auf noch nicht
+// vergangene Sitzungen angewendet werden.
+function startOfTodayUtcIso(): string {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+}
 
 // node-ical liefert ICS-Properties mit Parametern (z. B. "SUMMARY;LANGUAGE=de:...",
 // wie im echten ALLRIS-Feed von Iserlohn) als { params, val } statt als String.
@@ -144,7 +154,7 @@ Deno.serve(async (req) => {
     .select('ics_uid, status')
     .eq('source_id', source.id)
     .not('ics_uid', 'is', null)
-    .gte('datum', MIN_IMPORT_DATUM.toISOString())
+    .gte('datum', startOfTodayUtcIso())
   const existingByUid = new Map<string, string>((existingRows ?? []).map((r) => [r.ics_uid as string, r.status as string]))
 
   let parsed: Record<string, unknown>

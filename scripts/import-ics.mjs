@@ -33,12 +33,27 @@ function normalizeIcsUrl(url) {
 }
 
 // Nutzerentscheidung: der Kalender-Horizont beginnt am 11.11.2025 - ältere
-// Feed-Einträge werden nicht importiert. Wichtig: bereits vorher importierte
-// Sitzungen VOR diesem Datum bleiben unangetastet im Archiv erhalten - die
-// Absage-Erkennung unten lädt "existing" deshalb ebenfalls nur ab diesem
-// Datum, sonst würden alte Sitzungen fälschlich als "aus dem Feed
-// verschwunden" markiert, nur weil sie unterhalb des Horizonts liegen.
+// Feed-Einträge werden nicht (neu) importiert.
 const MIN_IMPORT_DATUM = new Date('2025-11-11T00:00:00Z')
+
+// Bug gefunden am 2026-07-26: die ALLRIS-Feeds liefern nur ein rollierendes
+// Zeitfenster (aktuell z. B. "Stadtrat Iserlohn" nur noch ab 2026-06-01,
+// obwohl "heute" der 26.07.2026 ist - ältere Termine fallen mit der Zeit
+// einfach aus dem Feed heraus, unabhängig davon, ob sie stattfanden oder
+// abgesagt wurden). Die Absage-Erkennung unten ("fehlt im Feed = vermutlich
+// abgesagt") darf deshalb NICHT auf bereits vergangene Sitzungen angewendet
+// werden, sonst werden ganz normal stattgefundene alte Sitzungen beim
+// nächsten Lauf fälschlich als "abgesagt" markiert, nur weil der Feed sie
+// nicht mehr auflistet (passiert: 9 Sitzungen zwischen 18.05. und 24.06.2026
+// wurden so fälschlich abgesagt, u. a. "CDU-Fraktion" am 18.05. - per SQL
+// wieder auf 'geplant' zurückgesetzt). "existing" wird deshalb nur noch ab
+// dem heutigen Tag geladen (UTC-Mitternacht) - eine Sitzung, die bereits
+// stattgefunden hat, wird durch diesen Job nie wieder angefasst, ihr Status
+// bleibt für immer, wie er zuletzt war.
+function startOfTodayUtcIso() {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+}
 
 // node-ical liefert ICS-Properties mit Parametern (z. B. "SUMMARY;LANGUAGE=de:...",
 // wie im echten ALLRIS-Feed von Iserlohn) als { params, val } statt als String.
@@ -94,13 +109,15 @@ async function importSource(source) {
     // Bestehende Sessions dieser Quelle VOR dem Import laden, um nachher zu
     // erkennen, welche UIDs aus dem Feed verschwunden sind (= vermutlich
     // abgesagt - der ALLRIS-Feed markiert Absagen nicht über STATUS:CANCELLED,
-    // sondern entfernt den Termin einfach aus dem Feed).
+    // sondern entfernt den Termin einfach aus dem Feed). Nur ab heute (siehe
+    // startOfTodayUtcIso()-Kommentar oben) - vergangene Sitzungen werden von
+    // der Absage-/Reaktivierungs-Logik nie mehr angefasst.
     const { data: existing } = await supabase
       .from('sessions')
       .select('ics_uid, status')
       .eq('source_id', source.id)
       .not('ics_uid', 'is', null)
-      .gte('datum', MIN_IMPORT_DATUM.toISOString())
+      .gte('datum', startOfTodayUtcIso())
     const existingByUid = new Map((existing ?? []).map((row) => [row.ics_uid, row.status]))
 
     const parsed = await ical.async.fromURL(normalizeIcsUrl(source.ics_url))

@@ -995,3 +995,30 @@ gefragt.
   - Verifiziert per `tsc -b`/`vite build`/`deno check` (beide Edge Functions), Migration gegen die
     Live-DB gepusht und per SQL-Query bestätigt (alle 5 bestehenden Quellen defaulten korrekt auf
     `art = 'sitzung'`).
+
+- **Bugfix: vergangene Sitzungen wurden fälschlich als „abgesagt" markiert** (gefunden 2026-07-26,
+  Nutzerfrage "Warum sind die Termine am 18. Mai abgesagt?"): Root Cause per direktem Feed-Vergleich
+  verifiziert - die ALLRIS-Feeds liefern nur ein **rollierendes Zeitfenster** (an diesem Tag lieferte
+  der "Stadtrat Iserlohn"-Feed z. B. nur noch Termine ab 01.06.2026, obwohl "heute" der 26.07.2026
+  war). Die Absage-Erkennung ("UID war bekannt, taucht aber nicht mehr im aktuellen Feed auf = vermutlich
+  abgesagt", ursprünglich eingeführt weil ALLRIS Absagen nicht über `STATUS:CANCELLED` markiert, sondern
+  den Termin einfach aus dem Feed entfernt) konnte nicht unterscheiden zwischen "wirklich abgesagt" und
+  "einfach nur aus dem rollierenden Zeitfenster herausgealtert" - beides sieht aus Sicht des Jobs
+  identisch aus ("UID fehlt im aktuellen Fetch"). Betroffen waren 9 Sitzungen zwischen 18.05. und
+  24.06.2026 (u. a. beide "CDU-Fraktion"-Termine am 18.05., Ausschuss für Umwelt- und Klimaschutz,
+  Beirat für Inklusion, Kulturausschuss, je zweimal Sitzung des Kulturausschusses/
+  Jugendhilfeausschusses über Kreistag/Kreistag MK, die beide dieselbe UID unter derselben
+  zugrundeliegenden Kreis-Domain liefern).
+  - Verifiziert: `titel`/`gremium` der betroffenen Sitzungen stimmen exakt mit der letzten bekannten
+    Feed-Fassung überein (keine Verstümmelung, keine Klammer-Filterung o. ä. - reine
+    Status-Fehlklassifikation).
+  - Fix: die Absage-/Reaktivierungs-Erkennung berücksichtigt jetzt nur noch Sitzungen, deren `datum`
+    noch nicht in der Vergangenheit liegt (`existing`-Query lädt ab `startOfTodayUtcIso()` statt ab
+    `MIN_IMPORT_DATUM`) - eine bereits vergangene Sitzung wird vom Import-Job nie wieder angefasst,
+    ihr letzter Status bleibt endgültig stehen. `MIN_IMPORT_DATUM` (11.11.2025) bleibt unverändert als
+    reine Untergrenze dafür, was überhaupt neu importiert wird - ein separates, unabhängiges Konzept.
+  - Die 9 fälschlich abgesagten Sitzungen direkt per SQL auf `status = 'geplant'` zurückgesetzt (hohe
+    Konfidenz: alle betroffenen Sitzungen liegen weit genug in der Vergangenheit, dass eine echte
+    Last-Minute-Absage zu diesem Zeitpunkt keinen operativen Sinn mehr ergäbe - eine Verwaltung sagt
+    keine Sitzung ab, die vor Wochen schon hätte stattfinden sollen).
+  - Verifiziert per `node -c`/`deno check`, Fix gegen die Live-Funktionen deployt.
