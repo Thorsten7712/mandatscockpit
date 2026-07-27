@@ -10,8 +10,8 @@ import { TodoDetailModal } from './TodoDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDate } from '../lib/format'
 
-/** 'alle' = ungefiltert, 'eigene' = Anträge ohne Sitzungsbezug, sonst eine session_id. */
-type SitzungFilter = 'alle' | 'eigene' | string
+/** 'alle' = ungefiltert, 'eigene' = Anträge ohne Sitzungsbezug, sonst ein Gremiumsname. */
+type GremiumFilter = 'alle' | 'eigene' | string
 
 interface DokumentItem {
   key: string
@@ -45,7 +45,7 @@ export function AntraegeSection() {
   const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
   const [tageByEbene, setTageByEbene] = useState<Map<Ebene, number>>(new Map())
 
-  const [sitzungFilter, setSitzungFilter] = useState<SitzungFilter>('alle')
+  const [gremiumFilter, setGremiumFilter] = useState<GremiumFilter>('alle')
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [newTitel, setNewTitel] = useState('')
@@ -247,18 +247,24 @@ export function AntraegeSection() {
     b.erstellt.localeCompare(a.erstellt),
   )
 
-  // Sitzungs-Filter: ein Chip pro Sitzung, die tatsächlich unter den
-  // Einträgen vorkommt (chronologisch), plus "Eigene Anträge" für Anträge
-  // ohne Sitzungsbezug - keine wirkungslosen Filter anzeigen.
-  const vorkommendeSitzungen = Array.from(new Set(alleItems.filter((i) => i.sessionId).map((i) => i.sessionId as string)))
-    .map((id) => sessionById.get(id))
-    .filter((s): s is SessionRow => Boolean(s))
-    .sort((a, b) => a.datum.localeCompare(b.datum))
+  // Gremien-Filter: ein Chip pro Gremium (nicht pro einzelner Sitzung - ein
+  // Gremium tagt mehrfach im Jahr, "ein Chip pro Sitzungstermin" erzeugte
+  // dieselbe Bezeichnung ("Rat der Stadt Iserlohn") mehrfach hintereinander
+  // und war dadurch nicht mehr sinnvoll unterscheidbar), plus "Eigene
+  // Anträge" für Anträge ohne Sitzungsbezug - keine wirkungslosen Filter
+  // anzeigen. `gremium` statt `titel`, weil `titel` das rohe SUMMARY-Feld
+  // aus dem ICS-Import ist (z. B. "Wahlprüfungsausschusses" statt
+  // "Wahlprüfungsausschuss") - `gremium` ist die bereits bereinigte Form
+  // (siehe extractGremium() in scripts/import-ics.mjs).
+  const gremiumOf = (item: DokumentItem) => (item.sessionId ? sessionById.get(item.sessionId)?.gremium : null)
+  const vorkommendeGremien = Array.from(new Set(alleItems.map(gremiumOf).filter((g): g is string => Boolean(g)))).sort(
+    (a, b) => a.localeCompare(b, 'de'),
+  )
   const hatEigeneOhneSitzung = antragItems.some((i) => !i.sessionId)
   const sichtbar = alleItems.filter((item) => {
-    if (sitzungFilter === 'alle') return true
-    if (sitzungFilter === 'eigene') return item.kind === 'antrag' && !item.sessionId
-    return item.sessionId === sitzungFilter
+    if (gremiumFilter === 'alle') return true
+    if (gremiumFilter === 'eigene') return item.kind === 'antrag' && !item.sessionId
+    return gremiumOf(item) === gremiumFilter
   })
   const abgeschlosseneAnzahl = antraege.length - aktive.length
 
@@ -311,35 +317,35 @@ export function AntraegeSection() {
         </form>
       )}
 
-      {(vorkommendeSitzungen.length > 0 || hatEigeneOhneSitzung) && (
+      {(vorkommendeGremien.length > 0 || hatEigeneOhneSitzung) && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           <button
             type="button"
-            onClick={() => setSitzungFilter('alle')}
+            onClick={() => setGremiumFilter('alle')}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              sitzungFilter === 'alle' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              gremiumFilter === 'alle' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
             Alle
           </button>
-          {vorkommendeSitzungen.map((s) => (
+          {vorkommendeGremien.map((g) => (
             <button
-              key={s.id}
+              key={g}
               type="button"
-              onClick={() => setSitzungFilter(s.id)}
+              onClick={() => setGremiumFilter(g)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                sitzungFilter === s.id ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                gremiumFilter === g ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              {s.titel}
+              {g}
             </button>
           ))}
           {hatEigeneOhneSitzung && (
             <button
               type="button"
-              onClick={() => setSitzungFilter('eigene')}
+              onClick={() => setGremiumFilter('eigene')}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                sitzungFilter === 'eigene' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                gremiumFilter === 'eigene' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               Eigene Anträge
