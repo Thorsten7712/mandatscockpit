@@ -312,11 +312,13 @@ export function AntraegeSection() {
       )}
 
       {(vorkommendeSitzungen.length > 0 || hatEigeneOhneSitzung) && (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={() => setSitzungFilter('alle')}
-            className={sitzungFilter === 'alle' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              sitzungFilter === 'alle' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
           >
             Alle
           </button>
@@ -325,7 +327,9 @@ export function AntraegeSection() {
               key={s.id}
               type="button"
               onClick={() => setSitzungFilter(s.id)}
-              className={sitzungFilter === s.id ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                sitzungFilter === s.id ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
             >
               {s.titel}
             </button>
@@ -334,7 +338,9 @@ export function AntraegeSection() {
             <button
               type="button"
               onClick={() => setSitzungFilter('eigene')}
-              className={sitzungFilter === 'eigene' ? 'mc-btn-primary !px-2.5 !py-1 !text-xs' : 'mc-btn-ghost !px-2.5 !py-1 !text-xs'}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                sitzungFilter === 'eigene' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
             >
               Eigene Anträge
             </button>

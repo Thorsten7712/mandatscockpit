@@ -15,9 +15,16 @@ function fileExtension(path: string): string {
   return path.split('.').pop()?.toLowerCase() ?? ''
 }
 
-/** Dateiname aus dem Storage-Pfad ("<user_id>/<dateiname>") extrahieren. */
+/** Dateiname aus dem Storage-Pfad ("<user_id>/<dateiname>") extrahieren.
+ * Uploads werden als "<Date.now()>-<originalname>" gespeichert, um
+ * Namenskollisionen im Bucket zu vermeiden (siehe z. B. handleUploadDocument
+ * in TodoDetailModal.tsx/AntragDetailModal.tsx) - dieser Zeitstempel-Präfix
+ * ist für Anzeigezwecke reines Rauschen und wird hier ausgeblendet, ohne den
+ * tatsächlichen Storage-Pfad (und damit bestehende datei_url-Referenzen) zu
+ * verändern. */
 export function fileNameFromPath(path: string): string {
-  return path.split('/').pop() ?? path
+  const name = path.split('/').pop() ?? path
+  return name.replace(/^\d+-/, '')
 }
 
 export function DocumentPreviewModal({
