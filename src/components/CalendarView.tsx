@@ -18,9 +18,11 @@ interface AggregatedItem {
   source_id: string | null
   /** Ebene der Sitzung direkt aus sessions.ebene (null bei eigenen Terminen) - Fallback, falls keine Quelle verknüpft ist */
   ebene: Ebene | null
+  /** Gremium der Sitzung (null bei eigenen Terminen), für den feingranularen Filter unten */
+  gremium: string | null
 }
 
-type TerminFilter = 'alle' | 'eigene' | Ebene
+type TerminFilter = 'alle' | 'eigene' | Ebene | string
 
 export function CalendarView() {
   const [events, setEvents] = useState<EventRow[]>([])
@@ -132,6 +134,7 @@ export function CalendarView() {
       abgesagt: e.status === 'abgesagt',
       source_id: null,
       ebene: null,
+      gremium: null,
     })),
     ...sessions.map((s) => ({
       key: `sitzung-${s.id}`,
@@ -143,20 +146,26 @@ export function CalendarView() {
       abgesagt: s.status === 'abgesagt',
       source_id: s.source_id,
       ebene: s.ebene,
+      gremium: s.gremium,
     })),
   ].sort((a, b) => a.start.localeCompare(b.start))
 
   const sourceById = new Map(sources.map((s) => [s.id, s]))
 
   // Filter-Chips: "Alle" immer, "Eigene Termine" nur wenn welche existieren,
-  // je eine Ebene nur wenn sie unter den aktuellen Sitzungen vorkommt -
-  // keine leeren/wirkungslosen Filter anzeigen.
+  // je eine Ebene nur wenn sie unter den aktuellen Sitzungen vorkommt (grobe
+  // Trennung, nützlich bei mehreren Mandats-Ebenen), plus ein Chip pro
+  // Gremium (feingranular, gleiches Muster wie in AntraegeSection.tsx bei
+  // "Meine Dokumente") - keine leeren/wirkungslosen Filter anzeigen.
+  const EBENEN_ORDER: Ebene[] = ['kommune', 'kreis', 'land', 'bund']
   const ebenenPresent = new Set(
     sessions
       .map((s) => sourceById.get(s.source_id ?? '')?.ebene ?? s.ebene)
       .filter((e): e is Ebene => Boolean(e)),
   )
-  const EBENEN_ORDER: Ebene[] = ['kommune', 'kreis', 'land', 'bund']
+  const gremienPresent = Array.from(new Set(sessions.map((s) => s.gremium).filter((g): g is string => Boolean(g)))).sort(
+    (a, b) => a.localeCompare(b, 'de'),
+  )
   const filterOptions: { value: TerminFilter; label: string }[] = [
     { value: 'alle', label: 'Alle' },
     ...(events.length > 0 ? [{ value: 'eigene' as TerminFilter, label: 'Eigene Termine' }] : []),
@@ -164,13 +173,17 @@ export function CalendarView() {
       value: e as TerminFilter,
       label: EBENE_LABEL[e],
     })),
+    ...gremienPresent.map((g) => ({ value: g, label: g })),
   ]
 
   const filtered = aggregated.filter((item) => {
     if (filter === 'alle') return true
     if (filter === 'eigene') return item.kind === 'event'
     if (item.kind !== 'session') return false
-    return (sourceById.get(item.source_id ?? '')?.ebene ?? item.ebene) === filter
+    if ((EBENEN_ORDER as string[]).includes(filter)) {
+      return (sourceById.get(item.source_id ?? '')?.ebene ?? item.ebene) === filter
+    }
+    return item.gremium === filter
   })
 
   return (
