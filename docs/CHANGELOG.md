@@ -1359,3 +1359,24 @@ Storage-Pfad, auf die `DocumentPreviewModal.tsx` für die Vorschau-Entscheidung 
   und nach der Korrektur (vorher `text/plain;charset=UTF-8`, danach `application/pdf`, wie bei allen
   anderen PDFs in der Tabelle). Kein Live-HTTP-Test des ausgelieferten Content-Type-Headers möglich
   ohne Zugriff auf den Service-Role-Key (bewusst nicht extrahiert/umgangen).
+
+### Nachtrag: `jsonb_set` auf `storage.objects.metadata` reichte nicht - echter Re-Upload nötig
+
+Nutzer-Test nach dem vorherigen Fix: die direkte SQL-Korrektur (`update storage.objects set
+metadata = jsonb_set(...)`) hat den tatsächlich ausgelieferten Content-Type NICHT verändert - der
+Browser bot beim betroffenen Dokument weiterhin nur den Download an, während andere PDFs korrekt in
+der Vorschau öffneten (per Screenshot belegt). Ursache: `storage.objects` ist nur die
+Postgres-Katalogtabelle; der tatsächlich ausgelieferte `Content-Type`-Header kommt vom
+Object-Storage-Backend selbst (S3-kompatibel), dessen eigene, separat gespeicherte Objekt-Metadaten
+durch ein `UPDATE` auf die Postgres-Zeile nicht angefasst werden.
+
+**Echter Fix**: Datei per `supabase storage cp --linked --experimental` lokal heruntergeladen
+(Byte-Identität mit der ursprünglich hochgeladenen Datei über die bekannte Dateigröße 54.593 Bytes
+verifiziert), das existierende Objekt unter demselben Pfad per `supabase storage rm --yes` gelöscht
+(kein `--upsert`-Flag bei `storage cp` verfügbar, ein direktes Überschreiben schlägt mit HTTP 409
+"KeyAlreadyExists" fehl) und mit `supabase storage cp --content-type application/pdf` unter exakt
+demselben Storage-Pfad neu hochgeladen - der `summaries.datei_url`-Verweis auf diesen Pfad blieb
+dadurch gültig, kein DB-Update nötig. Metadaten-Abfrage danach bestätigt: `mimetype: application/
+pdf`, `size: 54593` (unverändert). Der eigentliche Code-Fix (`guessContentType()` in beiden
+MCP-Upload-Pfaden) war bereits vorher korrekt und sorgt dafür, dass künftige Uploads dieses manuelle
+Nachbessern gar nicht erst brauchen.
