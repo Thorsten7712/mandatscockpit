@@ -102,6 +102,53 @@ function extractGremium(summary) {
   return s || null
 }
 
+// Wie weit in die Zukunft wiederkehrende Termine (RRULE ohne UNTIL, z. B.
+// "jeden Montag") expandiert werden - ohne Obergrenze wäre die Anzahl der
+// erzeugten Zeilen unbegrenzt.
+const RECURRENCE_HORIZON_MS = 365 * 24 * 60 * 60 * 1000
+
+// Bug gefunden 2026-08 (Nutzerfeedback: "Nächste Termine" zeigt nur
+// Gremiensitzungen, keine Termine aus reinen Terminkalender-Quellen): bei
+// einem wiederkehrenden Termin (RRULE) liefert node-ical in entry.start NUR
+// den ERSTEN Termin der Serie, ohne die Wiederholungen selbst zu expandieren
+// - liegt dieser erste Termin in der Vergangenheit (typisch bei einer seit
+// Monaten laufenden wöchentlichen Serie), verschwindet der gesamte Termin
+// unter "Nächste Termine", obwohl er z. B. jeden Montag weiter stattfindet.
+// node-ical liefert bei RRULE-Terminen zusätzlich ein fertiges rrule.js-
+// RRule-Objekt (entry.rrule) - dessen .between() übernimmt die Expansion,
+// keine zusätzliche Abhängigkeit nötig. Bereits individuell geänderte
+// Vorkommen (RECURRENCE-ID) tauchen im Feed als eigener VEVENT mit eigener
+// uid auf (normaler, nicht-rrule Zweig unten) - deren Datum wird beim
+// Expandieren der Basis-Serie übersprungen, sonst gäbe es für diesen Tag
+// zwei widersprüchliche Zeilen.
+function expandOccurrences(rawEntries) {
+  const von = MIN_IMPORT_DATUM
+  const bis = new Date(Date.now() + RECURRENCE_HORIZON_MS)
+  const expanded = []
+  for (const entry of rawEntries) {
+    if (!entry.rrule) {
+      expanded.push(entry)
+      continue
+    }
+    const overrideDates = new Set(
+      Object.keys(entry.recurrences ?? {}).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)),
+    )
+    for (const occurrence of entry.rrule.between(von, bis, true)) {
+      const dateKey = occurrence.toISOString().slice(0, 10)
+      if (overrideDates.has(dateKey)) continue
+      expanded.push({
+        uid: `${entry.uid}::${occurrence.toISOString()}`,
+        start: occurrence,
+        summary: entry.summary,
+        location: entry.location,
+        url: entry.url,
+        status: entry.status,
+      })
+    }
+  }
+  return expanded
+}
+
 async function importSource(source) {
   console.log(`Importiere "${source.name}" (${source.ics_url})`)
 
@@ -121,9 +168,19 @@ async function importSource(source) {
     const existingByUid = new Map((existing ?? []).map((row) => [row.ics_uid, row.status]))
 
     const parsed = await ical.async.fromURL(normalizeIcsUrl(source.ics_url))
-    const entries = Object.values(parsed).filter(
-      (entry) => entry.type === 'VEVENT' && entry.uid && entry.start && new Date(entry.start) >= MIN_IMPORT_DATUM,
+    // Wiederkehrende Termine (entry.rrule gesetzt) NICHT hier schon auf
+    // MIN_IMPORT_DATUM filtern - ihr entry.start ist nur der erste Termin
+    // der Serie und liegt bei einer laufenden Serie oft weit davor; die
+    // eigentliche Datums-/Horizont-Filterung passiert je Vorkommen in
+    // expandOccurrences() via rrule.between().
+    const rawEntries = Object.values(parsed).filter(
+      (entry) =>
+        entry.type === 'VEVENT' &&
+        entry.uid &&
+        entry.start &&
+        (entry.rrule || new Date(entry.start) >= MIN_IMPORT_DATUM),
     )
+    const entries = expandOccurrences(rawEntries)
 
     // "termin"-Quellen (reiner Terminkalender ohne Gremien-Konzept) tragen
     // bewusst kein gremium - sonst würde die heuristische SUMMARY-Auswertung

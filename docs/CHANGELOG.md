@@ -1262,3 +1262,35 @@ prominent zeigt.
   Test-Harness (`src/dev/DashboardFoldPreview.tsx` + Route) bei 1280×800 (typische Laptop-Auflösung)
   und mobiler Breite: ToDo-Board/Nächste Termine/Meine Dokumente jetzt ohne Scrollen sichtbar, Reader
   öffnet/schließt korrekt.
+
+### Wiederkehrende Termine (RRULE) wurden nie als "nächster Termin" angezeigt (Bugfix)
+
+Nutzer-Feedback: unter "Nächste Termine" erschienen nur Gremiensitzungen, keine Termine aus reinen
+Terminkalender-Quellen (`calendar_sources.art = 'termin'`). Ursache per Diagnose gefunden (ICS-Feed
+der betroffenen Quelle direkt heruntergeladen und mit `node-ical` geparst, live gegen die Produktions-
+DB abgeglichen): ein wiederkehrender Termin (RRULE, z. B. "jeden Montag" ohne UNTIL) liefert in
+`entry.start` nur den ERSTEN Termin der Serie - `node-ical` expandiert Wiederholungen nicht selbst.
+War dieser erste Termin (hier: seit 2025) bereits vergangen, verschwand die komplette Serie aus dem
+Import, obwohl sie z. B. jeden Montag weiter stattfindet ("Fraktionsvorstand"/"Fraktionssitzung" in der
+betroffenen Quelle). Gremiensitzungen aus ALLRIS-Feeds sind davon nicht betroffen, da ALLRIS jede
+Sitzung einzeln exportiert statt RRULE zu nutzen - daher fiel der Bug nur bei "termin"-Quellen auf.
+
+- **Fix** (`scripts/import-ics.mjs` + `supabase/functions/import-ics-source/index.ts`, wie immer
+  bewusst dupliziert statt geteiltem Modul, siehe CLAUDE.md): neue Funktion `expandOccurrences()`
+  nutzt das von `node-ical` bei RRULE-Terminen mitgelieferte fertige `rrule.js`-Objekt
+  (`entry.rrule.between(von, bis)`) statt einer neuen Abhängigkeit, um alle Vorkommen zwischen
+  `MIN_IMPORT_DATUM` und einem Jahr in die Zukunft (`RECURRENCE_HORIZON_MS`, Obergrenze nötig, da eine
+  RRULE ohne UNTIL unendlich ist) einzeln zu erzeugen. Jedes Vorkommen bekommt eine eigene, stabile
+  `ics_uid` (`<uid>::<ISO-Zeitstempel>`) fürs Upsert. Individuell geänderte Einzeltermine
+  (RECURRENCE-ID) tauchen im Feed bereits als eigener VEVENT mit eigener uid auf (normaler Zweig,
+  unverändert) - deren Datum wird beim Expandieren der Basis-Serie übersprungen (`entry.recurrences`-
+  Keys), sonst gäbe es für den Tag zwei widersprüchliche Zeilen.
+- Der bisherige Vorfilter (`new Date(entry.start) >= MIN_IMPORT_DATUM`) hätte wiederkehrende Termine
+  mit altem Serienstart weiterhin komplett verworfen, BEVOR die Expansion überhaupt zum Zug kommt -
+  Filter entsprechend angepasst: `entry.rrule` gesetzt ODER `start >= MIN_IMPORT_DATUM`.
+- Verifiziert per `node --check`/`deno check` sowie einem lokalen Trockenlauf gegen den echten,
+  frisch heruntergeladenen ICS-Feed der betroffenen Quelle (13 Roheinträge → 189 expandierte Zeilen,
+  davon 104 in der Zukunft, u. a. "Fraktionsvorstand"/"Fraktionssitzung" ab 17.08.2026 - vorher 0
+  zukünftige Einträge aus dieser Quelle). Edge Function deployt; `import-ics.yml`
+  (`workflow_dispatch`) danach manuell angestoßen, um die Korrektur sofort statt erst beim
+  nächsten planmäßigen 04:00-UTC-Lauf in die Produktions-DB zu übernehmen.

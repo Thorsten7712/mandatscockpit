@@ -108,6 +108,60 @@ interface IcalEntry {
   location?: unknown
   url?: unknown
   status?: string
+  /** Nur bei wiederkehrenden Terminen gesetzt (rrule.js-Instanz aus node-ical) - siehe expandOccurrences(). */
+  rrule?: { between: (after: Date, before: Date, inclusive?: boolean) => Date[] }
+  /** Individuell geänderte Vorkommen (RECURRENCE-ID), keyed u. a. nach YYYY-MM-DD. */
+  recurrences?: Record<string, unknown>
+}
+
+// Wie weit in die Zukunft wiederkehrende Termine (RRULE ohne UNTIL, z. B.
+// "jeden Montag") expandiert werden - ohne Obergrenze wäre die Anzahl der
+// erzeugten Zeilen unbegrenzt. WICHTIG: identischer Wert in
+// scripts/import-ics.mjs nachziehen.
+const RECURRENCE_HORIZON_MS = 365 * 24 * 60 * 60 * 1000
+
+// Bug gefunden 2026-08 (Nutzerfeedback: "Nächste Termine" zeigt nur
+// Gremiensitzungen, keine Termine aus reinen Terminkalender-Quellen): bei
+// einem wiederkehrenden Termin (RRULE) liefert node-ical in entry.start NUR
+// den ERSTEN Termin der Serie, ohne die Wiederholungen selbst zu expandieren
+// - liegt dieser erste Termin in der Vergangenheit (typisch bei einer seit
+// Monaten laufenden wöchentlichen Serie), verschwindet der gesamte Termin
+// unter "Nächste Termine", obwohl er z. B. jeden Montag weiter stattfindet.
+// node-ical liefert bei RRULE-Terminen zusätzlich ein fertiges rrule.js-
+// RRule-Objekt (entry.rrule) - dessen .between() übernimmt die Expansion,
+// keine zusätzliche Abhängigkeit nötig. Bereits individuell geänderte
+// Vorkommen (RECURRENCE-ID) tauchen im Feed als eigener VEVENT mit eigener
+// uid auf (normaler, nicht-rrule Zweig unten) - deren Datum wird beim
+// Expandieren der Basis-Serie übersprungen, sonst gäbe es für diesen Tag
+// zwei widersprüchliche Zeilen. WICHTIG: identische Logik in
+// scripts/import-ics.mjs nachziehen.
+function expandOccurrences(rawEntries: IcalEntry[]): IcalEntry[] {
+  const von = MIN_IMPORT_DATUM
+  const bis = new Date(Date.now() + RECURRENCE_HORIZON_MS)
+  const expanded: IcalEntry[] = []
+  for (const entry of rawEntries) {
+    if (!entry.rrule) {
+      expanded.push(entry)
+      continue
+    }
+    const overrideDates = new Set(
+      Object.keys(entry.recurrences ?? {}).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)),
+    )
+    for (const occurrence of entry.rrule.between(von, bis, true)) {
+      const dateKey = occurrence.toISOString().slice(0, 10)
+      if (overrideDates.has(dateKey)) continue
+      expanded.push({
+        type: 'VEVENT',
+        uid: `${entry.uid}::${occurrence.toISOString()}`,
+        start: occurrence,
+        summary: entry.summary,
+        location: entry.location,
+        url: entry.url,
+        status: entry.status,
+      })
+    }
+  }
+  return expanded
 }
 
 Deno.serve(async (req) => {
@@ -164,10 +218,19 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: `Fehler beim Laden des ICS-Feeds: ${String(err)}` }, 502)
   }
 
-  const entries = (Object.values(parsed) as IcalEntry[]).filter(
+  // Wiederkehrende Termine (entry.rrule gesetzt) NICHT hier schon auf
+  // MIN_IMPORT_DATUM filtern - ihr entry.start ist nur der erste Termin der
+  // Serie und liegt bei einer laufenden Serie oft weit davor; die eigentliche
+  // Datums-/Horizont-Filterung passiert je Vorkommen in expandOccurrences()
+  // via rrule.between().
+  const rawEntries = (Object.values(parsed) as IcalEntry[]).filter(
     (entry): entry is IcalEntry & { uid: string; start: Date } =>
-      entry.type === 'VEVENT' && Boolean(entry.uid) && Boolean(entry.start) && new Date(entry.start!) >= MIN_IMPORT_DATUM,
+      entry.type === 'VEVENT' &&
+      Boolean(entry.uid) &&
+      Boolean(entry.start) &&
+      (Boolean(entry.rrule) || new Date(entry.start!) >= MIN_IMPORT_DATUM),
   )
+  const entries = expandOccurrences(rawEntries) as (IcalEntry & { uid: string; start: Date })[]
 
   // "termin"-Quellen tragen bewusst kein gremium, siehe scripts/import-ics.mjs.
   const rows = entries.map((entry) => {
