@@ -580,10 +580,8 @@ export function AntragDetailModal({
       <h2 className="font-semibold mb-2">Dokumente</h2>
       <ul className="space-y-2 mb-3">
         {documents.map((d) => (
-          <li
-            key={d.id}
-            className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
-          >
+          <li key={d.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            {d.inhalt && <p className="text-sm whitespace-pre-wrap">{d.inhalt}</p>}
             {d.datei_url && (
               <button
                 type="button"
@@ -593,13 +591,16 @@ export function AntragDetailModal({
                 📎 {fileNameFromPath(d.datei_url)}
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => handleDeleteDocument(d.id)}
-              className="mc-btn-danger !px-2 !py-1 !text-xs"
-            >
-              Löschen
-            </button>
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-xs text-slate-400">{formatDateTime(d.erstellt_am)}</span>
+              <button
+                type="button"
+                onClick={() => handleDeleteDocument(d.id)}
+                className="mc-btn-danger !px-2 !py-1 !text-xs"
+              >
+                Löschen
+              </button>
+            </div>
           </li>
         ))}
         {documents.length === 0 && <li className="text-slate-400 text-sm">Noch keine Dokumente.</li>}

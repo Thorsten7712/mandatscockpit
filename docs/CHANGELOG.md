@@ -1380,3 +1380,29 @@ dadurch gültig, kein DB-Update nötig. Metadaten-Abfrage danach bestätigt: `mi
 pdf`, `size: 54593` (unverändert). Der eigentliche Code-Fix (`guessContentType()` in beiden
 MCP-Upload-Pfaden) war bereits vorher korrekt und sorgt dafür, dass künftige Uploads dieses manuelle
 Nachbessern gar nicht erst brauchen.
+
+### ToDo-/Antrags-Detail-Modal zeigte Text-Notizen ohne Datei-Anhang gar nicht an (Bugfix)
+
+Nutzer-Feedback (mit Screenshots belegt): über den MCP-Server angelegte ToDo-Karten (`create_todo`
++ anschließend `create_todo_note` mit reinem Freitext, ohne Datei) zeigten im Karten-Detail-Modal im
+"Dokumente"-Abschnitt nur einen einsamen "Löschen"-Link, keinerlei sichtbaren Text - obwohl die Notiz
+laut Bestätigungsmeldung des aufrufenden Claude-Sessions erfolgreich gespeichert wurde.
+
+Ursache in `TodoDetailModal.tsx`/`AntragDetailModal.tsx` gefunden: die "Dokumente"-Liste rendert pro
+`summaries`-Zeile nur `{d.datei_url && <button>📎 ...</button>}` - eine Zeile mit `inhalt`-Text aber
+ohne `datei_url` (genau der Fall bei `create_todo_note`/`create_antrag_note` ohne Datei-Anhang)
+erzeugte dadurch ein leeres `<li>` mit nur dem Löschen-Button, der eigentliche Notiztext ging visuell
+komplett verloren (war aber die ganze Zeit korrekt in der DB gespeichert - reiner Anzeigefehler).
+`TerminDetailPanel.tsx` ("Notizen & Dokumente" bei Terminen/Sitzungen) hatte diesen Fall bereits
+korrekt über `{s.inhalt && <p>...}` abgedeckt - die beiden anderen, strukturell ähnlichen Modals
+(ToDo-Karte, Antrag) waren beim ursprünglichen Bau offenbar nicht 1:1 nachgezogen worden.
+
+- **Fix**: `{d.inhalt && <p className="text-sm whitespace-pre-wrap">{d.inhalt}</p>}` in beiden
+  Modals ergänzt (identisches Muster wie in `TerminDetailPanel.tsx`), Listenelement von
+  `flex items-center justify-between` auf eine gestapelte Struktur umgestellt (Text/Datei-Chip oben,
+  Zeitstempel + Löschen-Button in einer eigenen Zeile darunter) - vorher hätte ein langer Notiztext
+  neben dem Löschen-Button gequetscht ausgesehen. Zeitstempel (`erstellt_am`) dabei ergänzt, analog
+  zu `TerminDetailPanel.tsx`, vorher fehlte er in beiden Modals komplett.
+- Verifiziert per `tsc -b`/`vite build` sowie einem temporären, anschließend wieder gelöschten
+  Test-Harness (`src/dev/DocListPreview.tsx` + Route) mit drei Fällen (nur Text, nur Datei, beides) -
+  alle drei rendern jetzt korrekt.
