@@ -44,6 +44,7 @@ import { listSessions } from './tools/sessions.ts'
 import { createAntrag, listAntraege, updateAntragStatus, listAntragFristen } from './tools/antraege.ts'
 import { listNotes, createSessionNote, createEventNote, createTodoNote, createAntragNote } from './tools/notes.ts'
 import { uploadPresseschau } from './tools/presseschau.ts'
+import { startFileUpload, appendFileChunk, finishFileUpload } from './tools/uploads.ts'
 import { search } from './tools/search.ts'
 
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -208,6 +209,15 @@ Deno.serve(async (req) => {
           break
         case 'upload_presseschau':
           result = await uploadPresseschau(supabase, user.id, args)
+          break
+        case 'start_file_upload':
+          result = await startFileUpload(supabase, user.id, args)
+          break
+        case 'append_file_chunk':
+          result = await appendFileChunk(supabase, user.id, args)
+          break
+        case 'finish_file_upload':
+          result = await finishFileUpload(supabase, user.id, args)
           break
         case 'search':
           result = await search(supabase, user.id, args)

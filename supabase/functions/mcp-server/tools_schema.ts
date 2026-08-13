@@ -136,7 +136,7 @@ export const TOOLS = [
   {
     name: 'create_session_note',
     description:
-      'Speichert eine Notiz zu einer bestimmten Sitzung im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort in der Termindetailsicht der Sitzung, wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument). Unterstützt Freitext (z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten Sammeldokuments), einen Datei-Anhang (Base64-kodiert, z. B. das Sammeldokument selbst) oder beides zusammen. Mindestens eins von beidem ist erforderlich. Für den Datei-Anhang gilt ein praktisches Limit von einigen MB (Base64 vergrößert die Originaldatei um ca. 33%, das Edge-Function-Request-Limit greift zuerst).',
+      'Speichert eine Notiz zu einer bestimmten Sitzung im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort in der Termindetailsicht der Sitzung, wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument). Unterstützt Freitext (z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten Sammeldokuments), einen Datei-Anhang (Base64-kodiert, z. B. das Sammeldokument selbst) oder beides zusammen. Mindestens eins von beidem ist erforderlich. Datei-Anhänge über ca. 13 KB (= ca. 18.000 Base64-Zeichen) NICHT über dateiname+datei_base64 versuchen - das scheitert an einer Zeichenlimit-Grenze des eigenen Tool-Aufrufs, nicht am Server. Für größere Dateien stattdessen start_file_upload/append_file_chunk/finish_file_upload verwenden und den daraus resultierenden datei_pfad hier statt dateiname+datei_base64 angeben.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -150,11 +150,15 @@ export const TOOLS = [
         },
         dateiname: {
           type: 'string',
-          description: 'Dateiname inkl. Endung für einen Datei-Anhang, z. B. "sammeldokument.pdf" (optional, nur zusammen mit datei_base64).',
+          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang, z. B. "sammeldokument.pdf" (optional, nur zusammen mit datei_base64, nur für Dateien bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
         },
         datei_base64: {
           type: 'string',
-          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname).',
+          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur für Dateien bis ca. 13 KB).',
+        },
+        datei_pfad: {
+          type: 'string',
+          description: 'Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
         },
       },
       required: ['session_id'],
@@ -163,7 +167,7 @@ export const TOOLS = [
   {
     name: 'create_event_note',
     description:
-      'Speichert eine Notiz zu einem bestimmten eigenen Termin (nicht Sitzung) im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort in der Termindetailsicht, wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument). Nur für Termine, die dem angemeldeten Nutzer gehören. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich.',
+      'Speichert eine Notiz zu einem bestimmten eigenen Termin (nicht Sitzung) im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort in der Termindetailsicht, wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument). Nur für Termine, die dem angemeldeten Nutzer gehören. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich. Datei-Anhänge über ca. 13 KB NICHT über dateiname+datei_base64 versuchen (Zeichenlimit des eigenen Tool-Aufrufs) - stattdessen start_file_upload/append_file_chunk/finish_file_upload verwenden und datei_pfad angeben.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -177,11 +181,15 @@ export const TOOLS = [
         },
         dateiname: {
           type: 'string',
-          description: 'Dateiname inkl. Endung für einen Datei-Anhang (optional, nur zusammen mit datei_base64).',
+          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
         },
         datei_base64: {
           type: 'string',
-          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname).',
+          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
+        },
+        datei_pfad: {
+          type: 'string',
+          description: 'Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
         },
       },
       required: ['event_id'],
@@ -190,7 +198,7 @@ export const TOOLS = [
   {
     name: 'create_todo_note',
     description:
-      'Speichert eine Notiz zu einer bestimmten ToDo-Karte im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort im Karten-Detail-Modal, wie ein manuell hochgeladenes Dokument - reiner Freitext ohne Datei landet ebenfalls dort, auch wenn die Web-UI für Karten primär Datei-Uploads zeigt). Nur für ToDo-Karten, die dem Nutzer gehören oder mit ihm geteilt sind. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich.',
+      'Speichert eine Notiz zu einer bestimmten ToDo-Karte im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort im Karten-Detail-Modal, wie ein manuell hochgeladenes Dokument - reiner Freitext ohne Datei landet ebenfalls dort, auch wenn die Web-UI für Karten primär Datei-Uploads zeigt). Nur für ToDo-Karten, die dem Nutzer gehören oder mit ihm geteilt sind. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich. Datei-Anhänge über ca. 13 KB NICHT über dateiname+datei_base64 versuchen (Zeichenlimit des eigenen Tool-Aufrufs) - stattdessen start_file_upload/append_file_chunk/finish_file_upload verwenden und datei_pfad angeben.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -204,11 +212,15 @@ export const TOOLS = [
         },
         dateiname: {
           type: 'string',
-          description: 'Dateiname inkl. Endung für einen Datei-Anhang (optional, nur zusammen mit datei_base64).',
+          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
         },
         datei_base64: {
           type: 'string',
-          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname).',
+          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
+        },
+        datei_pfad: {
+          type: 'string',
+          description: 'Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
         },
       },
       required: ['todo_id'],
@@ -327,7 +339,7 @@ export const TOOLS = [
   {
     name: 'create_antrag_note',
     description:
-      'Speichert eine Notiz zu einem bestimmten Antrag (Freitext, ein Datei-Anhang als Base64, oder beides). Für Anträge, die dem Nutzer gehören oder mit ihm geteilt sind. Mindestens eins von Text oder Datei ist erforderlich.',
+      'Speichert eine Notiz zu einem bestimmten Antrag (Freitext, ein Datei-Anhang als Base64, oder beides). Für Anträge, die dem Nutzer gehören oder mit ihm geteilt sind. Mindestens eins von Text oder Datei ist erforderlich. Datei-Anhänge über ca. 13 KB NICHT über dateiname+datei_base64 versuchen (Zeichenlimit des eigenen Tool-Aufrufs) - stattdessen start_file_upload/append_file_chunk/finish_file_upload verwenden und datei_pfad angeben.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -335,11 +347,15 @@ export const TOOLS = [
         inhalt: { type: 'string', description: 'Freitext-Notiz (optional).' },
         dateiname: {
           type: 'string',
-          description: 'Dateiname inkl. Endung für einen Datei-Anhang (optional, nur zusammen mit datei_base64).',
+          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
         },
         datei_base64: {
           type: 'string',
-          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname).',
+          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
+        },
+        datei_pfad: {
+          type: 'string',
+          description: 'Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
         },
       },
       required: ['antrag_id'],
@@ -368,6 +384,44 @@ export const TOOLS = [
         quelle: { type: 'string', description: 'Quellenangabe, z. B. "Iserlohner Kreisanzeiger und Zeitung" (optional).' },
       },
       required: ['inhalt', 'datum'],
+    },
+  },
+  {
+    name: 'start_file_upload',
+    description:
+      'Startet einen mehrteiligen Upload für eine größere Datei (z. B. PDF), die nicht in einem einzigen dateiname+datei_base64-Aufruf übertragen werden kann - Base64-Tool-Argumente über ca. 18.000 Zeichen (= ca. 13 KB Originaldatei) werden vom aufrufenden Client selbst abgeschnitten, nicht vom Server abgelehnt. Liefert eine upload_id, mit der anschließend append_file_chunk (mehrfach, mit dem Base64-Inhalt in Häppchen von je höchstens ca. 8000 Zeichen) und danach genau einmal finish_file_upload aufgerufen wird. Der finish_file_upload-Aufruf liefert einen datei_pfad, der bei create_session_note/create_event_note/create_todo_note/create_antrag_note statt dateiname+datei_base64 angegeben wird.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dateiname: { type: 'string', description: 'Dateiname inkl. Endung, z. B. "sammeldokument.pdf".' },
+      },
+      required: ['dateiname'],
+    },
+  },
+  {
+    name: 'append_file_chunk',
+    description:
+      'Überträgt ein Teilstück (Häppchen) des Base64-Inhalts einer per start_file_upload begonnenen Datei. chunk_index muss lückenlos bei 0 beginnend aufsteigend vergeben werden (0, 1, 2, ...) - jedes Häppchen sollte höchstens ca. 8000 Zeichen Base64-Text enthalten. Ein erneuter Aufruf mit derselben chunk_index überschreibt das vorherige Häppchen (z. B. nach einem Wiederholungsversuch), erzeugt also kein Duplikat.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        upload_id: { type: 'string', description: 'upload_id aus start_file_upload.' },
+        chunk_index: { type: 'number', description: 'Fortlaufende Nummer dieses Häppchens, beginnend bei 0.' },
+        chunk_base64: { type: 'string', description: 'Base64-Teilstück (höchstens ca. 8000 Zeichen empfohlen).' },
+      },
+      required: ['upload_id', 'chunk_index', 'chunk_base64'],
+    },
+  },
+  {
+    name: 'finish_file_upload',
+    description:
+      'Schließt einen per start_file_upload begonnenen, mehrteiligen Upload ab: setzt alle per append_file_chunk übertragenen Häppchen lückenlos zusammen, dekodiert das Ergebnis und legt die Datei im Storage ab. Liefert einen datei_pfad, der anschließend bei create_session_note/create_event_note/create_todo_note/create_antrag_note statt dateiname+datei_base64 angegeben wird, um die Datei an eine Sitzung/einen Termin/eine ToDo-Karte/einen Antrag zu hängen.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        upload_id: { type: 'string', description: 'upload_id aus start_file_upload.' },
+      },
+      required: ['upload_id'],
     },
   },
   {

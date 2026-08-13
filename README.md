@@ -123,7 +123,7 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 18 Tools:
+`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 21 Tools:
 
 **Anlegen:**
 - `create_todo(titel, spalte, faellig_am?, session_id?)` – Spalte wird angelegt, falls sie noch nicht existiert.
@@ -145,7 +145,17 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 - `update_todo(todo_id, titel?, beschreibung?, faellig_am?, zustaendig?, spalte?)` – `spalte` verschiebt nur die eigene Platzierung des aufrufenden Nutzers.
 - `update_antrag_status(antrag_id, status, ergebnis?, eingereicht_am?)` – `ergebnis` (`positiv`/`negativ`) ist bei `status="abgestimmt"` Pflicht; `eingereicht_am` wird beim Übergang auf `gestellt` automatisch auf heute gesetzt, falls nicht angegeben.
 
-**Notizen/Dokumente** (`create_session_note`/`create_event_note`/`create_todo_note`/`create_antrag_note`, jeweils `*_id`, `inhalt?`, `dateiname?`, `datei_base64?`): speichern Freitext (z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten Sammeldokuments), einen Datei-Anhang als Base64, oder beides zusammen – mindestens eins von beidem ist Pflicht. Erscheinen danach in der Termindetailsicht bzw. im ToDo-Karten-/Antrags-Detail-Modal wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument. `create_event_note`/`create_todo_note`/`create_antrag_note` erlauben das für Objekte, die dem Nutzer gehören **oder** mit ihm geteilt sind (`todo_placements`/`antrag_shares`); `create_session_note` prüft keine Ownership, da Sitzungen keinem einzelnen Nutzer gehören (Sichtbarkeit hängt an der Kalenderquelle, siehe `list_sessions`). Der Datei-Anhang läuft über denselben privaten Storage-Bucket `zusammenfassungen` wie Uploads aus der Web-UI; ob Claude beim Chat-Aufruf tatsächlich die Rohbytes einer im Chat angehängten Datei als Base64 überträgt, ist nicht abschließend erprobt – im Zweifel einfach ausprobieren.
+**Notizen/Dokumente** (`create_session_note`/`create_event_note`/`create_todo_note`/`create_antrag_note`, jeweils `*_id`, `inhalt?`, `dateiname?`, `datei_base64?`, `datei_pfad?`): speichern Freitext (z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten Sammeldokuments), einen Datei-Anhang als Base64, oder beides zusammen – mindestens eins von beidem ist Pflicht. Erscheinen danach in der Termindetailsicht bzw. im ToDo-Karten-/Antrags-Detail-Modal wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument. `create_event_note`/`create_todo_note`/`create_antrag_note` erlauben das für Objekte, die dem Nutzer gehören **oder** mit ihm geteilt sind (`todo_placements`/`antrag_shares`); `create_session_note` prüft keine Ownership, da Sitzungen keinem einzelnen Nutzer gehören (Sichtbarkeit hängt an der Kalenderquelle, siehe `list_sessions`). Der Datei-Anhang läuft über denselben privaten Storage-Bucket `zusammenfassungen` wie Uploads aus der Web-UI.
+
+⚠️ **Größenlimit bei `dateiname`+`datei_base64`:** Base64-Tool-Argumente über ca. 18.000–20.000
+Zeichen (≈ 13 KB Originaldatei) werden vom aufrufenden MCP-Client (Claude) beim Erzeugen des
+Tool-Aufrufs selbst abgeschnitten – eine Grenze der Tool-Aufruf-Generierung, nicht des Servers (eine
+54,6-KB-PDF ergibt bereits 72.792 Base64-Zeichen und schlägt fehl). Für größere Dateien stattdessen
+`start_file_upload(dateiname)` → mehrfach `append_file_chunk(upload_id, chunk_index, chunk_base64)`
+in Häppchen von je höchstens ca. 8000 Zeichen (lückenlos ab 0 nummeriert) → `finish_file_upload
+(upload_id)` verwenden; letzteres liefert einen `datei_pfad`, der bei den vier `create_*_note`-Tools
+statt `dateiname`+`datei_base64` angegeben wird. Angefangene, nie abgeschlossene Uploads werden nach
+1 Stunde automatisch aufgeräumt.
 
 **Auth-Modell:** Kein OAuth, sondern ein **persönliches Token pro Mitglied** – jeder Nutzer erzeugt es
 sich selbst, die Function agiert dann über den `SUPABASE_SERVICE_ROLE_KEY` im Namen genau dieses

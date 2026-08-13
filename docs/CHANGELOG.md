@@ -1294,3 +1294,40 @@ Sitzung einzeln exportiert statt RRULE zu nutzen - daher fiel der Bug nur bei "t
   zukünftige Einträge aus dieser Quelle). Edge Function deployt; `import-ics.yml`
   (`workflow_dispatch`) danach manuell angestoßen, um die Korrektur sofort statt erst beim
   nächsten planmäßigen 04:00-UTC-Lauf in die Produktions-DB zu übernehmen.
+
+### MCP: chunked File-Upload für größere Dateien (PDF-Anhänge über ~13 KB)
+
+Nutzer-Feedback (mit konkreter Fehlerdiagnose des aufrufenden Claude-Sessions mitgeliefert): der
+`datei_base64`-Parameter von `create_todo_note` wurde bei einer 54,6-KB-PDF (72.792 Base64-Zeichen)
+nach ca. 18.000–20.000 Zeichen abgeschnitten - der Server hat den unvollständigen Base64-String
+korrekt als ungültig zurückgewiesen, es wurde nichts Kaputtes gespeichert. Root Cause: eine Grenze
+der Tool-Aufruf-**Generierung** des aufrufenden MCP-Clients selbst (wie lang ein einzelnes
+String-Argument beim Erzeugen des Tool-Aufrufs zuverlässig werden kann), keine Beschränkung von
+MandatsCockpit - Edge Functions/PostgREST hätten ein 73-KB-JSON-Body-Feld anstandslos akzeptiert.
+Datei-Transfers über MCP sind deshalb grundsätzlich auf kleine Häppchen pro Tool-Aufruf angewiesen,
+unabhängig davon, welcher konkrete MCP-Client/welches Modell aufruft.
+
+- **Neue Tools** (`tools/uploads.ts`): `start_file_upload(dateiname)` legt eine `mcp_uploads`-Zeile an
+  und liefert eine `upload_id`; `append_file_chunk(upload_id, chunk_index, chunk_base64)` speichert
+  je ein Häppchen (empfohlen ≤ 8000 Zeichen) in `mcp_upload_chunks` - ein erneuter Aufruf mit
+  derselben `chunk_index` überschreibt per Upsert (`primary key (upload_id, chunk_index)`) statt ein
+  Duplikat anzulegen, robust gegen Wiederholungsversuche; `finish_file_upload(upload_id)` prüft
+  lückenlose Nummerierung (0..n-1), setzt alle Häppchen zusammen, dekodiert das Ergebnis, lädt es in
+  den bestehenden `zusammenfassungen`-Bucket hoch und liefert einen `datei_pfad`.
+- **`createNote()`** (`tools/notes.ts`, genutzt von allen vier `create_*_note`-Tools) akzeptiert jetzt
+  zusätzlich `datei_pfad` als Alternative zu `dateiname`+`datei_base64` - direkter Storage-Pfad einer
+  bereits per `finish_file_upload` hochgeladenen Datei, kein erneuter Base64-Umweg nötig. Manuell
+  geprüft, dass `datei_pfad` mit `<user_id>/` beginnt (Service-Role-Client umgeht Storage-RLS, ohne
+  diese Prüfung könnte ein erratener/bekannter fremder Pfad an die eigene Notiz gehängt werden).
+- **Migration `0032_mcp_chunked_uploads.sql`**: `mcp_uploads` (id, user_id, dateiname, erstellt_am)
+  + `mcp_upload_chunks` (upload_id, chunk_index, chunk_base64, PK darauf) mit
+  `on delete cascade` - ein gelöschter Upload räumt seine Häppchen automatisch mit auf.
+  `start_file_upload` löscht zusätzlich eigene, älter als 1 Stunde nie abgeschlossene Uploads dieses
+  Nutzers, bevor es einen neuen anlegt - vermeidet unbegrenztes Anwachsen ohne eigenen Cleanup-Cron.
+- Alle vier `create_*_note`-Tool-Beschreibungen in `tools_schema.ts` warnen jetzt explizit vor der
+  ~13-KB-Grenze bei `dateiname`+`datei_base64` und verweisen auf den Chunk-Upload-Weg.
+- Verifiziert per `deno check` sowie einem direkten End-to-End-Trockenlauf gegen die Produktions-DB
+  (20-KB-Zufallsdatei in 4 Häppchen à ≤ 7000 Zeichen zerlegt, inkl. einem bewussten
+  Wiederholungs-Insert für `chunk_index=0` zur Upsert-Prüfung, wieder zusammengesetzt und
+  Byte-für-Byte mit dem Original verglichen: identisch; Cascade-Delete beim Aufräumen der
+  Testzeile ebenfalls bestätigt - 0 verwaiste Chunk-Zeilen danach).

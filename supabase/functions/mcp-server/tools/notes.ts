@@ -125,14 +125,27 @@ async function createNote(
   const inhalt = typeof args.inhalt === 'string' && args.inhalt.trim() ? args.inhalt.trim() : null
   const dateiname = typeof args.dateiname === 'string' ? args.dateiname.trim() : ''
   const dateiBase64 = typeof args.datei_base64 === 'string' ? args.datei_base64.trim() : ''
-  const hasFile = Boolean(dateiname && dateiBase64)
+  // Alternative zu dateiname+datei_base64 für größere Dateien: ein per
+  // start_file_upload/append_file_chunk/finish_file_upload bereits
+  // hochgeladener Storage-Pfad (siehe tools/uploads.ts) - direkte
+  // Base64-Übergabe scheitert bei größeren Dateien an der Zeichenlänge,
+  // die der aufrufende MCP-Client in einem einzelnen Tool-Aufruf generieren
+  // kann.
+  const dateiPfad = typeof args.datei_pfad === 'string' ? args.datei_pfad.trim() : ''
+  const hasFile = Boolean((dateiname && dateiBase64) || dateiPfad)
 
   if (!targetId) return toolTextResult(`Fehler: ${target.idArgName} ist erforderlich.`, true)
   if (!inhalt && !hasFile) {
-    return toolTextResult('Fehler: entweder inhalt oder dateiname+datei_base64 sind erforderlich.', true)
+    return toolTextResult('Fehler: entweder inhalt, dateiname+datei_base64 oder datei_pfad sind erforderlich.', true)
   }
   if ((dateiname && !dateiBase64) || (!dateiname && dateiBase64)) {
     return toolTextResult('Fehler: dateiname und datei_base64 müssen zusammen angegeben werden.', true)
+  }
+  if (dateiPfad && (dateiname || dateiBase64)) {
+    return toolTextResult('Fehler: datei_pfad kann nicht zusammen mit dateiname/datei_base64 angegeben werden.', true)
+  }
+  if (dateiPfad && !dateiPfad.startsWith(`${userId}/`)) {
+    return toolTextResult('Fehler: datei_pfad gehört nicht zu diesem Konto.', true)
   }
 
   // Immer dieselbe, konstante Spaltenliste abfragen (nicht abhängig von
@@ -164,7 +177,9 @@ async function createNote(
   }
 
   let dateiUrl: string | null = null
-  if (hasFile) {
+  if (dateiPfad) {
+    dateiUrl = dateiPfad
+  } else if (dateiname && dateiBase64) {
     let bytes: Uint8Array
     try {
       bytes = Uint8Array.from(atob(dateiBase64), (c) => c.charCodeAt(0))
@@ -184,7 +199,8 @@ async function createNote(
     .single()
   if (error || !note) return toolTextResult(`Fehler beim Speichern der Notiz: ${error?.message}`, true)
 
-  const parts = [inhalt ? 'Text' : null, dateiUrl ? `Datei "${dateiname}"` : null].filter(Boolean)
+  const dateiLabel = dateiname || (dateiUrl ? fileNameFromPath(dateiUrl) : '')
+  const parts = [inhalt ? 'Text' : null, dateiUrl ? `Datei "${dateiLabel}"` : null].filter(Boolean)
   return toolTextResult(
     `Notiz (${parts.join(' + ')}) zu ${target.label} "${targetRow.titel}" wurde gespeichert (id: ${note.id}).`,
   )
