@@ -354,19 +354,20 @@ export const TOOLS = [
   {
     name: 'upload_presseschau',
     description:
-      'Speichert eine tägliche Presseschau (Markdown-Text, z. B. eine extern erstellte Übersicht relevanter Presseartikel) im MandatsCockpit-Account des angemeldeten Nutzers. Erscheint dort im Presseschau-Abschnitt des Dashboards, sofern der Nutzer diesen in seinen eigenen Einstellungen aktiviert hat - der Upload funktioniert unabhängig davon immer. Pro Tag ist genau ein Eintrag möglich; ein erneuter Upload für denselben Tag ersetzt den bisherigen Inhalt (Korrektur statt Duplikat).',
+      'Speichert eine tägliche Presseschau (Markdown-Text, z. B. eine extern erstellte Übersicht relevanter Presseartikel) im MandatsCockpit-Account des angemeldeten Nutzers. Erscheint dort im Presseschau-Abschnitt des Dashboards, sofern der Nutzer diesen in seinen eigenen Einstellungen aktiviert hat - der Upload funktioniert unabhängig davon immer. Pro Kalendertag (datum) ist genau ein Eintrag möglich; ein erneuter Upload für dasselbe datum ERSETZT den bisherigen Inhalt (Korrektur statt Duplikat) - für unterschiedliche Presseschauen deshalb immer das tatsächliche Datum der jeweiligen Ausgabe angeben, niemals das aktuelle Tagesdatum raten oder weglassen, sonst überschreiben sich mehrere Ausgaben gegenseitig.',
     inputSchema: {
       type: 'object',
       properties: {
         inhalt: { type: 'string', description: 'Vollständiger Presseschau-Text als Markdown.' },
         datum: {
           type: 'string',
-          description: 'Datum der Presseschau im Format YYYY-MM-DD (optional, Standard: heute).',
+          description:
+            'Datum der Presseschau-Ausgabe im Format YYYY-MM-DD (Pflicht). Muss das tatsächliche Datum der Ausgabe sein (z. B. aus dem Dateinamen/der Überschrift der Vorlage, etwa "2026-07-28_Presseschau_IKZ.md" → 2026-07-28), nicht automatisch das heutige Datum - sonst überschreibt ein späterer Upload für einen anderen Tag versehentlich den falschen Eintrag.',
         },
         titel: { type: 'string', description: 'Überschrift, z. B. "Presseschau IKZ – 28.07.2026" (optional).' },
         quelle: { type: 'string', description: 'Quellenangabe, z. B. "Iserlohner Kreisanzeiger und Zeitung" (optional).' },
       },
-      required: ['inhalt'],
+      required: ['inhalt', 'datum'],
     },
   },
   {

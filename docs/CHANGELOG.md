@@ -1205,3 +1205,23 @@ Presseschauen hochladen).
   der echten Presseschau-Vorlage – echter Login-Rundgang war nicht möglich (Passwort-Eingabe im
   Browser ist laut CLAUDE.md tabu), stattdessen Desktop- und Mobile-Breite geprüft (Zweispaltig ab
   `sm:`, einspaltig darunter).
+
+### Presseschau: `datum` bei `upload_presseschau` von optional auf Pflicht (Bugfix)
+
+Nutzer-Feedback nach dem ersten Test: mehrfache Uploads am selben realen Kalendertag haben sich
+gegenseitig überschrieben, obwohl inhaltlich unterschiedliche Presseschau-Ausgaben gemeint waren -
+gewünscht war, durch die einzelnen Tage navigieren zu können. Root Cause per Diagnose bestätigt:
+Backend/Upsert (`(user_id, datum)`) funktionieren korrekt (zwei Testuploads mit explizit
+unterschiedlichem `datum` blieben als zwei separate, navigierbare Zeilen erhalten) - das Problem war
+der bisherige stille Default `datum = heute` bei fehlendem Parameter: gab der aufrufende Client kein
+`datum` an (z. B. weil er es für unnötig hielt oder das Ausgabedatum nicht explizit herausgelesen
+hat), landeten mehrere Uploads am selben Tag unbemerkt auf demselben Datensatz.
+
+Fix: `datum` ist jetzt in `tools/presseschau.ts` und `tools_schema.ts` ein **Pflichtfeld** (kein
+Default mehr, `todayBerlin()`-Helper entfernt) - der Aufruf schlägt ohne `datum` explizit mit einer
+Fehlermeldung fehl, statt still das falsche Datum zu wählen. Tool-Beschreibung ergänzt: das
+tatsächliche Ausgabedatum verwenden (z. B. aus dem Dateinamen der Vorlage), nicht das aktuelle
+Tagesdatum raten. Verifiziert per `deno check`, Deploy, und direktem Testaufruf über den echten
+MCP-Connector (Aufruf ohne `datum` schlägt jetzt korrekt fehl; zwei Aufrufe mit unterschiedlichem
+`datum` legen zwei separate, per SQL-Abfrage auf der Live-DB bestätigte Zeilen an, anschließend
+wieder gelöscht).

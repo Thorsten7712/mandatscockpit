@@ -129,7 +129,7 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 - `create_todo(titel, spalte, faellig_am?, session_id?)` – Spalte wird angelegt, falls sie noch nicht existiert.
 - `create_event(titel, start, ende?)` – eigener Termin, `herkunft='privat'`.
 - `create_antrag(titel, inhalt?, ausschuss?, ebene?, session_id?)` – Status startet immer bei `entwurf`; `ausschuss`/`ebene` werden aus `session_id` übernommen, falls nicht explizit gesetzt.
-- `upload_presseschau(inhalt, datum?, titel?, quelle?)` – speichert eine tägliche Presseschau (Markdown-Text); `datum` Standard heute, pro Tag ein Eintrag (erneuter Upload für denselben Tag ersetzt den bisherigen). Sichtbar im Dashboard nur, wenn „Presseschau" unter Einstellungen aktiviert ist.
+- `upload_presseschau(inhalt, datum, titel?, quelle?)` – speichert eine tägliche Presseschau (Markdown-Text); `datum` ist Pflicht (das tatsächliche Ausgabedatum, kein automatisches "heute" – ein früherer stiller Default hatte dazu geführt, dass mehrere Uploads am selben realen Kalendertag sich gegenseitig überschrieben haben), pro Tag ein Eintrag (erneuter Upload für denselben Tag ersetzt den bisherigen). Sichtbar im Dashboard nur, wenn „Presseschau" unter Einstellungen aktiviert ist.
 
 **Lesen:**
 - `list_todos(status?, spalte?, limit?)` – eigene + mit dem Nutzer geteilte Karten.
