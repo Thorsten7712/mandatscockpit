@@ -28,6 +28,18 @@ export interface Profile {
   gliederung_land: string | null
   /** true = admin-vergebenes Passwort noch nicht selbst geändert (siehe ForcedPasswordChange.tsx) */
   muss_passwort_aendern: boolean
+  /** Presseschau-Abschnitt auf dem Dashboard ein-/ausgeblendet (siehe PresseschauSection.tsx) */
+  presseschau_aktiv: boolean
+}
+
+export interface PresseschauRow {
+  id: string
+  user_id: string
+  datum: string
+  titel: string | null
+  quelle: string | null
+  inhalt: string
+  erstellt_am: string
 }
 
 export interface CalendarSource {

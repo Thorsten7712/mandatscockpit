@@ -36,8 +36,10 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 
 - **Login/Auth**: Supabase Auth, Redirect-Schutz (`ProtectedRoute`), erzwungener Passwortwechsel beim
   ersten Login bzw. nach Admin-Reset (`ForcedPasswordChange`).
-- **Dashboard**: ToDo-Board (frei definierbare Spalten, Drag & Drop, Teilen mit Partei-/Ebenen-/
-  Gliederungs-Kolleg*innen), „Meine Dokumente" (Anträge + Sitzungs- + ToDo-Dokumente in einer
+- **Dashboard**: optionaler „Presseschau"-Abschnitt (newspaperartige Darstellung hochgeladener
+  Presseschauen, Tage-Navigation, nur sichtbar wenn `profiles.presseschau_aktiv` gesetzt ist,
+  strikt privat pro Nutzer), ToDo-Board (frei definierbare Spalten, Drag & Drop, Teilen mit Partei-/
+  Ebenen-/Gliederungs-Kolleg*innen), „Meine Dokumente" (Anträge + Sitzungs- + ToDo-Dokumente in einer
   Liste, filterbar nach Sitzung), „Nächste Termine" (eigene Termine + importierte Sitzungen
   zusammengeführt, mit Detail-Modal).
 - **Settings** (Sidebar-Navigation): Profil (Foto/Name), Kalenderquellen (eigene + gemeinsam
@@ -50,9 +52,9 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 17 Tools über
-  ToDos/Termine/Sitzungen/Anträge/Notizen – volle Liste + Details in README.md Abschnitt 9 und
-  `docs/CHANGELOG.md`).
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 18 Tools über
+  ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau – volle Liste + Details in README.md
+  Abschnitt 9 und `docs/CHANGELOG.md`).
 - **GitHub-Actions-Workflows**: Deploy nach GitHub Pages (inkl. `404.html`-Kopie fürs SPA-Routing),
   Supabase-Keep-Alive, täglicher ICS-Import (`import-ics.yml`, 04:00 UTC), Edge-Function-Deploy
   (`deploy-edge-functions.yml`, deployt bei jeder Änderung unter `supabase/functions/**` alle

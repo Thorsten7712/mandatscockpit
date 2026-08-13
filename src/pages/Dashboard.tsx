@@ -4,23 +4,26 @@ import { supabase } from '../lib/supabaseClient'
 import { CalendarView } from '../components/CalendarView'
 import { TodoBoard } from '../components/TodoBoard'
 import { AntraegeSection } from '../components/AntraegeSection'
+import { PresseschauSection } from '../components/PresseschauSection'
 import { logoUrl, themeById } from '../lib/themes'
 
 export default function Dashboard() {
   const [profileName, setProfileName] = useState('')
   const [profileFotoUrl, setProfileFotoUrl] = useState<string | null>(null)
   const [partei, setPartei] = useState<string | null>(null)
+  const [presseschauAktiv, setPresseschauAktiv] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       const { data: profile } = await supabase
         .from('profiles')
-        .select('name, foto_url, partei')
+        .select('name, foto_url, partei, presseschau_aktiv')
         .eq('id', data.user.id)
         .single()
       setProfileName(profile?.name ?? '')
       setPartei(profile?.partei ?? null)
+      setPresseschauAktiv(profile?.presseschau_aktiv ?? false)
       if (profile?.foto_url) {
         const { data: signed } = await supabase.storage
           .from('profilbilder')
@@ -83,6 +86,7 @@ export default function Dashboard() {
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-6 py-8">
+        {presseschauAktiv && <PresseschauSection />}
         <section className="mb-8">
           <h2 className="mb-3 text-base font-semibold text-slate-900">ToDo-Board</h2>
           <TodoBoard />

@@ -1164,3 +1164,44 @@ Supabase Edge Functions unterstützen relative Imports innerhalb des Funktionsor
 Deploy-Log einzeln aufgelistet). Nach dem Deploy dieselben Prüfungen wie beim letzten CORS-Fix
 wiederholt (Preflight-Header, `verify_jwt=false`, HTTP 200 statt 401 bei Auth-Fehlern) - alle
 identisch zum Stand vor der Aufteilung, wie erwartet bei einer reinen Umstrukturierung.
+
+## Presseschau (optionaler Newspaper-Abschnitt auf dem Dashboard)
+
+Nutzerwunsch: eine täglich per KI erstellte Presseschau (Beispielformat: `Presseschau IKZ –
+28.07.2026.md`, Markdown mit Abschnitten je Gremium/Kategorie) soll im Dashboard übersichtlich als
+Zeitungsübersicht mit Tage-Navigation erscheinen – optional pro Mitglied aktivierbar, standardmäßig
+unsichtbar, und strikt privat (nicht für andere Mitglieder sichtbar, auch wenn diese ebenfalls
+Presseschauen hochladen).
+
+- **Datenmodell**: neue Tabelle `presseschauen` (`user_id`, `datum`, `titel`, `quelle`, `inhalt` als
+  Markdown-Text, `unique(user_id, datum)`) – bewusst **kein** Storage-Blob wie bei `summaries`, da der
+  Inhalt reiner Text ist, der direkt gerendert werden soll (kein Sinn in signierten URLs für reinen
+  Text). RLS-Policy `presseschauen_manage_own` analog `summaries_manage_own`. Neue Spalte
+  `profiles.presseschau_aktiv` (boolean, default false) als Ein/Aus-Schalter – ohne die Spalte wäre
+  der Abschnitt für alle sichtbar, sobald irgendwer per MCP einen Eintrag hochlädt.
+- **MCP-Tool `upload_presseschau`** (`tools/presseschau.ts`): Upsert auf `(user_id, datum)`, `inhalt`
+  Pflicht, `datum` optional (Standard: heute in Europe/Berlin, nicht die UTC-Serverzeit der Edge
+  Function – sonst würde ein Upload kurz nach Mitternacht Berliner Zeit auf den Vortag fallen).
+  Erneuter Upload für denselben Tag ersetzt den bisherigen Inhalt (Korrektur statt Duplikat) statt
+  einen zweiten Eintrag anzulegen. Der Upload funktioniert unabhängig vom `presseschau_aktiv`-Schalter
+  immer – der Schalter steuert nur die Anzeige im Dashboard.
+- **Settings**: neuer Abschnitt „Presseschau" mit einem einzelnen Checkbox-Schalter
+  (`togglePresseschau`), der `profiles.presseschau_aktiv` umschaltet.
+- **`PresseschauSection.tsx`**: newspaperartige Darstellung (Serifenschrift, Doppellinie unter dem
+  Masthead, zweispaltiger Fließtext ab `sm:`-Breakpoint via `columns-2`) mit Pfeil-Navigation, die
+  nur zwischen **tatsächlich vorhandenen** Presseschau-Tagen blättert (nicht zwischen Kalendertagen) –
+  Presseschauen werden unregelmäßig hochgeladen. Lädt zunächst nur `(id, datum)` aller eigenen
+  Einträge, den vollen Text erst je ausgewähltem Eintrag nach, damit ein wachsender Bestand nicht
+  komplett in den Speicher geladen wird. Markdown-Rendering über `react-markdown` (neue Abhängigkeit)
+  statt eines eigenen Parsers – Sicherheits- und Korrektheitsgründe (kein
+  `dangerouslySetInnerHTML`). Eigenes, schlankes CSS für die Markdown-Typografie
+  (`.mc-presseschau-content` in `index.css`) statt `@tailwindcss/typography`, da nur eine Handvoll
+  Elemente vorkommen (Überschriften, Absätze, Listen, Fett/Kursiv, Trennlinie).
+- **Dashboard**: Abschnitt erscheint direkt unter dem Header, noch vor dem ToDo-Board (prominenteste
+  Position), aber nur wenn `profiles.presseschau_aktiv = true` – ohne aktivierten Schalter sieht das
+  Dashboard exakt wie vorher aus.
+- Design visuell verifiziert über einen temporären, nicht verlinkten Test-Harness
+  (`src/dev/PresseschauPreview.tsx` + Route, nach der Prüfung wieder entfernt) mit Beispieltext aus
+  der echten Presseschau-Vorlage – echter Login-Rundgang war nicht möglich (Passwort-Eingabe im
+  Browser ist laut CLAUDE.md tabu), stattdessen Desktop- und Mobile-Breite geprüft (Zweispaltig ab
+  `sm:`, einspaltig darunter).

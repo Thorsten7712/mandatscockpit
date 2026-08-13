@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Bot, CalendarClock, CalendarDays, Landmark, Mail, SquareKanban, User, Users } from 'lucide-react'
+import { Bot, CalendarClock, CalendarDays, Landmark, Mail, Newspaper, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type {
   AntragDeadlineSetting,
@@ -17,7 +17,7 @@ import { gliederungFeld } from '../lib/gliederung'
 import { UserManagement } from '../components/UserManagement'
 import { KontaktAnfragenListe } from '../components/KontaktAnfragenListe'
 
-type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'fristen' | 'mcp' | 'benutzer' | 'kontakt'
+type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'fristen' | 'presseschau' | 'mcp' | 'benutzer' | 'kontakt'
 
 const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: boolean }[] = [
   { id: 'profil', label: 'Profil', icon: User },
@@ -25,6 +25,7 @@ const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: b
   { id: 'gremien', label: 'Meine Gremien', icon: Landmark },
   { id: 'board', label: 'ToDo-Board', icon: SquareKanban },
   { id: 'fristen', label: 'Antrags-Fristen', icon: CalendarClock },
+  { id: 'presseschau', label: 'Presseschau', icon: Newspaper },
   { id: 'mcp', label: 'MCP Connection', icon: Bot },
   { id: 'benutzer', label: 'Benutzerverwaltung', icon: Users, adminOnly: true },
   { id: 'kontakt', label: 'Kontaktanfragen', icon: Mail, adminOnly: true },
@@ -541,6 +542,13 @@ export default function Settings() {
     const updated = { ...current, [field]: !current[field] }
     setBoardSettings(updated)
     await supabase.from('todo_board_settings').upsert(updated)
+  }
+
+  async function togglePresseschau() {
+    if (!userId || !profile) return
+    const neu = !profile.presseschau_aktiv
+    setProfile({ ...profile, presseschau_aktiv: neu })
+    await supabase.from('profiles').update({ presseschau_aktiv: neu }).eq('id', userId)
   }
 
   async function handleGenerateMcpToken() {
@@ -1176,6 +1184,28 @@ export default function Settings() {
           {savingFristen ? 'Speichern...' : 'Speichern'}
         </button>
       </form>
+      </section>
+      )}
+
+      {activeSection === 'presseschau' && (
+      <section className="mc-animate-fade">
+      <h2 className="mb-2 text-base font-semibold text-slate-900">Presseschau</h2>
+      <p className="mb-3 max-w-md text-sm text-slate-500">
+        Blendet auf dem Dashboard einen Zeitungsübersicht-Abschnitt ein, der eigene, per MCP
+        (Tool „upload_presseschau") hochgeladene Presseschauen zeigt. Nur für dieses Konto sichtbar,
+        auch wenn andere Mitglieder ebenfalls Presseschauen hochladen.
+      </p>
+      <div className="mc-card max-w-md p-4">
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-sm text-slate-700">Presseschau auf dem Dashboard anzeigen</span>
+          <input
+            type="checkbox"
+            checked={profile?.presseschau_aktiv ?? false}
+            onChange={togglePresseschau}
+            className="h-4 w-4"
+          />
+        </label>
+      </div>
       </section>
       )}
 

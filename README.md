@@ -123,12 +123,13 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 17 Tools:
+`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 18 Tools:
 
 **Anlegen:**
 - `create_todo(titel, spalte, faellig_am?, session_id?)` – Spalte wird angelegt, falls sie noch nicht existiert.
 - `create_event(titel, start, ende?)` – eigener Termin, `herkunft='privat'`.
 - `create_antrag(titel, inhalt?, ausschuss?, ebene?, session_id?)` – Status startet immer bei `entwurf`; `ausschuss`/`ebene` werden aus `session_id` übernommen, falls nicht explizit gesetzt.
+- `upload_presseschau(inhalt, datum?, titel?, quelle?)` – speichert eine tägliche Presseschau (Markdown-Text); `datum` Standard heute, pro Tag ein Eintrag (erneuter Upload für denselben Tag ersetzt den bisherigen). Sichtbar im Dashboard nur, wenn „Presseschau" unter Einstellungen aktiviert ist.
 
 **Lesen:**
 - `list_todos(status?, spalte?, limit?)` – eigene + mit dem Nutzer geteilte Karten.

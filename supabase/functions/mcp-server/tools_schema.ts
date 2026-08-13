@@ -352,6 +352,24 @@ export const TOOLS = [
     inputSchema: { type: 'object', properties: {} },
   },
   {
+    name: 'upload_presseschau',
+    description:
+      'Speichert eine tägliche Presseschau (Markdown-Text, z. B. eine extern erstellte Übersicht relevanter Presseartikel) im MandatsCockpit-Account des angemeldeten Nutzers. Erscheint dort im Presseschau-Abschnitt des Dashboards, sofern der Nutzer diesen in seinen eigenen Einstellungen aktiviert hat - der Upload funktioniert unabhängig davon immer. Pro Tag ist genau ein Eintrag möglich; ein erneuter Upload für denselben Tag ersetzt den bisherigen Inhalt (Korrektur statt Duplikat).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        inhalt: { type: 'string', description: 'Vollständiger Presseschau-Text als Markdown.' },
+        datum: {
+          type: 'string',
+          description: 'Datum der Presseschau im Format YYYY-MM-DD (optional, Standard: heute).',
+        },
+        titel: { type: 'string', description: 'Überschrift, z. B. "Presseschau IKZ – 28.07.2026" (optional).' },
+        quelle: { type: 'string', description: 'Quellenangabe, z. B. "Iserlohner Kreisanzeiger und Zeitung" (optional).' },
+      },
+      required: ['inhalt'],
+    },
+  },
+  {
     name: 'search',
     description:
       'Durchsucht Titel/Inhalte von ToDo-Karten, Anträgen und Notizen (Freitext-Suche, Groß-/Kleinschreibung egal) - berücksichtigt dabei nur für den Nutzer sichtbare Einträge (eigene und geteilte). Für Fragen wie "wo ging es um XY".',
