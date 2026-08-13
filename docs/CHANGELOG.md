@@ -1331,3 +1331,31 @@ unabhängig davon, welcher konkrete MCP-Client/welches Modell aufruft.
   Wiederholungs-Insert für `chunk_index=0` zur Upsert-Prüfung, wieder zusammengesetzt und
   Byte-für-Byte mit dem Original verglichen: identisch; Cascade-Delete beim Aufräumen der
   Testzeile ebenfalls bestätigt - 0 verwaiste Chunk-Zeilen danach).
+
+### MCP-Datei-Uploads: falscher Content-Type verhinderte PDF-Vorschau (Bugfix)
+
+Nutzer-Feedback: ein über den MCP-Server hochgeladenes PDF stand im Dashboard nur zum Download
+bereit, statt wie andere PDFs direkt im Vorschau-Modal (`DocumentPreviewModal.tsx`, `<iframe>`) zu
+öffnen. Ursache per direkter Abfrage von `storage.objects.metadata` in der Produktions-DB bestätigt:
+das betroffene PDF hatte `mimetype: "text/plain;charset=UTF-8"` gespeichert, alle über die Web-UI
+hochgeladenen PDFs dagegen korrekt `application/pdf`. `supabase.storage.upload()` ohne explizite
+`contentType`-Option leitet den Content-Type bei einem echten Browser-`File`-Objekt automatisch aus
+dessen `.type` ab (Web-UI-Uploads) - bei den MCP-Upload-Pfaden wird aber ein reines,
+Base64-dekodiertes `Uint8Array` ohne Typ-Information hochgeladen, wofür Supabase Storage ersatzweise
+`text/plain;charset=UTF-8` verwendet. Browser rendern Inhalt mit diesem Content-Type nicht in einem
+PDF-`<iframe>`, sondern bieten nur den Download an - unabhängig von der `.pdf`-Dateiendung im
+Storage-Pfad, auf die `DocumentPreviewModal.tsx` für die Vorschau-Entscheidung eigentlich abstellt.
+
+- **Fix**: neue Funktion `guessContentType(dateiname)` in `shared.ts` (Endung → MIME-Type,
+  `pdf`/`png`/`jpg`/`docx`/... → passender Typ, Fallback `application/octet-stream`) - beide
+  MCP-Upload-Stellen (`createNote()` in `notes.ts` für den direkten Base64-Pfad, `finishFileUpload()`
+  in `uploads.ts` für den Chunk-Upload-Pfad) übergeben jetzt `{ contentType: guessContentType(...) }`
+  an `.storage.upload()`, genau wie es ein echtes `File`-Objekt aus der Web-UI automatisch tut.
+- **Bereits betroffenes Dokument** direkt repariert: `update storage.objects set metadata =
+  jsonb_set(metadata, '{mimetype}', '"application/pdf"') where ...` auf der Produktions-DB - kein
+  erneuter Upload nötig, die Bytes selbst waren immer korrekt, nur der gespeicherte Content-Type war
+  falsch.
+- Verifiziert per `deno check`, Deploy, sowie einer SQL-Abfrage auf `storage.objects.metadata` vor
+  und nach der Korrektur (vorher `text/plain;charset=UTF-8`, danach `application/pdf`, wie bei allen
+  anderen PDFs in der Tabelle). Kein Live-HTTP-Test des ausgelieferten Content-Type-Headers möglich
+  ohne Zugriff auf den Service-Role-Key (bewusst nicht extrahiert/umgangen).

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
-import { fileNameFromPath, formatDateTime, parseLimit, toolTextResult, truncate } from '../shared.ts'
+import { fileNameFromPath, formatDateTime, guessContentType, parseLimit, toolTextResult, truncate } from '../shared.ts'
 
 interface NoteListRow {
   id: string
@@ -187,7 +187,9 @@ async function createNote(
       return toolTextResult('Fehler: datei_base64 ist kein gültiges Base64.', true)
     }
     const path = `${userId}/${Date.now()}-${dateiname}`
-    const { error: uploadError } = await supabase.storage.from('zusammenfassungen').upload(path, bytes)
+    const { error: uploadError } = await supabase.storage
+      .from('zusammenfassungen')
+      .upload(path, bytes, { contentType: guessContentType(dateiname) })
     if (uploadError) return toolTextResult(`Fehler beim Hochladen der Datei: ${uploadError.message}`, true)
     dateiUrl = path
   }

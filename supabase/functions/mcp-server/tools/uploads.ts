@@ -1,5 +1,5 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
-import { toolTextResult } from '../shared.ts'
+import { guessContentType, toolTextResult } from '../shared.ts'
 
 // Größere Dateien (z. B. PDFs) lassen sich nicht in einem einzigen
 // create_*_note-Aufruf übertragen, weil der Base64-Tool-Aufruf-Text beim
@@ -111,7 +111,9 @@ export async function finishFileUpload(supabase: SupabaseClient, userId: string,
   }
 
   const path = `${userId}/${Date.now()}-${upload.dateiname}`
-  const { error: uploadError } = await supabase.storage.from('zusammenfassungen').upload(path, bytes)
+  const { error: uploadError } = await supabase.storage
+    .from('zusammenfassungen')
+    .upload(path, bytes, { contentType: guessContentType(upload.dateiname) })
   if (uploadError) return toolTextResult(`Fehler beim Hochladen der Datei: ${uploadError.message}`, true)
 
   // Löscht per on-delete-cascade auch die zugehörigen mcp_upload_chunks-Zeilen.

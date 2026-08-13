@@ -88,6 +88,41 @@ export function fileNameFromPath(path: string): string {
   return path.split('/').pop() ?? path
 }
 
+const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  txt: 'text/plain;charset=UTF-8',
+  md: 'text/markdown;charset=UTF-8',
+  csv: 'text/csv;charset=UTF-8',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  zip: 'application/zip',
+}
+
+/** Bugfix (siehe docs/CHANGELOG.md): `supabase.storage.upload()` ohne
+ *  explizite `contentType`-Option speichert Base64-dekodierte Bytes
+ *  (Uint8Array statt eines echten Browser-File-Objekts mit eigenem `.type`)
+ *  standardmäßig als `text/plain;charset=UTF-8` ab - der Browser rendert
+ *  PDFs mit diesem Content-Type nicht im `<iframe>`-Vorschau-Modal
+ *  (DocumentPreviewModal.tsx), sondern bietet nur einen Download an. Beide
+ *  MCP-Upload-Pfade (createNote() in notes.ts, finishFileUpload() in
+ *  uploads.ts) müssen deshalb den Content-Type explizit anhand der
+ *  Dateiendung setzen, wie es ein echtes File-Objekt aus der Web-UI
+ *  automatisch tut. */
+export function guessContentType(dateiname: string): string {
+  const ext = dateiname.split('.').pop()?.toLowerCase() ?? ''
+  return CONTENT_TYPE_BY_EXTENSION[ext] ?? 'application/octet-stream'
+}
+
 export function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}… [gekürzt, ${text.length} Zeichen gesamt]`
 }
