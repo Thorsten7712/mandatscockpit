@@ -1225,3 +1225,40 @@ Tagesdatum raten. Verifiziert per `deno check`, Deploy, und direktem Testaufruf 
 MCP-Connector (Aufruf ohne `datum` schlägt jetzt korrekt fehl; zwei Aufrufe mit unterschiedlichem
 `datum` legen zwei separate, per SQL-Abfrage auf der Live-DB bestätigte Zeilen an, anschließend
 wieder gelöscht).
+
+### Presseschau: kompakte Karte statt vollem Zeitungsabschnitt auf dem Dashboard
+
+Nutzer-Feedback nach dem ersten Live-Test (per PDF-Screenshot des echten Dashboards belegt): die
+vollständig ausgeschriebene Presseschau ganz oben hat ToDo-Board, „Nächste Termine" und „Meine
+Dokumente" so weit nach unten gedrückt, dass man scrollen musste, um sie zu sehen - Wunsch war ein
+"Wow-Effekt", nutzerfreundliches, "wie von Apple" wirkendes Design, das die Presseschau trotzdem
+prominent zeigt.
+
+- **`PresseschauSection.tsx`** zeigt jetzt nur noch eine kompakte, klickbare Karte (Masthead +
+  Tages-Navigation wie vorher, aber Body auf Überschrift + zweizeiligen Anreißer-Text reduziert,
+  `line-clamp-2`) statt des vollen Artikels. Ganze Karte ist Click-Target (`role="button"`,
+  `tabIndex`, Enter/Space) mit Hover-Lift (`-translate-y-0.5` + Schatten) und Press-Feedback
+  (`active:scale-[0.995]`) - Tage-Navigation-Pfeile bleiben eigene `<button>`s mit
+  `stopPropagation()`, kein verschachteltes `<button>`.
+- **Anreißer-Text (`extractTeaser()`)**: bevorzugt den Inhalt eines `## Kernaussage`-Abschnitts (die
+  Presseschau-Vorlage schreibt dort bereits eine von der KI verfasste Zusammenfassung, siehe
+  `docs/`-Beispieldatei) statt blind die ersten Zeichen des Volltexts zu nehmen - inhaltlich
+  sinnvoller als eine Zufalls-Kürzung mitten im Fließtext. Fällt ohne passenden Abschnitt auf
+  Markdown-bereinigten Volltext zurück.
+- **Neu: `PresseschauReaderModal.tsx`** - der komplette, vorher inline auf dem Dashboard stehende
+  Zeitungslayout-Leseblock (Masthead, zweispaltiger Fließtext, Tage-Navigation) lebt jetzt in einem
+  fokussierten Overlay (analog Safari-Lesemodus/Apple News), das beim Klick auf die Karte erscheint -
+  `bg-slate-900/60 backdrop-blur-sm` als Scrim, `mc-animate-pop`-Karte (bereits bestehende
+  Projekt-Animation, keine neue Bewegungssprache eingeführt). Bekommt `current`/`isNeuest`/
+  `isAeltest`/`onPrev`/`onNext` von `PresseschauSection` durchgereicht statt selbst nachzuladen - die
+  Daten sind dort ohnehin schon im State (kein doppelter Request).
+- Design-Referenz für "Apple-Wow-Effekt, nutzerfreundlich, innovativ" bewusst auf Basis der
+  `apple-design`-Skill-Prinzipien umgesetzt (Materialisierung via `backdrop-filter`+Scale statt
+  reinem Opacity-Fade, kritisch gedämpfte statt überschwingende Eintritts-Bewegung, Response auf
+  Pointer-Down über `active:`-Press-States) - bewusst **keine** neue Spring-/Gesten-Bibliothek
+  eingeführt, da die Interaktion (Klick zum Öffnen/Schließen) nicht gestengetrieben ist und die
+  bestehenden CSS-Keyframe-Animationen (`mc-animate-pop`/`mc-animate-fade`) dafür ausreichen.
+- Verifiziert per `tsc -b`/`vite build` und einem temporären, anschließend wieder gelöschten
+  Test-Harness (`src/dev/DashboardFoldPreview.tsx` + Route) bei 1280×800 (typische Laptop-Auflösung)
+  und mobiler Breite: ToDo-Board/Nächste Termine/Meine Dokumente jetzt ohne Scrollen sichtbar, Reader
+  öffnet/schließt korrekt.
