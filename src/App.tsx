@@ -3,6 +3,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Archiv from './pages/Archiv'
+import Dokumente from './pages/Dokumente'
 import TerminDetail from './pages/TerminDetail'
 import Impressum from './pages/Impressum'
 import Datenschutz from './pages/Datenschutz'
@@ -38,6 +39,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Archiv />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dokumente"
+          element={
+            <ProtectedRoute>
+              <Dokumente />
             </ProtectedRoute>
           }
         />

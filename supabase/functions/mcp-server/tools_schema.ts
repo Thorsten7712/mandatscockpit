@@ -415,13 +415,81 @@ export const TOOLS = [
   {
     name: 'finish_file_upload',
     description:
-      'Schließt einen per start_file_upload begonnenen, mehrteiligen Upload ab: setzt alle per append_file_chunk übertragenen Häppchen lückenlos zusammen, dekodiert das Ergebnis und legt die Datei im Storage ab. Liefert einen datei_pfad, der anschließend bei create_session_note/create_event_note/create_todo_note/create_antrag_note statt dateiname+datei_base64 angegeben wird, um die Datei an eine Sitzung/einen Termin/eine ToDo-Karte/einen Antrag zu hängen.',
+      'Schließt einen per start_file_upload begonnenen, mehrteiligen Upload ab: setzt alle per append_file_chunk übertragenen Häppchen lückenlos zusammen, dekodiert das Ergebnis und legt die Datei im Storage ab. Liefert einen datei_pfad, der anschließend bei create_session_note/create_event_note/create_todo_note/create_antrag_note bzw. create_document statt dateiname+datei_base64 angegeben wird.',
     inputSchema: {
       type: 'object',
       properties: {
         upload_id: { type: 'string', description: 'upload_id aus start_file_upload.' },
+        ziel: {
+          type: 'string',
+          enum: ['notiz', 'dokument'],
+          description:
+            'Wofür die Datei bestimmt ist: "notiz" (Standard, für create_session_note/create_event_note/create_todo_note/create_antrag_note) oder "dokument" (für create_document im Dokumenten-Hub) - bestimmt den Ziel-Speicherort.',
+        },
       },
       required: ['upload_id'],
+    },
+  },
+  {
+    name: 'create_document',
+    description:
+      'Legt ein Dokument im Dokumenten-Hub an (neuer Reiter "Dokumente", neben dem Archiv). Zwei Kategorien: sichtbarkeit="geteilt" (sichtbar für alle Mitglieder der eigenen Partei auf der angegebenen Ebene/Gliederung, z. B. "Kommune Iserlohn" - die Gliederung wird automatisch aus dem eigenen Profil übernommen, NICHT als Parameter angegeben) oder sichtbarkeit="persoenlich" (nur für den Nutzer selbst sichtbar). Unterstützt Freitext, einen kleinen Datei-Anhang (dateiname+datei_base64, nur bis ca. 13 KB) oder einen bereits per finish_file_upload(ziel="dokument") hochgeladenen datei_pfad - mindestens eins von inhalt/Datei ist erforderlich. Übliche Tags für geteilte Dokumente: Antrag, Fact Sheet, Argumentationshilfe. Übliche Tags für persönliche Dokumente: Einschätzung, Analyse, Redebeitrag - tags sind aber frei wählbar, keine feste Liste.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        titel: { type: 'string', description: 'Titel des Dokuments.' },
+        sichtbarkeit: {
+          type: 'string',
+          enum: ['persoenlich', 'geteilt'],
+          description: '"persoenlich" = nur für den Nutzer selbst, "geteilt" = für alle Mitglieder der eigenen Partei auf der angegebenen ebene sichtbar.',
+        },
+        ebene: {
+          type: 'string',
+          enum: ['kommune', 'kreis', 'land', 'bund'],
+          description: 'Pflicht bei sichtbarkeit="geteilt". Muss eine Ebene sein, auf der der Nutzer laut seinem Profil selbst ein Mandat hat (Einstellungen -> Meine Gremien).',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Freie Tags, z. B. ["Antrag", "Fact Sheet"] bei geteilten oder ["Einschätzung"] bei persönlichen Dokumenten (optional).',
+        },
+        inhalt: { type: 'string', description: 'Freitext-Inhalt, z. B. eine im Chat erstellte Analyse (optional).' },
+        dateiname: {
+          type: 'string',
+          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
+        },
+        datei_base64: {
+          type: 'string',
+          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
+        },
+        datei_pfad: {
+          type: 'string',
+          description: 'Storage-Pfad einer bereits per finish_file_upload(ziel="dokument") hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
+        },
+      },
+      required: ['titel', 'sichtbarkeit'],
+    },
+  },
+  {
+    name: 'list_documents',
+    description:
+      'Listet Dokumente aus dem Dokumenten-Hub auf - eigene (persönlich und geteilt) sowie die geteilten Dokumente anderer Mitglieder der eigenen Partei auf gemeinsamen Ebenen/Gliederungen. Liefert je Dokument auch die id (für spätere Verwaltung) und ggf. den Ersteller-Namen bei fremden geteilten Dokumenten.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sichtbarkeit: {
+          type: 'string',
+          enum: ['alle', 'persoenlich', 'geteilt'],
+          description: 'Filtert nach Kategorie (Standard "alle").',
+        },
+        ebene: {
+          type: 'string',
+          enum: ['kommune', 'kreis', 'land', 'bund'],
+          description: 'Filtert geteilte Dokumente nach Ebene (optional).',
+        },
+        tag: { type: 'string', description: 'Filtert per Teilstring-Suche nach Tag, Groß-/Kleinschreibung egal (optional).' },
+        limit: { type: 'number', description: 'Maximale Anzahl Dokumente (Standard 20, Maximum 100).' },
+      },
     },
   },
   {

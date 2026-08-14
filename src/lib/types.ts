@@ -42,6 +42,23 @@ export interface PresseschauRow {
   erstellt_am: string
 }
 
+export type DokumentSichtbarkeit = 'persoenlich' | 'geteilt'
+
+export interface DokumentRow {
+  id: string
+  user_id: string
+  titel: string
+  sichtbarkeit: DokumentSichtbarkeit
+  /** nur bei sichtbarkeit='geteilt' gesetzt */
+  ebene: Ebene | null
+  /** nur bei sichtbarkeit='geteilt' und ebene != 'bund' gesetzt, server-seitig aus dem Profil des Erstellers übernommen */
+  gliederung: string | null
+  tags: string[]
+  inhalt: string | null
+  datei_url: string | null
+  erstellt_am: string
+}
+
 export interface CalendarSource {
   id: string
   name: string

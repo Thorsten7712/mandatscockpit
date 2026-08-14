@@ -123,6 +123,35 @@ export function guessContentType(dateiname: string): string {
   return CONTENT_TYPE_BY_EXTENSION[ext] ?? 'application/octet-stream'
 }
 
+export interface Base64UploadResult {
+  path?: string
+  error?: string
+}
+
+/** Dekodiert einen Base64-String und lädt ihn unter `<userId>/<Date.now()>-<dateiname>`
+ *  in den angegebenen Bucket hoch, mit korrektem Content-Type (siehe guessContentType()).
+ *  Gemeinsam genutzt von createNote() (notes.ts, Bucket "zusammenfassungen") und
+ *  createDocument() (tools/dokumente.ts, Bucket "dokumente") - vorher war diese Logik
+ *  nur in createNote() inline vorhanden. */
+export async function uploadBase64File(
+  supabase: SupabaseClient,
+  bucket: string,
+  userId: string,
+  dateiname: string,
+  base64: string,
+): Promise<Base64UploadResult> {
+  let bytes: Uint8Array
+  try {
+    bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+  } catch {
+    return { error: 'datei_base64 ist kein gültiges Base64.' }
+  }
+  const path = `${userId}/${Date.now()}-${dateiname}`
+  const { error } = await supabase.storage.from(bucket).upload(path, bytes, { contentType: guessContentType(dateiname) })
+  if (error) return { error: `Fehler beim Hochladen der Datei: ${error.message}` }
+  return { path }
+}
+
 export function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}… [gekürzt, ${text.length} Zeichen gesamt]`
 }

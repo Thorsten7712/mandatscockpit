@@ -46,3 +46,23 @@ export const EBENE_LABEL: Record<string, string> = {
   land: 'Land',
   bund: 'Bund',
 }
+
+/** Feste Farbzuordnung pro Ebene (Dokumenten-Hub, Dokumente.tsx) - anders als
+ *  Kalenderquellen (freie Farbwahl je Quelle) soll dieselbe Ebene im gesamten
+ *  Dokumenten-Hub immer dieselbe Farbe tragen, unabhängig vom Dokument. */
+export const EBENE_COLOR: Record<string, SourceColor> = {
+  kommune: SOURCE_COLORS[0], // Blau
+  kreis: SOURCE_COLORS[1], // Grün
+  land: SOURCE_COLORS[2], // Amber
+  bund: SOURCE_COLORS[3], // Violett
+}
+
+/** Deterministisches Hashing des Tag-Texts auf einen Palette-Eintrag
+ *  (Dokumenten-Hub) - derselbe Tag hat dadurch immer dieselbe Farbe, ohne
+ *  dass Nutzer Tag-Farben manuell pflegen müssten. */
+export function tagColor(tag: string): SourceColor {
+  let hash = 0
+  for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) | 0
+  const index = Math.abs(hash) % SOURCE_COLORS.length
+  return SOURCE_COLORS[index]
+}

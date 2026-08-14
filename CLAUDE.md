@@ -28,7 +28,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
 - **ToDo-Board:** Kanban-Stil mit frei definierbaren Spalten (`todo_columns`) statt fester Status,
   Drag & Drop via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~27 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~33 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 
@@ -49,12 +49,19 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Archiv**: vergangene Sitzungen (inkl. manuell nachtragbar, z. B. für Gremien ohne ICS-Feed - nur
   der erstellende Nutzer darf seine eigene nachgetragene Sitzung bearbeiten/löschen), erledigte
   Aufgaben, hochgeladene Dokumente, entschiedene Anträge.
+- **Dokumente** (`/dokumente`, eigener Reiter neben dem Archiv): zwei Kategorien - "geteilt"
+  (sichtbar für alle Mitglieder derselben Partei UND derselben Ebene/Gliederung, z. B. "Kommune
+  Iserlohn", getaggt mit Ebene + freien Tags) und "persönlich" (nur für den Hochladenden). Beides
+  über die Web-UI oder den MCP-Server (`create_document`/`list_documents`) befüllbar, mit Ebene-/
+  Tag-Filterchips und Farbmarkierungen (`EBENE_COLOR`/`tagColor()` in `src/lib/sourceColors.ts`).
+  Eigener Storage-Bucket `dokumente`, RLS-Sichtbarkeit über `current_user_gliederung_matches()`
+  (`supabase/migrations/0033_dokumente.sql`).
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 18 Tools über
-  ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau – volle Liste + Details in README.md
-  Abschnitt 9 und `docs/CHANGELOG.md`).
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 25 Tools über
+  ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
+  README.md Abschnitt 9 und `docs/CHANGELOG.md`).
 - **GitHub-Actions-Workflows**: Deploy nach GitHub Pages (inkl. `404.html`-Kopie fürs SPA-Routing),
   Supabase-Keep-Alive, täglicher ICS-Import (`import-ics.yml`, 04:00 UTC), Edge-Function-Deploy
   (`deploy-edge-functions.yml`, deployt bei jeder Änderung unter `supabase/functions/**` alle
@@ -118,10 +125,11 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 2. **Fraktionsbüro-Variante der Termin-Erstellung**: eigene Termine anlegen/bearbeiten/löschen ist
    fertig (siehe oben), es fehlt noch die Rolle „Fraktionsbüro", die ein Zielmitglied aus der eigenen
    Fraktion auswählen und für dieses einen Termin (`herkunft = 'fraktionsbuero'`) anlegen kann.
-3. **Dokumenten-Hub** (Phase 2): Liste/Suche für `documents`, zunächst manuell gepflegt. Zusammenfassungs-
-   Upload + Sitzungsdetailsicht sind bereits fertig (siehe „Termindetailsicht" oben, KONZEPT.md
-   Abschnitt 5.5) – es fehlt nur noch die Verknüpfung mit echten `documents`-Einträgen (Dokumenten-Hub
-   existiert noch nicht).
+3. **RIS-Dokumenten-Import** (Phase 2, KONZEPT.md Abschnitt 5.1): automatischer Import öffentlicher
+   Ratsinformationssystem-Dokumente (Anträge/Vorlagen) in die weiterhin ungenutzte `documents`-Tabelle
+   (0001_init.sql) - nicht zu verwechseln mit dem neuen `/dokumente`-Reiter (Tabelle `dokumente`,
+   0033_dokumente.sql), der geteilte/persönliche, selbst hochgeladene Dokumente verwaltet und davon
+   unabhängig ist.
 4. **iCal-Export** des zusammengeführten persönlichen Kalenders.
 
 Bekannte offene Frage bei der Quellen-UI: aktuell kann jedes Mitglied jede selbst angelegte Quelle auch

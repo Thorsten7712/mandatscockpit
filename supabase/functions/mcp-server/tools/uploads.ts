@@ -1,5 +1,14 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
-import { guessContentType, toolTextResult } from '../shared.ts'
+import { toolTextResult, uploadBase64File } from '../shared.ts'
+
+/** "notiz" (Standard) = Anhang an Sitzung/Termin/ToDo/Antrag (Bucket
+ *  "zusammenfassungen"), "dokument" = Eintrag im Dokumenten-Hub (Bucket
+ *  "dokumente", siehe tools/dokumente.ts). Ein Parameter statt einer zweiten,
+ *  fast identischen Upload-Tool-Trias. */
+const BUCKET_BY_ZIEL: Record<string, string> = {
+  notiz: 'zusammenfassungen',
+  dokument: 'dokumente',
+}
 
 // Größere Dateien (z. B. PDFs) lassen sich nicht in einem einzigen
 // create_*_note-Aufruf übertragen, weil der Base64-Tool-Aufruf-Text beim
@@ -73,6 +82,10 @@ export async function finishFileUpload(supabase: SupabaseClient, userId: string,
   const uploadId = typeof args.upload_id === 'string' ? args.upload_id.trim() : ''
   if (!uploadId) return toolTextResult('Fehler: upload_id ist erforderlich.', true)
 
+  const ziel = typeof args.ziel === 'string' && args.ziel.trim() ? args.ziel.trim() : 'notiz'
+  const bucket = BUCKET_BY_ZIEL[ziel]
+  if (!bucket) return toolTextResult(`Fehler: ziel muss "notiz" oder "dokument" sein (war "${ziel}").`, true)
+
   const { data: upload } = await supabase
     .from('mcp_uploads')
     .select('id, dateiname')
@@ -103,23 +116,17 @@ export async function finishFileUpload(supabase: SupabaseClient, userId: string,
   }
 
   const fullBase64 = chunks.map((c) => c.chunk_base64 as string).join('')
-  let bytes: Uint8Array
-  try {
-    bytes = Uint8Array.from(atob(fullBase64), (c) => c.charCodeAt(0))
-  } catch {
-    return toolTextResult('Fehler: die zusammengesetzten Teilstücke ergeben kein gültiges Base64.', true)
-  }
-
-  const path = `${userId}/${Date.now()}-${upload.dateiname}`
-  const { error: uploadError } = await supabase.storage
-    .from('zusammenfassungen')
-    .upload(path, bytes, { contentType: guessContentType(upload.dateiname) })
-  if (uploadError) return toolTextResult(`Fehler beim Hochladen der Datei: ${uploadError.message}`, true)
+  const uploaded = await uploadBase64File(supabase, bucket, userId, upload.dateiname, fullBase64)
+  if (uploaded.error) return toolTextResult(uploaded.error, true)
 
   // Löscht per on-delete-cascade auch die zugehörigen mcp_upload_chunks-Zeilen.
   await supabase.from('mcp_uploads').delete().eq('id', uploadId)
 
+  const naechsterSchritt =
+    ziel === 'dokument'
+      ? 'create_document'
+      : 'create_session_note/create_event_note/create_todo_note/create_antrag_note'
   return toolTextResult(
-    `Datei "${upload.dateiname}" wurde vollständig hochgeladen (${bytes.length} Bytes). Jetzt datei_pfad="${path}" bei create_session_note/create_event_note/create_todo_note/create_antrag_note angeben, um sie an eine Sitzung/einen Termin/eine ToDo-Karte/einen Antrag zu hängen.`,
+    `Datei "${upload.dateiname}" wurde vollständig hochgeladen. Jetzt datei_pfad="${uploaded.path}" bei ${naechsterSchritt} angeben.`,
   )
 }

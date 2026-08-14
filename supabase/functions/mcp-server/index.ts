@@ -45,6 +45,7 @@ import { createAntrag, listAntraege, updateAntragStatus, listAntragFristen } fro
 import { listNotes, createSessionNote, createEventNote, createTodoNote, createAntragNote } from './tools/notes.ts'
 import { uploadPresseschau } from './tools/presseschau.ts'
 import { startFileUpload, appendFileChunk, finishFileUpload } from './tools/uploads.ts'
+import { createDocument, listDocuments } from './tools/dokumente.ts'
 import { search } from './tools/search.ts'
 
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -137,7 +138,7 @@ Deno.serve(async (req) => {
           protocolVersion,
           capabilities: { tools: {} },
           serverInfo: { name: 'mandatscockpit-mcp', version: '1.0.0' },
-          instructions: `Verwaltet ToDos, eigene Termine, Sitzungen, Anträge, Notizen und Presseschauen im MandatsCockpit-Account von ${user.name ?? 'diesem Nutzer'}.`,
+          instructions: `Verwaltet ToDos, eigene Termine, Sitzungen, Anträge, Notizen, Presseschauen und den Dokumenten-Hub im MandatsCockpit-Account von ${user.name ?? 'diesem Nutzer'}.`,
         }),
       )
     }
@@ -218,6 +219,12 @@ Deno.serve(async (req) => {
           break
         case 'finish_file_upload':
           result = await finishFileUpload(supabase, user.id, args)
+          break
+        case 'create_document':
+          result = await createDocument(supabase, user.id, args)
+          break
+        case 'list_documents':
+          result = await listDocuments(supabase, user.id, args)
           break
         case 'search':
           result = await search(supabase, user.id, args)

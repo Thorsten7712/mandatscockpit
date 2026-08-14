@@ -1406,3 +1406,67 @@ korrekt über `{s.inhalt && <p>...}` abgedeckt - die beiden anderen, strukturell
 - Verifiziert per `tsc -b`/`vite build` sowie einem temporären, anschließend wieder gelöschten
   Test-Harness (`src/dev/DocListPreview.tsx` + Route) mit drei Fällen (nur Text, nur Datei, beides) -
   alle drei rendern jetzt korrekt.
+
+## Dokumenten-Hub: neuer Reiter für geteilte (Partei/Ebene) + persönliche Dokumente
+
+Nutzerwunsch: ein neuer, eigenständiger Reiter neben dem Archiv für zwei Dokument-Kategorien -
+"geteilt" (sichtbar für alle Mitglieder derselben Partei UND derselben Ebene/Gliederung, z. B.
+"Kommune Iserlohn", getaggt mit Ebene + freien Tags wie Antrag/Fact Sheet/Argumentationshilfe) und
+"persönlich" (nur für den Hochladenden, getaggt mit freien Tags wie Einschätzung/Analyse/
+Redebeitrag). Beides sowohl über die Web-UI als auch über den MCP-Server befüllbar, mit Filtern und
+Farbmarkierungen. Geplant via `EnterPlanMode`/`ExitPlanMode` (Architektur-Entscheidungen vorab mit dem
+Nutzer abgestimmt, Plan unter `.claude/plans/shimmering-wibbling-kahn.md`), da die Partei/Ebene-
+Sichtbarkeit sicherheitsrelevant ist (RLS).
+
+- **Migration `0033_dokumente.sql`**: neue Tabelle `dokumente` (`user_id`, `titel`, `sichtbarkeit`
+  `persoenlich`/`geteilt`, `ebene`, `gliederung`, `tags text[]`, `inhalt`, `datei_url`,
+  `erstellt_am`). Das bereits bestehende, aber komplett ungenutzte `documents`-Table (0001_init.sql,
+  keine einzige Insert-Stelle im gesamten Code) wurde bewusst NICHT wiederverwendet - es hat kein
+  `user_id`/Sichtbarkeitsmodell und ist für einen späteren, anderen Zweck vorgesehen (öffentliche
+  RIS-Importe, KONZEPT.md Abschnitt 5.1).
+- **Sicherheitskritische RLS-Entscheidung**: die Partei+Ebene-Sichtbarkeit für geteilte Dokumente
+  portiert dasselbe Matching, das bereits für die Teilen-Kandidatensuche bei ToDos/Anträgen existiert
+  (`current_user_partei()`/`current_user_ebenen()` aus `0020_profiles_ebenen.sql`, `gleicheGliederung()`
+  in `src/lib/gliederung.ts`, bisher nur clientseitig) als neue SQL-Funktion
+  `current_user_gliederung_matches(ebene, gliederung)`, jetzt server-seitig für RLS. `gliederung`
+  eines geteilten Dokuments wird IMMER server-seitig aus dem Profil des Hochladenden übernommen (nie
+  ein frei eingebbarer Client-/MCP-Parameter) - sonst könnte sich jemand versehentlich oder
+  absichtlich in die falsche Gliederung eintragen und ein Dokument an die falschen Leute "leaken"
+  oder für die richtigen unsichtbar machen. Live-verifiziert mit den vier echten Profilen der
+  Produktions-DB (Logik-Substitutionstest, da `db query --linked` als Postgres-Superuser läuft und
+  RLS damit umgeht, echtes `auth.uid()`-Impersonation also nicht direkt testbar ist): ein
+  Test-Dokument "Kommune Iserlohn" war für den Ersteller und einen zweiten Nutzer mit identischer
+  Gliederung korrekt sichtbar, für einen Nutzer mit Kommune-Mandat aber ohne hinterlegte Gliederung
+  UND für einen Nutzer ganz ohne Kommune-Mandat korrekt NICHT sichtbar - danach wieder gelöscht.
+- **Neuer privater Storage-Bucket `dokumente`** (getrennt vom bestehenden `zusammenfassungen`-Bucket
+  für Anhänge an Sitzungen/Termine/ToDos/Anträge) mit einer SELECT-Policy, die zusätzlich zum
+  eigenen Ordner auch Dateien erlaubt, deren zugehörige `dokumente`-Zeile `sichtbarkeit='geteilt'`
+  ist und dieselbe Partei/Ebene/Gliederung-Bedingung erfüllt (dieselbe Bedingung wie oben, dupliziert
+  auf `storage.objects` - eine RLS-Policy kann nicht auf die Policy einer anderen Tabelle verweisen).
+- **MCP-Server**: `shared.ts` bekommt `uploadBase64File()` (Decode+Upload+Content-Type in einer
+  Funktion, aus `createNote()` extrahiert, jetzt von `createNote()` UND `createDocument()` genutzt -
+  weniger Duplikation). `finish_file_upload` bekommt einen neuen optionalen Parameter `ziel`
+  (`"notiz"` Standard = Bucket `zusammenfassungen`, `"dokument"` = Bucket `dokumente`) - der
+  bestehende Chunk-Upload-Mechanismus (`start_file_upload`/`append_file_chunk`/`finish_file_upload`,
+  siehe vorheriger Changelog-Eintrag) wird für große Dateien in beiden Ziel-Buckets wiederverwendet
+  statt einer zweiten Tool-Trias. Neu `tools/dokumente.ts`: `create_document` (Parameter `titel`,
+  `sichtbarkeit`, bei `geteilt` Pflicht-`ebene` - muss eine eigene Ebene laut Profil sein, sonst
+  Fehler -, `tags`, `inhalt`/`dateiname`+`datei_base64`/`datei_pfad`) und `list_documents` (Filter
+  `sichtbarkeit`/`ebene`/`tag` - RLS erledigt die Sichtbarkeitsfilterung automatisch, kein manuelles
+  Partei/Ebene-Matching im Tool-Code). 25 Tools insgesamt danach.
+- **Frontend**: `src/lib/sourceColors.ts` bekommt `EBENE_COLOR` (feste Farbe pro Ebene, konsistent im
+  gesamten Dokumenten-Hub) und `tagColor()` (deterministisches Hashing des Tag-Texts auf einen
+  Palette-Eintrag, damit derselbe Tag immer dieselbe Farbe hat, ohne dass Nutzer Farben manuell
+  pflegen müssten). Neue Seite `src/pages/Dokumente.tsx` (Route `/dokumente`, Link im
+  Dashboard-Header neben "Archiv"): Tab-Umschalter Geteilt/Meine Dokumente (bestimmt gleichzeitig die
+  `sichtbarkeit` beim Anlegen, kein separater Umschalter im Formular nötig), Ebene-Select im
+  Upload-Formular nur mit den eigenen `profiles.ebenen`-Werten (Gliederung wird automatisch aus dem
+  Profil übernommen, nicht frei editierbar - dieselbe Absicherung wie server-seitig), Ebene-/Tag-
+  Filter-Chips (Muster aus `AntraegeSection.tsx`s Gremium-Filter übernommen), Tag-Eingabe mit
+  Vorschlag-Chips + freiem Text. Dokument-Vorschau/-Download nutzt die bestehende
+  `DocumentPreviewModal.tsx` unverändert weiter.
+- Verifiziert per `deno check`, `tsc -b`/`vite build`, Live-DB-Push, Edge-Function-Deploy, der oben
+  beschriebenen RLS-Logikprüfung sowie einem temporären, danach wieder gelöschten Test-Harness mit
+  Mock-Daten (Desktop- und Mobile-Breite) für das Karten-/Filter-Layout - kein echter MCP-Testaufruf
+  über den Live-Connector möglich, da neue Tools erst nach einem Reconnect im Client sichtbar werden
+  (siehe vorheriger Changelog-Eintrag zu `upload_presseschau`).

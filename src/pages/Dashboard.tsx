@@ -66,6 +66,12 @@ export default function Dashboard() {
               Archiv
             </Link>
             <Link
+              to="/dokumente"
+              className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white"
+            >
+              Dokumente
+            </Link>
+            <Link
               to="/settings"
               className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white"
             >

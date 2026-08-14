@@ -123,13 +123,14 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 21 Tools:
+`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 25 Tools:
 
 **Anlegen:**
 - `create_todo(titel, spalte, faellig_am?, session_id?)` – Spalte wird angelegt, falls sie noch nicht existiert.
 - `create_event(titel, start, ende?)` – eigener Termin, `herkunft='privat'`.
 - `create_antrag(titel, inhalt?, ausschuss?, ebene?, session_id?)` – Status startet immer bei `entwurf`; `ausschuss`/`ebene` werden aus `session_id` übernommen, falls nicht explizit gesetzt.
 - `upload_presseschau(inhalt, datum, titel?, quelle?)` – speichert eine tägliche Presseschau (Markdown-Text); `datum` ist Pflicht (das tatsächliche Ausgabedatum, kein automatisches "heute" – ein früherer stiller Default hatte dazu geführt, dass mehrere Uploads am selben realen Kalendertag sich gegenseitig überschrieben haben), pro Tag ein Eintrag (erneuter Upload für denselben Tag ersetzt den bisherigen). Sichtbar im Dashboard nur, wenn „Presseschau" unter Einstellungen aktiviert ist.
+- `create_document(titel, sichtbarkeit, ebene?, tags?, inhalt?, dateiname?, datei_base64?, datei_pfad?)` – legt ein Dokument im Dokumenten-Hub an (`/dokumente`). `sichtbarkeit="geteilt"` macht es für alle Mitglieder der eigenen Partei auf der angegebenen `ebene`/Gliederung sichtbar (Gliederung wird automatisch aus dem eigenen Profil übernommen, nicht als Parameter); `sichtbarkeit="persoenlich"` ist nur für den Nutzer selbst sichtbar. `ebene` muss eine eigene Ebene laut Profil sein.
 
 **Lesen:**
 - `list_todos(status?, spalte?, limit?)` – eigene + mit dem Nutzer geteilte Karten.
@@ -138,7 +139,8 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 - `list_antraege(status?, ausschuss?, limit?)` – eigene + geteilte; `status` Standard `aktiv` (entwurf/gestellt/in_beratung/vertagt).
 - `list_antrag_fristen()` – errechnet Einreichungsfristen (Sitzungsdatum minus die unter Einstellungen → Antrags-Fristen konfigurierte Vorlaufzeit je Ebene) für aktive eigene Anträge mit Sitzungsbezug.
 - `list_notes(session_id?, event_id?, todo_id?, limit?)` – liest zurück, was die `create_*_note`-Tools gespeichert haben; ohne Filter die zuletzt gespeicherten Einträge, mit genau einem `*_id`-Filter alle Einträge zu diesem Objekt. Datei-Anhänge werden nur mit Dateinamen genannt, der Inhalt selbst ist über MCP nicht herunterladbar.
-- `search(query, limit?)` – Volltextsuche über Titel/Beschreibung von ToDos, Titel/Inhalt von Anträgen und Notiz-Texten (eigene + geteilte).
+- `list_documents(sichtbarkeit?, ebene?, tag?, limit?)` – eigene sowie sichtbare geteilte Dokumente anderer Mitglieder (Sichtbarkeit wird per RLS serverseitig gefiltert, kein manuelles Partei/Ebene-Matching im Tool).
+- `search(query, limit?)` – Volltextsuche über Titel/Beschreibung von ToDos, Titel/Inhalt von Anträgen und Notiz-Texten (eigene + geteilte). Durchsucht **nicht** den Dokumenten-Hub, dafür `list_documents` mit Filtern verwenden.
 
 **Bearbeiten:**
 - `complete_todo(todo_id, erledigt?)` – abhaken/rückgängig machen.
@@ -153,9 +155,11 @@ Tool-Aufrufs selbst abgeschnitten – eine Grenze der Tool-Aufruf-Generierung, n
 54,6-KB-PDF ergibt bereits 72.792 Base64-Zeichen und schlägt fehl). Für größere Dateien stattdessen
 `start_file_upload(dateiname)` → mehrfach `append_file_chunk(upload_id, chunk_index, chunk_base64)`
 in Häppchen von je höchstens ca. 8000 Zeichen (lückenlos ab 0 nummeriert) → `finish_file_upload
-(upload_id)` verwenden; letzteres liefert einen `datei_pfad`, der bei den vier `create_*_note`-Tools
-statt `dateiname`+`datei_base64` angegeben wird. Angefangene, nie abgeschlossene Uploads werden nach
-1 Stunde automatisch aufgeräumt.
+(upload_id, ziel?)` verwenden; letzteres liefert einen `datei_pfad`, der bei den vier
+`create_*_note`-Tools bzw. bei `create_document` statt `dateiname`+`datei_base64` angegeben wird.
+`ziel="notiz"` (Standard) legt die Datei im Bucket der Notiz-Anhänge ab, `ziel="dokument"` im Bucket
+des Dokumenten-Hubs. Angefangene, nie abgeschlossene Uploads werden nach 1 Stunde automatisch
+aufgeräumt.
 
 **Auth-Modell:** Kein OAuth, sondern ein **persönliches Token pro Mitglied** – jeder Nutzer erzeugt es
 sich selbst, die Function agiert dann über den `SUPABASE_SERVICE_ROLE_KEY` im Namen genau dieses
