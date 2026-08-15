@@ -31,17 +31,24 @@ export function DocumentPreviewModal({
   path,
   fileName,
   onClose,
+  bucket = 'zusammenfassungen',
 }: {
   path: string
   fileName: string
   onClose: () => void
+  /** Storage-Bucket, in dem `path` liegt - "zusammenfassungen" (Standard) für
+   *  Notiz-Anhänge an Sitzungen/Termine/ToDos/Anträge, "dokumente" für den
+   *  Dokumenten-Hub (Dokumente.tsx). */
+  bucket?: 'zusammenfassungen' | 'dokumente'
 }) {
   const [url, setUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    setUrl(null)
+    setError(null)
     supabase.storage
-      .from('zusammenfassungen')
+      .from(bucket)
       .createSignedUrl(path, 3600)
       .then(({ data, error: signError }) => {
         if (signError || !data) {
@@ -50,7 +57,7 @@ export function DocumentPreviewModal({
           setUrl(data.signedUrl)
         }
       })
-  }, [path])
+  }, [path, bucket])
 
   const ext = fileExtension(path)
   const isImage = IMAGE_EXTENSIONS.has(ext)

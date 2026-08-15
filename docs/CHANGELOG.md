@@ -1470,3 +1470,22 @@ Sichtbarkeit sicherheitsrelevant ist (RLS).
   Mock-Daten (Desktop- und Mobile-Breite) für das Karten-/Filter-Layout - kein echter MCP-Testaufruf
   über den Live-Connector möglich, da neue Tools erst nach einem Reconnect im Client sichtbar werden
   (siehe vorheriger Changelog-Eintrag zu `upload_presseschau`).
+
+### Dokumenten-Hub: Vorschau schlug fehl (falscher Storage-Bucket, Bugfix)
+
+Nutzer-Feedback (Screenshot: "Datei konnte nicht geladen werden.") direkt nach dem ersten manuellen
+Upload im neuen `/dokumente`-Reiter. Ursache: `DocumentPreviewModal.tsx` hatte den Bucket-Namen
+`"zusammenfassungen"` fest einprogrammiert (Notiz-Anhänge an Sitzungen/Termine/ToDos/Anträge) - beim
+Bau von `Dokumente.tsx` wurde die Komponente unverändert wiederverwendet, obwohl Dokumente aus dem
+neuen Hub bewusst im eigenen, separaten Bucket `"dokumente"` liegen (siehe `0033_dokumente.sql`).
+`createSignedUrl()` fand die Datei deshalb im falschen Bucket nicht.
+
+- **Fix**: `DocumentPreviewModal` bekommt eine neue, optionale `bucket`-Prop (Standard weiterhin
+  `"zusammenfassungen"`, damit alle fünf bestehenden Aufrufstellen unverändert bleiben);
+  `Dokumente.tsx` übergibt jetzt `bucket="dokumente"`. `useEffect`-Dependency-Array um `bucket`
+  ergänzt, `url`/`error` beim Pfad-/Bucket-Wechsel zurückgesetzt (vorher blieb ein alter Fehler-/
+  URL-State theoretisch stehen, wenn dieselbe Modal-Instanz für ein anderes Dokument wiederverwendet
+  worden wäre).
+- Verifiziert per `tsc -b`/`vite build`; alle anderen Aufrufstellen (`AntraegeSection.tsx`,
+  `AntragDetailModal.tsx`, `TodoDetailModal.tsx`, `TerminDetailPanel.tsx`, `Archiv.tsx`) geprüft -
+  keine übergibt `bucket`, bleiben also unverändert beim Standard-Bucket.

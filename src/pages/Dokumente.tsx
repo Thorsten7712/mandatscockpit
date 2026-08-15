@@ -436,7 +436,12 @@ export default function Dokumente() {
       </div>
 
       {previewDoc && (
-        <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} onClose={() => setPreviewDoc(null)} />
+        <DocumentPreviewModal
+          path={previewDoc.path}
+          fileName={previewDoc.name}
+          bucket="dokumente"
+          onClose={() => setPreviewDoc(null)}
+        />
       )}
     </div>
   )
