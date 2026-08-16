@@ -42,21 +42,30 @@ export interface PresseschauRow {
   erstellt_am: string
 }
 
-export type DokumentSichtbarkeit = 'persoenlich' | 'geteilt'
+export type DokumentSichtbarkeit = 'persoenlich' | 'geteilt' | 'einzelpersonen'
 
 export interface DokumentRow {
   id: string
   user_id: string
+  /** null = Top-Level-Dokument (z. B. Sitzungsvorlage), gesetzt = angehängte Notiz/Analyse (siehe DokumentDetailModal.tsx) */
+  parent_id: string | null
   titel: string
   sichtbarkeit: DokumentSichtbarkeit
-  /** nur bei sichtbarkeit='geteilt' gesetzt */
+  /** nur bei sichtbarkeit='geteilt' gesetzt (bei Kindern vom Elternteil übernommen) */
   ebene: Ebene | null
-  /** nur bei sichtbarkeit='geteilt' und ebene != 'bund' gesetzt, server-seitig aus dem Profil des Erstellers übernommen */
+  /** nur bei sichtbarkeit='geteilt' und ebene != 'bund' gesetzt, server-seitig/vom Elternteil übernommen */
   gliederung: string | null
   tags: string[]
   inhalt: string | null
   datei_url: string | null
   erstellt_am: string
+}
+
+/** sichtbarkeit='einzelpersonen': mit wem ein Dokument/eine Notiz konkret geteilt wurde. */
+export interface DokumentShareRow {
+  id: string
+  dokument_id: string
+  user_id: string
 }
 
 export interface CalendarSource {

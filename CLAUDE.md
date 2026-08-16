@@ -49,13 +49,18 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Archiv**: vergangene Sitzungen (inkl. manuell nachtragbar, z. B. für Gremien ohne ICS-Feed - nur
   der erstellende Nutzer darf seine eigene nachgetragene Sitzung bearbeiten/löschen), erledigte
   Aufgaben, hochgeladene Dokumente, entschiedene Anträge.
-- **Dokumente** (`/dokumente`, eigener Reiter neben dem Archiv): zwei Kategorien - "geteilt"
-  (sichtbar für alle Mitglieder derselben Partei UND derselben Ebene/Gliederung, z. B. "Kommune
-  Iserlohn", getaggt mit Ebene + freien Tags) und "persönlich" (nur für den Hochladenden). Beides
-  über die Web-UI oder den MCP-Server (`create_document`/`list_documents`) befüllbar, mit Ebene-/
-  Tag-Filterchips und Farbmarkierungen (`EBENE_COLOR`/`tagColor()` in `src/lib/sourceColors.ts`).
-  Eigener Storage-Bucket `dokumente`, RLS-Sichtbarkeit über `current_user_gliederung_matches()`
-  (`supabase/migrations/0033_dokumente.sql`).
+- **Dokumente** (`/dokumente`, eigener Reiter neben dem Archiv): Top-Level-Dokumente sind immer
+  "geteilt" (sichtbar für alle Mitglieder derselben Partei UND derselben Ebene/Gliederung, z. B.
+  "Kommune Iserlohn", getaggt mit Ebene + freien Tags, z. B. hochgeladene Sitzungsvorlagen). Klick auf
+  ein Dokument öffnet `DokumentDetailModal.tsx`: dort lassen sich eigene Notizen/Analysen anhängen
+  (`dokumente.parent_id`), wahlweise "persönlich", Ebene-weit geteilt oder mit einzelnen ausgewählten
+  Personen geteilt (`dokument_shares`-Tabelle, Muster von `antrag_shares`). Alles auch über den
+  MCP-Server befüllbar (`create_document`/`list_documents` - der Server läuft über den
+  Service-Role-Client, RLS greift dort nicht, die Sichtbarkeitsprüfung passiert deshalb explizit im
+  Tool-Code, siehe `darfSehen()` in `tools/dokumente.ts`). Ebene-/Tag-Filterchips und
+  Farbmarkierungen (`EBENE_COLOR`/`tagColor()` in `src/lib/sourceColors.ts`). Eigener Storage-Bucket
+  `dokumente`, RLS-Sichtbarkeit über `current_user_gliederung_matches()`/`dokument_ist_geteilt_mit()`
+  (`supabase/migrations/0033_dokumente.sql`, `0034_dokumente_kommentare.sql`).
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),

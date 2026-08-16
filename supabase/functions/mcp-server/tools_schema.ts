@@ -433,20 +433,29 @@ export const TOOLS = [
   {
     name: 'create_document',
     description:
-      'Legt ein Dokument im Dokumenten-Hub an (neuer Reiter "Dokumente", neben dem Archiv). Zwei Kategorien: sichtbarkeit="geteilt" (sichtbar für alle Mitglieder der eigenen Partei auf der angegebenen Ebene/Gliederung, z. B. "Kommune Iserlohn" - die Gliederung wird automatisch aus dem eigenen Profil übernommen, NICHT als Parameter angegeben) oder sichtbarkeit="persoenlich" (nur für den Nutzer selbst sichtbar). Unterstützt Freitext, einen kleinen Datei-Anhang (dateiname+datei_base64, nur bis ca. 13 KB) oder einen bereits per finish_file_upload(ziel="dokument") hochgeladenen datei_pfad - mindestens eins von inhalt/Datei ist erforderlich. Übliche Tags für geteilte Dokumente: Antrag, Fact Sheet, Argumentationshilfe. Übliche Tags für persönliche Dokumente: Einschätzung, Analyse, Redebeitrag - tags sind aber frei wählbar, keine feste Liste.',
+      'Legt ein Dokument im Dokumenten-Hub an (neuer Reiter "Dokumente", neben dem Archiv) - entweder als eigenständiges Top-Level-Dokument oder, mit parent_id, als Notiz/Analyse-Anhang an ein bestehendes Dokument (z. B. eine Einschätzung zu einer hochgeladenen Sitzungsvorlage). Drei Sichtbarkeits-Kategorien: sichtbarkeit="geteilt" (sichtbar für alle Mitglieder der eigenen Partei auf der Ebene/Gliederung - bei einem Top-Level-Dokument über den Parameter ebene gewählt, bei einem Anhang automatisch vom übergeordneten Dokument übernommen), sichtbarkeit="persoenlich" (nur für den Nutzer selbst sichtbar) oder sichtbarkeit="einzelpersonen" (nur für die in teilen_mit_namen genannten Personen zusätzlich sichtbar). Unterstützt Freitext, einen kleinen Datei-Anhang (dateiname+datei_base64, nur bis ca. 13 KB) oder einen bereits per finish_file_upload(ziel="dokument") hochgeladenen datei_pfad - mindestens eins von inhalt/Datei ist erforderlich. Übliche Tags für geteilte Top-Level-Dokumente: Antrag, Fact Sheet, Argumentationshilfe. Übliche Tags für persönliche Anhänge: Einschätzung, Analyse, Redebeitrag - tags sind aber frei wählbar, keine feste Liste.',
     inputSchema: {
       type: 'object',
       properties: {
         titel: { type: 'string', description: 'Titel des Dokuments.' },
         sichtbarkeit: {
           type: 'string',
-          enum: ['persoenlich', 'geteilt'],
-          description: '"persoenlich" = nur für den Nutzer selbst, "geteilt" = für alle Mitglieder der eigenen Partei auf der angegebenen ebene sichtbar.',
+          enum: ['persoenlich', 'geteilt', 'einzelpersonen'],
+          description: '"persoenlich" = nur für den Nutzer selbst, "geteilt" = für alle Mitglieder der eigenen Partei auf der Ebene sichtbar, "einzelpersonen" = nur für die in teilen_mit_namen genannten Personen zusätzlich sichtbar.',
+        },
+        parent_id: {
+          type: 'string',
+          description: 'UUID eines bestehenden Dokuments (z. B. aus list_documents), an das dieses hier als Notiz/Analyse angehängt werden soll (optional). Ohne parent_id entsteht ein eigenständiges Top-Level-Dokument.',
         },
         ebene: {
           type: 'string',
           enum: ['kommune', 'kreis', 'land', 'bund'],
-          description: 'Pflicht bei sichtbarkeit="geteilt". Muss eine Ebene sein, auf der der Nutzer laut seinem Profil selbst ein Mandat hat (Einstellungen -> Meine Gremien).',
+          description: 'Nur bei sichtbarkeit="geteilt" OHNE parent_id relevant (Pflicht in diesem Fall) - muss eine Ebene sein, auf der der Nutzer laut seinem Profil selbst ein Mandat hat. Mit parent_id wird die Ebene automatisch vom übergeordneten Dokument übernommen, hier NICHT angeben.',
+        },
+        teilen_mit_namen: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Namen der Partei-/Ebenen-Kolleg*innen, mit denen geteilt werden soll (Pflicht bei sichtbarkeit="einzelpersonen", sonst ignoriert). Teilstring-Suche gegen sichtbare Profile, Namen ohne eindeutigen Treffer werden in der Antwort genannt statt den Aufruf abzubrechen.',
         },
         tags: {
           type: 'array',
@@ -473,13 +482,17 @@ export const TOOLS = [
   {
     name: 'list_documents',
     description:
-      'Listet Dokumente aus dem Dokumenten-Hub auf - eigene (persönlich und geteilt) sowie die geteilten Dokumente anderer Mitglieder der eigenen Partei auf gemeinsamen Ebenen/Gliederungen. Liefert je Dokument auch die id (für spätere Verwaltung) und ggf. den Ersteller-Namen bei fremden geteilten Dokumenten.',
+      'Listet Dokumente aus dem Dokumenten-Hub auf - eigene (persönlich, geteilt und einzelpersonen) sowie die geteilten bzw. mit dem Nutzer individuell geteilten Dokumente anderer Mitglieder. Ohne parent_id nur Top-Level-Dokumente (z. B. hochgeladene Sitzungsvorlagen); mit parent_id gezielt die an ein bestimmtes Dokument angehängten Notizen/Analysen. Liefert je Dokument auch die id (für parent_id bei create_document oder spätere Verwaltung) und ggf. den Ersteller-Namen bei fremden Dokumenten.',
     inputSchema: {
       type: 'object',
       properties: {
+        parent_id: {
+          type: 'string',
+          description: 'UUID eines Top-Level-Dokuments - listet dann nur die daran angehängten Notizen/Analysen statt der Top-Level-Dokumente (optional).',
+        },
         sichtbarkeit: {
           type: 'string',
-          enum: ['alle', 'persoenlich', 'geteilt'],
+          enum: ['alle', 'persoenlich', 'geteilt', 'einzelpersonen'],
           description: 'Filtert nach Kategorie (Standard "alle").',
         },
         ebene: {

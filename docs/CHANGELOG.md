@@ -1489,3 +1489,58 @@ neuen Hub bewusst im eigenen, separaten Bucket `"dokumente"` liegen (siehe `0033
 - Verifiziert per `tsc -b`/`vite build`; alle anderen Aufrufstellen (`AntraegeSection.tsx`,
   `AntragDetailModal.tsx`, `TodoDetailModal.tsx`, `TerminDetailPanel.tsx`, `Archiv.tsx`) geprüft -
   keine übergibt `bucket`, bleiben also unverändert beim Standard-Bucket.
+
+## Dokumenten-Hub: Notizen/Analysen an ein Dokument hängen, mit Ebene- oder Einzelpersonen-Freigabe
+
+Nutzerwunsch nach dem Hochladen der ersten 16 Sitzungsvorlagen: Einschätzungen/Analysen des
+Politikbüros zu einzelnen Sitzungsvorlagen sollen nicht mehr als unabhängige "persönliche Dokumente"
+in einer separaten Liste landen, sondern direkt an das jeweilige Original-Dokument gehängt werden -
+mit einem Detail-Modal (Titel, Tags, Original-Dokument-Link, eigene Notizen/Analysen darunter).
+Zusätzlich sollen diese angehängten Notizen/Dokumente nicht mehr nur binär privat/Ebene-weit,
+sondern auch mit **einzelnen ausgewählten Personen** teilbar sein. Die bisherige "Meine
+Dokumente"-Ansicht entfällt dadurch. Geplant via `EnterPlanMode`/`ExitPlanMode` (zweite
+Architekturrunde für dieses Feature in Folge - RLS-relevant).
+
+- **Migration `0034_dokumente_kommentare.sql`**: `dokumente` bekommt eine selbstreferenzierende,
+  nullable Spalte `parent_id` (null = Top-Level-Dokument, gesetzt = angehängte Notiz/Analyse - kann
+  wie bei `summaries` `inhalt` und/oder `datei_url` haben). `sichtbarkeit`-Check-Constraint um
+  `'einzelpersonen'` erweitert. Neue Tabelle `dokument_shares` (dokument_id, user_id,
+  `unique(dokument_id, user_id)`) 1:1 nach dem Muster von `antrag_shares`
+  (`0023_antraege_sharing_status_fristen.sql`) samt Helper-Funktionen
+  `dokument_gehoert_nutzer()`/`dokument_ist_geteilt_mit()`. Bei Kindern mit `sichtbarkeit='geteilt'`
+  werden `ebene`/`gliederung` beim Anlegen 1:1 vom Elternteil übernommen (Frontend/MCP kopieren sie) -
+  dadurch funktioniert die bestehende `dokumente_select_shared`-Policy für Kinder unverändert, keine
+  RLS-Änderung nötig für den "ganze Ebene"-Fall. Storage-Select-Policy für den `dokumente`-Bucket um
+  denselben `dokument_shares`-Weg ergänzt (sonst ließe sich die angehängte Datei zwar in der DB sehen,
+  aber keine signierte URL dafür erzeugen).
+- **Bug beim Bauen entdeckt und mitgefixt**: `list_documents` (MCP) verließ sich fälschlich auf RLS
+  ("RLS filtert das schon") - der MCP-Server läuft aber komplett über den
+  `SUPABASE_SERVICE_ROLE_KEY` (siehe `index.ts`-Kommentar), der jede RLS-Policy umgeht. Praktisch
+  hätte das bedeutet, dass `list_documents` OHNE Sichtbarkeitsprüfung ALLE `dokumente`-Zeilen aller
+  Nutzer zurückgegeben hätte, inklusive fremder "persönlicher" Notizen - ein Anzeigefehler wäre das
+  nicht gewesen, sondern ein echtes Datenleck, bislang aber folgenlos, weil aktuell nur eine Partei im
+  System aktiv ist und noch keine "persönlichen" Top-Level-Dokumente existierten. Fix: `darfSehen()`
+  in `tools/dokumente.ts` baut die RLS-Logik (Partei/Ebene/Gliederung-Match bzw. `dokument_shares`)
+  jetzt explizit im Tool-Code nach, exakt wie es `list_antraege`/`list_todos` bereits für ihre
+  Freigaben tun (eigene Zeilen + manuell aufgelöste Shares, nie ein RLS-Trugschluss).
+- **`tools/dokumente.ts`**: `create_document` bekommt `parent_id` (Notiz/Analyse an ein bestehendes
+  Dokument hängen - Sichtbarkeitsprüfung des Elternteils läuft über dieselbe `darfSehen()`-Funktion,
+  sonst könnte über eine erratene/bekannte fremde `parent_id` an ein nicht sichtbares Dokument
+  angehängt werden) und `teilen_mit_namen` (Namensauflösung gegen sichtbare Profile, nicht
+  auflösbare Namen brechen den Aufruf nicht ab, sondern werden im Antworttext genannt).
+  `list_documents` bekommt `parent_id` (ohne Angabe nur Top-Level-Dokumente, analog zur Web-UI).
+- **Frontend**: `Dokumente.tsx` verliert den Tab-Umschalter (Geteilt/Meine Dokumente) - zeigt nur noch
+  Top-Level-Dokumente, das "+ Dokument"-Formular legt immer `sichtbarkeit='geteilt'` an. Klick auf ein
+  Dokument öffnet die neue Komponente `DokumentDetailModal.tsx` (Original-Dokument-Kopf + Liste
+  eigener/sichtbarer fremder Notizen mit Sichtbarkeits-Badge + Anhänge-Formular mit
+  Persönlich/Ganze-Ebene/Einzelne-Personen-Auswahl - Kolleg\*innen-Suche 1:1 nach dem Muster aus
+  `AntragDetailModal.tsx` (`loadCandidates()`/Dropdown), nur ohne Ebene-Einschränkung auf ein
+  bestimmtes `antrag.ebene`, da Kinder keine eigene Ebene tragen).
+- Verifiziert per `deno check`, `tsc -b`/`vite build`, `supabase db push`, Edge-Function-Deploy, sowie
+  einer Logik-Substitutionsprüfung gegen die vier echten Profile der Produktions-DB: eine Test-Notiz
+  mit "ganze Ebene" war für den Ersteller und den Kollegen mit identischer Gliederung sichtbar, für
+  die anderen zwei nicht; eine zweite Test-Notiz mit "einzelpersonen" (freigegeben für genau einen
+  Kollegen) war NUR für diesen einen sichtbar, nicht für den anderen Ebene-Kollegen mit
+  übereinstimmender Gliederung - beide Testzeilen (inkl. `dokument_shares`-Zeile) danach wieder
+  gelöscht, Cascade-Delete bestätigt. Zusätzlich ein temporärer, danach gelöschter Test-Harness mit
+  Mock-Daten für das neue Modal-Layout (Desktop-Breite, Sichtbarkeits-Badges/Formular).
