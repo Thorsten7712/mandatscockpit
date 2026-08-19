@@ -7,6 +7,7 @@ import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
 import { fileNameFromPath } from '../components/DocumentPreviewModal'
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
+import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
 
 // Vorschläge, keine feste Liste - Nutzer können jederzeit eigene Tags
 // eintragen (siehe Eingabefeld im Formular unten).
@@ -62,10 +63,32 @@ export default function Dokumente() {
 
   const [openDoc, setOpenDoc] = useState<DokumentRow | null>(null)
 
+  const [kinderByParent, setKinderByParent] = useState<Map<string, { erstellt_am: string }[]>>(new Map())
+  const [gelesenMap, setGelesenMap] = useState<Map<string, string>>(new Map())
+
   async function loadDocuments() {
     const { data } = await supabase.from('dokumente').select('*').is('parent_id', null).order('erstellt_am', { ascending: false })
     setDocuments(data ?? [])
     setLoading(false)
+  }
+
+  // Für die Fett/Nicht-fett-Markierung (siehe src/lib/dokumenteGelesen.ts):
+  // Erstellungsdaten aller sichtbaren Notizen je Top-Level-Dokument sowie die
+  // eigenen Gelesen-Zeitstempel. Wird nach dem Schließen der Detailansicht
+  // erneut geladen, damit gerade gelesene Dokumente sofort nicht mehr fett
+  // erscheinen.
+  async function loadLeseStatus(uid: string) {
+    const { data: kinder } = await supabase.from('dokumente').select('parent_id, erstellt_am').not('parent_id', 'is', null)
+    const byParent = new Map<string, { erstellt_am: string }[]>()
+    for (const k of kinder ?? []) {
+      const list = byParent.get(k.parent_id as string) ?? []
+      list.push({ erstellt_am: k.erstellt_am })
+      byParent.set(k.parent_id as string, list)
+    }
+    setKinderByParent(byParent)
+
+    const { data: gelesen } = await supabase.from('dokument_gelesen').select('dokument_id, gelesen_am').eq('user_id', uid)
+    setGelesenMap(new Map((gelesen ?? []).map((g) => [g.dokument_id, g.gelesen_am])))
   }
 
   useEffect(() => {
@@ -75,6 +98,7 @@ export default function Dokumente() {
       setUserId(data.user.id)
       const { data: profileRow } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
       setProfile(profileRow)
+      await loadLeseStatus(data.user.id)
     })
   }, [])
 
@@ -330,7 +354,9 @@ export default function Dokumente() {
         )}
 
         <ul className="space-y-2">
-          {filtered.map((d) => (
+          {filtered.map((d) => {
+            const ungelesen = istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id))
+            return (
             <li
               key={d.id}
               role="button"
@@ -348,7 +374,9 @@ export default function Dokumente() {
                 <FileText className="mt-0.5 h-6 w-6 shrink-0 text-slate-400" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="truncate text-sm font-medium text-slate-900">{d.titel}</span>
+                    <span className={`truncate text-sm text-slate-900 ${ungelesen ? 'font-bold' : 'font-normal'}`}>
+                      {d.titel}
+                    </span>
                     {d.ebene && (
                       <span
                         className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[d.ebene].chip}`}
@@ -384,7 +412,8 @@ export default function Dokumente() {
                 </button>
               )}
             </li>
-          ))}
+            )
+          })}
           {!loading && filtered.length === 0 && (
             <li className="mc-card p-6 text-center text-sm text-slate-400">
               {documents.length === 0 ? 'Noch keine Dokumente.' : 'Keine Dokumente für diese Auswahl.'}
@@ -396,7 +425,10 @@ export default function Dokumente() {
       {openDoc && (
         <DokumentDetailModal
           document={openDoc}
-          onClose={() => setOpenDoc(null)}
+          onClose={() => {
+            setOpenDoc(null)
+            if (userId) loadLeseStatus(userId)
+          }}
           onDeleted={() => {
             setOpenDoc(null)
             loadDocuments()

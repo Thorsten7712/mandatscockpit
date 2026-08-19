@@ -5,6 +5,7 @@ import type { DokumentRow, DokumentSichtbarkeit, Profile } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDateTime } from '../lib/format'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
+import { istNotizUngelesen } from '../lib/dokumenteGelesen'
 
 const TAG_VORSCHLAEGE = ['Einschätzung', 'Analyse', 'Redebeitrag']
 
@@ -39,6 +40,12 @@ export function DokumentDetailModal({
 
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
+  // Zeitstempel VOR dem Markieren-als-gelesen (siehe useEffect unten) - damit
+  // Notizen, die seit dem letzten Öffnen neu dazugekommen sind, für die Dauer
+  // dieser Modal-Sitzung noch fett bleiben (wie bei einem Mailprogramm),
+  // obwohl im Hintergrund direkt der neue Gelesen-Zeitstempel gespeichert wird.
+  const [gelesenAmVorDiesemOeffnen, setGelesenAmVorDiesemOeffnen] = useState<string | undefined>(undefined)
+
   const [newTitel, setNewTitel] = useState('')
   const [newInhalt, setNewInhalt] = useState('')
   const [newFile, setNewFile] = useState<File | null>(null)
@@ -68,6 +75,20 @@ export function DokumentDetailModal({
       setUserId(data.user.id)
       const { data: profileRow } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
       setMyProfile(profileRow)
+
+      const { data: gelesenRows } = await supabase
+        .from('dokument_gelesen')
+        .select('gelesen_am')
+        .eq('dokument_id', document.id)
+        .eq('user_id', data.user.id)
+      setGelesenAmVorDiesemOeffnen(gelesenRows?.[0]?.gelesen_am)
+
+      await supabase
+        .from('dokument_gelesen')
+        .upsert(
+          { dokument_id: document.id, user_id: data.user.id, gelesen_am: new Date().toISOString() },
+          { onConflict: 'dokument_id,user_id' },
+        )
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [document.id])
@@ -305,7 +326,9 @@ export function DokumentDetailModal({
                     </span>
                   ))}
                 </div>
-                <p className="text-sm font-medium text-slate-900">{c.titel}</p>
+                <p className={`text-sm text-slate-900 ${istNotizUngelesen(c, gelesenAmVorDiesemOeffnen) ? 'font-bold' : 'font-normal'}`}>
+                  {c.titel}
+                </p>
                 {c.inhalt && <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700">{c.inhalt}</p>}
                 {c.datei_url && (
                   <button

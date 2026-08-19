@@ -61,6 +61,14 @@ export interface DokumentRow {
   erstellt_am: string
 }
 
+/** Individuelle Gelesen-Markierung pro Nutzer, immer auf ein Top-Level-Dokument
+ * bezogen (siehe src/lib/dokumenteGelesen.ts für die Ungelesen-Berechnung). */
+export interface DokumentGelesen {
+  dokument_id: string
+  user_id: string
+  gelesen_am: string
+}
+
 /** sichtbarkeit='einzelpersonen': mit wem ein Dokument/eine Notiz konkret geteilt wurde. */
 export interface DokumentShareRow {
   id: string

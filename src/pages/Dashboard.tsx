@@ -6,12 +6,37 @@ import { TodoBoard } from '../components/TodoBoard'
 import { AntraegeSection } from '../components/AntraegeSection'
 import { PresseschauSection } from '../components/PresseschauSection'
 import { logoUrl, themeById } from '../lib/themes'
+import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
 
 export default function Dashboard() {
   const [profileName, setProfileName] = useState('')
   const [profileFotoUrl, setProfileFotoUrl] = useState<string | null>(null)
   const [partei, setPartei] = useState<string | null>(null)
   const [presseschauAktiv, setPresseschauAktiv] = useState(false)
+  const [ungeleseneDokumente, setUngeleseneDokumente] = useState(0)
+
+  // Zählt Top-Level-Dokumente (parent_id null), die entweder nie geöffnet
+  // wurden oder seit dem letzten Öffnen eine neue Notiz bekommen haben (siehe
+  // src/lib/dokumenteGelesen.ts). Eine einzige Abfrage über alle für den
+  // Nutzer sichtbaren dokumente-Zeilen (Top-Level + Notizen) reicht, RLS
+  // filtert auf das Sichtbare (0033/0034_dokumente*.sql).
+  async function loadUngeleseneDokumente(uid: string) {
+    const { data: alle } = await supabase.from('dokumente').select('id, parent_id, erstellt_am')
+    const topLevel = (alle ?? []).filter((d) => !d.parent_id)
+    const kinderByParent = new Map<string, { erstellt_am: string }[]>()
+    for (const d of alle ?? []) {
+      if (!d.parent_id) continue
+      const list = kinderByParent.get(d.parent_id) ?? []
+      list.push({ erstellt_am: d.erstellt_am })
+      kinderByParent.set(d.parent_id, list)
+    }
+    const { data: gelesen } = await supabase.from('dokument_gelesen').select('dokument_id, gelesen_am').eq('user_id', uid)
+    const gelesenMap = new Map((gelesen ?? []).map((g) => [g.dokument_id, g.gelesen_am]))
+    const anzahl = topLevel.filter((d) =>
+      istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id)),
+    ).length
+    setUngeleseneDokumente(anzahl)
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -30,6 +55,7 @@ export default function Dashboard() {
           .createSignedUrl(profile.foto_url, 3600)
         setProfileFotoUrl(signed?.signedUrl ?? null)
       }
+      await loadUngeleseneDokumente(data.user.id)
     })
   }, [])
 
@@ -70,6 +96,11 @@ export default function Dashboard() {
               className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white"
             >
               Dokumente
+              {ungeleseneDokumente > 0 && (
+                <span className="ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                  {ungeleseneDokumente}
+                </span>
+              )}
             </Link>
             <Link
               to="/settings"
