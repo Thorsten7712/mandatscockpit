@@ -1,11 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Trash2, X } from 'lucide-react'
+import { Mail, MailOpen, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, DokumentSichtbarkeit, Profile } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDateTime } from '../lib/format'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
-import { istNotizUngelesen } from '../lib/dokumenteGelesen'
+import { TagEditor } from './TagEditor'
+import { SichtbarkeitEditor } from './SichtbarkeitEditor'
+import { istNotizUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
 
 const TAG_VORSCHLAEGE = ['Einschätzung', 'Analyse', 'Redebeitrag']
 
@@ -36,9 +38,29 @@ export function DokumentDetailModal({
   const [children, setChildren] = useState<DokumentRow[]>([])
   const [authorNames, setAuthorNames] = useState<Map<string, string>>(new Map())
   const [shareNamesByChild, setShareNamesByChild] = useState<Map<string, string[]>>(new Map())
+  const [shareIdsByChild, setShareIdsByChild] = useState<Map<string, string[]>>(new Map())
   const [candidates, setCandidates] = useState<Profile[]>([])
 
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
+
+  // Lokaler Spiegel der Top-Level-Tags: document ist eine unveränderliche
+  // Prop (siehe Dokumente.tsx), Tag-Änderungen brauchen aber sofortiges
+  // visuelles Feedback in dieser Sitzung - sicher, weil Dokumente.tsx diese
+  // Komponente beim Wechsel auf ein anderes Dokument immer erst unmountet
+  // (openDoc geht durch null), nie direkt mit neuer document-Prop remountet.
+  const [docTags, setDocTags] = useState<string[]>(document.tags)
+
+  // Manuelles Gelesen/Ungelesen (zusätzlich zum automatischen Markieren beim
+  // Öffnen, siehe useEffect unten) - initial true, weil das Öffnen ohnehin
+  // sofort automatisch markiert.
+  const [istGelesen, setIstGelesen] = useState(true)
+
+  // Nachträgliches Bearbeiten der Sichtbarkeit/Freigabe einer eigenen Notiz.
+  const [editingChildId, setEditingChildId] = useState<string | null>(null)
+  const [editSichtbarkeit, setEditSichtbarkeit] = useState<DokumentSichtbarkeit>('persoenlich')
+  const [editTeilenMit, setEditTeilenMit] = useState<string[]>([])
+  const [editSaving, setEditSaving] = useState(false)
+  const [editShareError, setEditShareError] = useState<string | null>(null)
 
   // Zeitstempel VOR dem Markieren-als-gelesen (siehe useEffect unten) - damit
   // Notizen, die seit dem letzten Öffnen neu dazugekommen sind, für die Dauer
@@ -50,11 +72,8 @@ export function DokumentDetailModal({
   const [newInhalt, setNewInhalt] = useState('')
   const [newFile, setNewFile] = useState<File | null>(null)
   const [newTags, setNewTags] = useState<string[]>([])
-  const [newTagInput, setNewTagInput] = useState('')
   const [newSichtbarkeit, setNewSichtbarkeit] = useState<DokumentSichtbarkeit>('persoenlich')
   const [teilenMit, setTeilenMit] = useState<string[]>([])
-  const [shareSearch, setShareSearch] = useState('')
-  const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -117,16 +136,22 @@ export function DokumentDetailModal({
           const userIds = Array.from(new Set((shares ?? []).map((s) => s.user_id as string)))
           const { data: profs } = userIds.length > 0 ? await supabase.from('profiles').select('id, name').in('id', userIds) : { data: [] }
           const nameById = new Map((profs ?? []).map((p) => [p.id as string, p.name as string]))
-          const byChild = new Map<string, string[]>()
+          const byChildNames = new Map<string, string[]>()
+          const byChildIds = new Map<string, string[]>()
           for (const s of shares ?? []) {
-            const list = byChild.get(s.dokument_id as string) ?? []
-            list.push(nameById.get(s.user_id as string) ?? '…')
-            byChild.set(s.dokument_id as string, list)
+            const namesList = byChildNames.get(s.dokument_id as string) ?? []
+            namesList.push(nameById.get(s.user_id as string) ?? '…')
+            byChildNames.set(s.dokument_id as string, namesList)
+            const idsList = byChildIds.get(s.dokument_id as string) ?? []
+            idsList.push(s.user_id as string)
+            byChildIds.set(s.dokument_id as string, idsList)
           }
-          setShareNamesByChild(byChild)
+          setShareNamesByChild(byChildNames)
+          setShareIdsByChild(byChildIds)
         })
     } else {
       setShareNamesByChild(new Map())
+      setShareIdsByChild(new Map())
     }
   }, [children, userId])
 
@@ -156,17 +181,9 @@ export function DokumentDetailModal({
     setNewInhalt('')
     setNewFile(null)
     setNewTags([])
-    setNewTagInput('')
     setNewSichtbarkeit('persoenlich')
     setTeilenMit([])
-    setShareSearch('')
     setFormError(null)
-  }
-
-  function addTag(tag: string) {
-    const t = tag.trim()
-    if (!t || newTags.includes(t)) return
-    setNewTags((prev) => [...prev, t])
   }
 
   async function handleAddChild(e: FormEvent) {
@@ -249,9 +266,55 @@ export function DokumentDetailModal({
     onDeleted()
   }
 
-  const kandidatenGefiltert = candidates
-    .filter((c) => !teilenMit.includes(c.id))
-    .filter((c) => c.name.toLowerCase().includes(shareSearch.toLowerCase()))
+  async function toggleGelesen() {
+    if (!userId) return
+    if (istGelesen) {
+      await markiereUngelesen(supabase, document.id, userId)
+      setIstGelesen(false)
+    } else {
+      await markiereGelesen(supabase, document.id, userId)
+      setIstGelesen(true)
+    }
+  }
+
+  async function handleUpdateTopLevelTags(tags: string[]) {
+    setDocTags(tags)
+    await supabase.from('dokumente').update({ tags }).eq('id', document.id)
+  }
+
+  async function handleUpdateChildTags(childId: string, tags: string[]) {
+    setChildren((prev) => prev.map((c) => (c.id === childId ? { ...c, tags } : c)))
+    await supabase.from('dokumente').update({ tags }).eq('id', childId)
+  }
+
+  function startEditSharing(c: DokumentRow) {
+    setEditingChildId(c.id)
+    setEditSichtbarkeit(c.sichtbarkeit)
+    setEditTeilenMit(shareIdsByChild.get(c.id) ?? [])
+    setEditShareError(null)
+  }
+
+  async function saveEditSharing(c: DokumentRow) {
+    if (editSichtbarkeit === 'einzelpersonen' && editTeilenMit.length === 0) {
+      setEditShareError('Mindestens eine Person auswählen.')
+      return
+    }
+    setEditSaving(true)
+    setEditShareError(null)
+
+    const ebene = editSichtbarkeit === 'geteilt' ? document.ebene : null
+    const gliederung = editSichtbarkeit === 'geteilt' ? document.gliederung : null
+
+    await supabase.from('dokumente').update({ sichtbarkeit: editSichtbarkeit, ebene, gliederung }).eq('id', c.id)
+    await supabase.from('dokument_shares').delete().eq('dokument_id', c.id)
+    if (editSichtbarkeit === 'einzelpersonen' && editTeilenMit.length > 0) {
+      await supabase.from('dokument_shares').insert(editTeilenMit.map((uid) => ({ dokument_id: c.id, user_id: uid })))
+    }
+
+    setEditSaving(false)
+    setEditingChildId(null)
+    await loadChildren()
+  }
 
   function sichtbarkeitLabel(c: DokumentRow): string {
     if (c.sichtbarkeit === 'persoenlich') return 'Persönlich'
@@ -269,6 +332,15 @@ export function DokumentDetailModal({
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
           <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-slate-900">{document.titel}</h1>
           <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={toggleGelesen}
+              aria-label={istGelesen ? 'Als ungelesen markieren' : 'Als gelesen markieren'}
+              title={istGelesen ? 'Als ungelesen markieren' : 'Als gelesen markieren'}
+              className="mc-btn-ghost !p-2 text-slate-500"
+            >
+              {istGelesen ? <MailOpen size={17} /> : <Mail size={17} />}
+            </button>
             {document.user_id === userId && (
               <button
                 type="button"
@@ -296,12 +368,18 @@ export function DokumentDetailModal({
                   {document.gliederung ? ` · ${document.gliederung}` : ''}
                 </span>
               )}
-              {document.tags.map((t) => (
-                <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
-                  {t}
-                </span>
-              ))}
+              {document.user_id !== userId &&
+                docTags.map((t) => (
+                  <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
+                    {t}
+                  </span>
+                ))}
             </div>
+            {document.user_id === userId && (
+              <div className="mb-2">
+                <TagEditor tags={docTags} onChange={handleUpdateTopLevelTags} vorschlaege={TAG_VORSCHLAEGE} />
+              </div>
+            )}
             {document.inhalt && <p className="mb-2 whitespace-pre-wrap text-sm text-slate-700">{document.inhalt}</p>}
             {document.datei_url && (
               <button
@@ -319,13 +397,50 @@ export function DokumentDetailModal({
             {children.map((c) => (
               <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
                 <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{sichtbarkeitLabel(c)}</span>
-                  {c.tags.map((t) => (
-                    <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
-                      {t}
-                    </span>
-                  ))}
+                  {c.user_id === userId ? (
+                    <button
+                      type="button"
+                      onClick={() => (editingChildId === c.id ? setEditingChildId(null) : startEditSharing(c))}
+                      className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-200"
+                    >
+                      {sichtbarkeitLabel(c)}
+                    </button>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{sichtbarkeitLabel(c)}</span>
+                  )}
+                  {c.user_id !== userId &&
+                    c.tags.map((t) => (
+                      <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
+                        {t}
+                      </span>
+                    ))}
                 </div>
+                {c.user_id === userId && editingChildId === c.id && (
+                  <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                    <SichtbarkeitEditor
+                      sichtbarkeit={editSichtbarkeit}
+                      onSichtbarkeitChange={setEditSichtbarkeit}
+                      ebeneOptionLabel={`Ganze Ebene${document.ebene ? ` (${EBENE_LABEL[document.ebene]}${document.gliederung ? ` ${document.gliederung}` : ''})` : ''}`}
+                      teilenMit={editTeilenMit}
+                      onTeilenMitChange={setEditTeilenMit}
+                      candidates={candidates}
+                    />
+                    {editShareError && <p className="mt-1.5 text-xs text-red-600">{editShareError}</p>}
+                    <div className="mt-2 flex gap-1.5">
+                      <button type="button" onClick={() => saveEditSharing(c)} disabled={editSaving} className="mc-btn-primary !px-2.5 !py-1 !text-xs">
+                        {editSaving ? 'Speichern...' : 'Speichern'}
+                      </button>
+                      <button type="button" onClick={() => setEditingChildId(null)} className="mc-btn-ghost !px-2.5 !py-1 !text-xs">
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {c.user_id === userId && (
+                  <div className="mb-1.5">
+                    <TagEditor tags={c.tags} onChange={(tags) => handleUpdateChildTags(c.id, tags)} vorschlaege={TAG_VORSCHLAEGE} />
+                  </div>
+                )}
                 <p className={`text-sm text-slate-900 ${istNotizUngelesen(c, gelesenAmVorDiesemOeffnen) ? 'font-bold' : 'font-normal'}`}>
                   {c.titel}
                 </p>
@@ -373,112 +488,18 @@ export function DokumentDetailModal({
             />
             <input type="file" onChange={(e) => setNewFile(e.target.files?.[0] ?? null)} className="w-full text-sm" />
 
-            <div>
-              <div className="mb-1.5 flex flex-wrap gap-1.5">
-                {TAG_VORSCHLAEGE.filter((t) => !newTags.includes(t)).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => addTag(t)}
-                    className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-200"
-                  >
-                    + {t}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {newTags.map((t) => (
-                  <span key={t} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${tagColor(t).chip}`}>
-                    {t}
-                    <button type="button" onClick={() => setNewTags((prev) => prev.filter((x) => x !== t))} aria-label={`Tag "${t}" entfernen`} className="hover:opacity-70">
-                      ×
-                    </button>
-                  </span>
-                ))}
-                <input
-                  type="text"
-                  placeholder="eigener Tag + Enter"
-                  value={newTagInput}
-                  onChange={(e) => setNewTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      addTag(newTagInput)
-                      setNewTagInput('')
-                    }
-                  }}
-                  className="mc-input !w-40 !py-1 !text-xs"
-                />
-              </div>
-            </div>
+            <TagEditor tags={newTags} onChange={setNewTags} vorschlaege={TAG_VORSCHLAEGE} />
 
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">Sichtbarkeit</label>
-              <div className="flex flex-wrap gap-3 text-sm">
-                <label className="flex items-center gap-1.5">
-                  <input type="radio" checked={newSichtbarkeit === 'persoenlich'} onChange={() => setNewSichtbarkeit('persoenlich')} />
-                  Persönlich
-                </label>
-                <label className="flex items-center gap-1.5">
-                  <input type="radio" checked={newSichtbarkeit === 'geteilt'} onChange={() => setNewSichtbarkeit('geteilt')} />
-                  Ganze Ebene{document.ebene ? ` (${EBENE_LABEL[document.ebene]}${document.gliederung ? ` ${document.gliederung}` : ''})` : ''}
-                </label>
-                <label className="flex items-center gap-1.5">
-                  <input type="radio" checked={newSichtbarkeit === 'einzelpersonen'} onChange={() => setNewSichtbarkeit('einzelpersonen')} />
-                  Einzelne Personen
-                </label>
-              </div>
-              {newSichtbarkeit === 'einzelpersonen' && (
-                <div className="mt-2">
-                  <div className="mb-1.5 flex flex-wrap gap-1.5">
-                    {teilenMit.map((uid) => {
-                      const p = candidates.find((c) => c.id === uid)
-                      return (
-                        <span key={uid} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                          {p?.name ?? '…'}
-                          <button type="button" onClick={() => setTeilenMit((prev) => prev.filter((x) => x !== uid))} className="hover:opacity-70">
-                            ×
-                          </button>
-                        </span>
-                      )
-                    })}
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Kolleg*in suchen..."
-                      value={shareSearch}
-                      onChange={(e) => setShareSearch(e.target.value)}
-                      onFocus={() => setShareDropdownOpen(true)}
-                      onBlur={() => setTimeout(() => setShareDropdownOpen(false), 150)}
-                      className="mc-input w-full"
-                    />
-                    {shareDropdownOpen && (
-                      <ul className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-                        {kandidatenGefiltert.map((c) => (
-                          <li key={c.id}>
-                            <button
-                              type="button"
-                              onMouseDown={() => {
-                                setTeilenMit((prev) => [...prev, c.id])
-                                setShareSearch('')
-                              }}
-                              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
-                            >
-                              {c.name}
-                            </button>
-                          </li>
-                        ))}
-                        {kandidatenGefiltert.length === 0 && (
-                          <li className="px-3 py-1.5 text-sm text-slate-400">
-                            {candidates.length === 0 ? 'Keine Kolleg*innen mit gleicher Partei/Ebene gefunden.' : 'Keine Treffer.'}
-                          </li>
-                        )}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              )}
+              <SichtbarkeitEditor
+                sichtbarkeit={newSichtbarkeit}
+                onSichtbarkeitChange={setNewSichtbarkeit}
+                ebeneOptionLabel={`Ganze Ebene${document.ebene ? ` (${EBENE_LABEL[document.ebene]}${document.gliederung ? ` ${document.gliederung}` : ''})` : ''}`}
+                teilenMit={teilenMit}
+                onTeilenMitChange={setTeilenMit}
+                candidates={candidates}
+              />
             </div>
 
             {formError && <p className="text-sm text-red-600">{formError}</p>}

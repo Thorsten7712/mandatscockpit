@@ -72,6 +72,32 @@ async function loadCallerProfile(supabase: SupabaseClient, userId: string): Prom
   return (data as CallerProfile) ?? null
 }
 
+/** Namen gegen für den Aufrufer sichtbare Profile auflösen (RLS auf profiles
+ *  begrenzt die Treffer ohnehin auf Partei-/Ebene-Kolleg*innen) - genutzt von
+ *  createDocument (Notiz mit sichtbarkeit="einzelpersonen" anlegen) UND
+ *  updateDocumentSharing (nachträglich teilen). Nicht gefundene Namen brechen
+ *  den Aufruf nicht ab, sondern werden nur zurückgemeldet. */
+async function resolveTeilenMitNamen(
+  supabase: SupabaseClient,
+  userId: string,
+  caller: CallerProfile,
+  namen: string[],
+): Promise<{ ids: string[]; unaufgeloest: string[] }> {
+  const ids: string[] = []
+  const unaufgeloest: string[] = []
+  for (const name of namen) {
+    const { data: matches } = await supabase
+      .from('profiles')
+      .select('id, name, partei, ebenen')
+      .ilike('name', `%${name}%`)
+      .neq('id', userId)
+    const treffer = (matches ?? []).find((p) => p.partei === caller.partei && (p.ebenen as string[]).some((e) => caller.ebenen.includes(e)))
+    if (treffer) ids.push(treffer.id as string)
+    else unaufgeloest.push(name)
+  }
+  return { ids, unaufgeloest }
+}
+
 export async function createDocument(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const titel = typeof args.titel === 'string' ? args.titel.trim() : ''
   if (!titel) return toolTextResult('Fehler: titel ist erforderlich.', true)
@@ -179,16 +205,9 @@ export async function createDocument(supabase: SupabaseClient, userId: string, a
     if (namen.length === 0) {
       return toolTextResult('Fehler: teilen_mit_namen ist erforderlich (mindestens ein Name) bei sichtbarkeit="einzelpersonen".', true)
     }
-    for (const name of namen) {
-      const { data: matches } = await supabase
-        .from('profiles')
-        .select('id, name, partei, ebenen')
-        .ilike('name', `%${name}%`)
-        .neq('id', userId)
-      const treffer = (matches ?? []).find((p) => p.partei === caller.partei && (p.ebenen as string[]).some((e) => caller.ebenen.includes(e)))
-      if (treffer) teilenMitUserIds.push(treffer.id as string)
-      else unaufgeloesteNamen.push(name)
-    }
+    const resolved = await resolveTeilenMitNamen(supabase, userId, caller, namen)
+    teilenMitUserIds = resolved.ids
+    unaufgeloesteNamen = resolved.unaufgeloest
     if (teilenMitUserIds.length === 0) {
       return toolTextResult(`Fehler: keiner der angegebenen Namen (${namen.join(', ')}) konnte einer Partei-/Ebenen-Kolleg*in zugeordnet werden.`, true)
     }
@@ -332,4 +351,105 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
     return teile.join(' · ')
   })
   return toolTextResult(lines.join('\n'))
+}
+
+export async function updateDocumentTags(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
+  if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
+  if (!Array.isArray(args.tags)) {
+    return toolTextResult('Fehler: tags muss ein Array von Strings sein (leeres Array entfernt alle Tags).', true)
+  }
+  const tags = args.tags.filter((t): t is string => typeof t === 'string' && t.trim() !== '').map((t) => t.trim())
+
+  const { data: dok } = await supabase.from('dokumente').select('id, user_id, titel').eq('id', dokumentId).maybeSingle()
+  if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+  if (dok.user_id !== userId) return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf dessen Tags ändern.', true)
+
+  const { error } = await supabase.from('dokumente').update({ tags }).eq('id', dokumentId)
+  if (error) return toolTextResult(`Fehler beim Aktualisieren der Tags: ${error.message}`, true)
+
+  return toolTextResult(`Tags von "${dok.titel}" wurden aktualisiert: ${tags.length > 0 ? tags.join(', ') : '(keine)'}.`)
+}
+
+export async function updateDocumentSharing(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
+  if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
+
+  const sichtbarkeit =
+    args.sichtbarkeit === 'geteilt' || args.sichtbarkeit === 'persoenlich' || args.sichtbarkeit === 'einzelpersonen'
+      ? args.sichtbarkeit
+      : ''
+  if (!sichtbarkeit) return toolTextResult('Fehler: sichtbarkeit muss "persoenlich", "geteilt" oder "einzelpersonen" sein.', true)
+
+  const { data: dok } = await supabase
+    .from('dokumente')
+    .select('id, user_id, titel, parent_id, ebene, gliederung')
+    .eq('id', dokumentId)
+    .maybeSingle()
+  if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+  if (dok.user_id !== userId) return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf dessen Freigabe ändern.', true)
+
+  const caller = await loadCallerProfile(supabase, userId)
+  if (!caller) return toolTextResult('Fehler: eigenes Profil konnte nicht geladen werden.', true)
+
+  // ebene/gliederung wie beim Anlegen (createDocument): bei "geteilt" für ein
+  // an ein anderes Dokument angehängtes Dokument 1:1 vom Elternteil
+  // übernehmen; für ein Top-Level-Dokument (kein parent_id) bleiben sie
+  // unverändert (Top-Level-Dokumente werden bereits "geteilt" angelegt, siehe
+  // Dokumente.tsx). Bei persoenlich/einzelpersonen werden beide genullt.
+  let ebene: string | null = dok.ebene
+  let gliederung: string | null = dok.gliederung
+  if (sichtbarkeit === 'geteilt') {
+    if (dok.parent_id) {
+      const { data: parent } = await supabase.from('dokumente').select('ebene, gliederung').eq('id', dok.parent_id).maybeSingle()
+      if (!parent?.ebene) {
+        return toolTextResult('Fehler: das übergeordnete Dokument ist nicht Ebene-weit geteilt - sichtbarkeit="geteilt" ist für ein daran angehängtes Dokument deshalb nicht möglich (persoenlich oder einzelpersonen verwenden).', true)
+      }
+      ebene = parent.ebene
+      gliederung = parent.gliederung
+    }
+  } else {
+    ebene = null
+    gliederung = null
+  }
+
+  let teilenMitUserIds: string[] = []
+  let unaufgeloesteNamen: string[] = []
+  if (sichtbarkeit === 'einzelpersonen') {
+    const namen = Array.isArray(args.teilen_mit_namen)
+      ? args.teilen_mit_namen.filter((n): n is string => typeof n === 'string' && n.trim() !== '').map((n) => n.trim())
+      : []
+    if (namen.length === 0) {
+      return toolTextResult('Fehler: teilen_mit_namen ist erforderlich (mindestens ein Name) bei sichtbarkeit="einzelpersonen".', true)
+    }
+    const resolved = await resolveTeilenMitNamen(supabase, userId, caller, namen)
+    teilenMitUserIds = resolved.ids
+    unaufgeloesteNamen = resolved.unaufgeloest
+    if (teilenMitUserIds.length === 0) {
+      return toolTextResult(`Fehler: keiner der angegebenen Namen (${namen.join(', ')}) konnte einer Partei-/Ebenen-Kolleg*in zugeordnet werden.`, true)
+    }
+  }
+
+  const { error: updateError } = await supabase.from('dokumente').update({ sichtbarkeit, ebene, gliederung }).eq('id', dokumentId)
+  if (updateError) return toolTextResult(`Fehler beim Aktualisieren der Sichtbarkeit: ${updateError.message}`, true)
+
+  const { error: deleteError } = await supabase.from('dokument_shares').delete().eq('dokument_id', dokumentId)
+  if (deleteError) return toolTextResult(`Sichtbarkeit wurde geändert, aber alte Freigaben konnten nicht entfernt werden: ${deleteError.message}`, true)
+
+  if (teilenMitUserIds.length > 0) {
+    const { error: shareError } = await supabase
+      .from('dokument_shares')
+      .insert(teilenMitUserIds.map((uid) => ({ dokument_id: dokumentId, user_id: uid })))
+    if (shareError) return toolTextResult(`Sichtbarkeit wurde geändert, aber Freigabe schlug fehl: ${shareError.message}`, true)
+  }
+
+  let sichtbarkeitsHinweis: string
+  if (sichtbarkeit === 'geteilt') {
+    sichtbarkeitsHinweis = `sichtbar für alle Mitglieder deiner Partei auf Ebene "${EBENE_LABEL[ebene!]}"${gliederung ? ` (${gliederung})` : ''}`
+  } else if (sichtbarkeit === 'einzelpersonen') {
+    sichtbarkeitsHinweis = `geteilt mit ${teilenMitUserIds.length} Person(en)${unaufgeloesteNamen.length > 0 ? ` - nicht gefunden: ${unaufgeloesteNamen.join(', ')}` : ''}`
+  } else {
+    sichtbarkeitsHinweis = 'nur für dich sichtbar'
+  }
+  return toolTextResult(`Sichtbarkeit von "${dok.titel}" wurde aktualisiert: ${sichtbarkeitsHinweis}.`)
 }

@@ -1,13 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText } from 'lucide-react'
+import { FileText, Mail, MailOpen } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, Ebene, Profile } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
 import { fileNameFromPath } from '../components/DocumentPreviewModal'
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
-import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
+import { TagEditor } from '../components/TagEditor'
+import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
 
 // Vorschläge, keine feste Liste - Nutzer können jederzeit eigene Tags
 // eintragen (siehe Eingabefeld im Formular unten).
@@ -55,7 +56,6 @@ export default function Dokumente() {
   const [newTitel, setNewTitel] = useState('')
   const [newEbene, setNewEbene] = useState<Ebene | ''>('')
   const [newTags, setNewTags] = useState<string[]>([])
-  const [newTagInput, setNewTagInput] = useState('')
   const [newInhalt, setNewInhalt] = useState('')
   const [newFile, setNewFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
@@ -121,16 +121,9 @@ export default function Dokumente() {
     setNewTitel('')
     setNewEbene('')
     setNewTags([])
-    setNewTagInput('')
     setNewInhalt('')
     setNewFile(null)
     setFormError(null)
-  }
-
-  function addTag(tag: string) {
-    const t = tag.trim()
-    if (!t || newTags.includes(t)) return
-    setNewTags((prev) => [...prev, t])
   }
 
   async function handleAdd(e: FormEvent) {
@@ -185,6 +178,13 @@ export default function Dokumente() {
     setShowForm(false)
     setSaving(false)
     await loadDocuments()
+  }
+
+  async function handleToggleGelesen(d: DokumentRow, ungelesen: boolean) {
+    if (!userId) return
+    if (ungelesen) await markiereGelesen(supabase, d.id, userId)
+    else await markiereUngelesen(supabase, d.id, userId)
+    await loadLeseStatus(userId)
   }
 
   async function handleDelete(d: DokumentRow) {
@@ -293,50 +293,7 @@ export default function Dokumente() {
             )}
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">Tags</label>
-              <div className="mb-1.5 flex flex-wrap gap-1.5">
-                {TAG_VORSCHLAEGE.filter((t) => !newTags.includes(t)).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => addTag(t)}
-                    className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-200"
-                  >
-                    + {t}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {newTags.map((t) => (
-                  <span
-                    key={t}
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${tagColor(t).chip}`}
-                  >
-                    {t}
-                    <button
-                      type="button"
-                      onClick={() => setNewTags((prev) => prev.filter((x) => x !== t))}
-                      aria-label={`Tag "${t}" entfernen`}
-                      className="hover:opacity-70"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-                <input
-                  type="text"
-                  placeholder="eigener Tag + Enter"
-                  value={newTagInput}
-                  onChange={(e) => setNewTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      addTag(newTagInput)
-                      setNewTagInput('')
-                    }
-                  }}
-                  className="mc-input !w-40 !py-1 !text-xs"
-                />
-              </div>
+              <TagEditor tags={newTags} onChange={setNewTags} vorschlaege={TAG_VORSCHLAEGE} />
             </div>
             <textarea
               placeholder="Text (optional)"
@@ -399,18 +356,32 @@ export default function Dokumente() {
                   {d.inhalt && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{d.inhalt}</p>}
                 </div>
               </div>
-              {d.user_id === userId && (
+              <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleDelete(d)
+                    handleToggleGelesen(d, ungelesen)
                   }}
-                  className="mc-btn-danger !px-2 !py-1 !text-xs shrink-0"
+                  aria-label={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
+                  title={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
+                  className="mc-btn-ghost !p-1.5 text-slate-400 hover:text-slate-600"
                 >
-                  Löschen
+                  {ungelesen ? <Mail size={16} /> : <MailOpen size={16} />}
                 </button>
-              )}
+                {d.user_id === userId && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDelete(d)
+                    }}
+                    className="mc-btn-danger !px-2 !py-1 !text-xs"
+                  >
+                    Löschen
+                  </button>
+                )}
+              </div>
             </li>
             )
           })}
@@ -428,6 +399,7 @@ export default function Dokumente() {
           onClose={() => {
             setOpenDoc(null)
             if (userId) loadLeseStatus(userId)
+            loadDocuments()
           }}
           onDeleted={() => {
             setOpenDoc(null)

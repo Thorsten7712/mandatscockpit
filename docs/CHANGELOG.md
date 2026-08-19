@@ -1544,3 +1544,63 @@ Architekturrunde für dieses Feature in Folge - RLS-relevant).
   übereinstimmender Gliederung - beide Testzeilen (inkl. `dokument_shares`-Zeile) danach wieder
   gelöscht, Cascade-Delete bestätigt. Zusätzlich ein temporärer, danach gelöschter Test-Harness mit
   Mock-Daten für das neue Modal-Layout (Desktop-Breite, Sichtbarkeits-Badges/Formular).
+
+## Dokumenten-Hub: manuelles Gelesen/Ungelesen, Tags editieren, Notizen nachträglich teilen (+ MCP)
+
+Nutzerwunsch: die bislang rein automatische Gelesen/Ungelesen-Markierung (Migration
+`0035_dokument_gelesen.sql`, setzt `gelesen_am` beim Öffnen) sollte auch manuell umschaltbar sein,
+Tags sollten nachträglich editierbar werden (bislang nur beim Anlegen setzbar) und Notizen sollten
+nachträglich noch geteilt werden können - Tags und Teilen zusätzlich über den MCP-Server. Geplant via
+`EnterPlanMode`/`ExitPlanMode`. Erste Rückfrage ergab ein Missverständnis: gemeint war explizit auch
+die an ein Top-Level-Dokument angehängten Notizen im `/dokumente`-Dokumenten-Hub, nicht das ältere
+`summaries`-System.
+
+**Keine neue Migration nötig** - alle drei Fähigkeiten waren durch bereits bestehende RLS-Policies
+gedeckt: `dokumente_update_own` erlaubt dem Owner das Ändern jeder Spalte (inkl. `tags`/`sichtbarkeit`),
+`dokument_shares_insert_by_owner`/`_delete` verwalten Freigaben, und `dokument_gelesen_manage_own`
+erlaubt JEDER/M Betrachter*in volle CRUD auf die eigene Gelesen-Zeile, unabhängig von der
+Dokument-Eigentümerschaft (richtig so, weil "gelesen" ein reines Betrachter-Konzept ist).
+
+- **`src/lib/dokumenteGelesen.ts`**: neue Funktionen `markiereGelesen()`/`markiereUngelesen()` (upsert
+  bzw. delete auf `dokument_gelesen`, Letzteres reproduziert exakt den "nie geöffnet"-Zustand, den
+  `istDokumentUngelesen()` schon kennt).
+- **Neue geteilte Komponenten** `src/components/TagEditor.tsx` und `src/components/SichtbarkeitEditor.tsx`,
+  extrahiert aus den bislang doppelt vorhandenen Create-Formular-Blöcken in `Dokumente.tsx` und
+  `DokumentDetailModal.tsx` (nach Projekt-Konvention wird ab dem 3. Vorkommen extrahiert - hier direkt
+  4 Stellen: 2 bestehende Create-Formulare + 2 neue Edit-Stellen). Beide Create-Formulare wurden im
+  Zuge dessen auf die neuen Komponenten umgestellt (reines Refactoring).
+- **`DokumentDetailModal.tsx`**: neuer Header-Button (`Mail`/`MailOpen` aus `lucide-react`) neben
+  Löschen/Schließen zum manuellen Umschalten, lokaler `istGelesen`-State (initial `true`, da das
+  Öffnen ohnehin schon automatisch markiert). Top-Level-Dokument-Tags sind für den Owner jetzt über
+  `TagEditor` editierbar (sofortiges Speichern bei `onChange`), ebenso die Tags jeder eigenen Notiz.
+  Die bisher statische Sichtbarkeits-Badge einer eigenen Notiz ist jetzt klickbar und öffnet
+  `SichtbarkeitEditor` vorbefüllt mit dem aktuellen Stand (`shareIdsByChild: Map<string, string[]>`
+  zusätzlich zu `shareNamesByChild` geladen, damit die rohen `user_id`s statt nur aufgelöster Namen
+  zur Verfügung stehen) - Speichern berechnet `ebene`/`gliederung` wie beim Anlegen neu (bei "geteilt"
+  vom Elternteil übernommen) und ersetzt die bestehenden `dokument_shares`-Zeilen der Notiz komplett
+  (löschen + bei "einzelpersonen" neu einfügen, einfacher als Diffing bei der kleinen Zeilenzahl pro
+  Notiz). Fremde/nicht-eigene Notizen bleiben unverändert read-only.
+- **`Dokumente.tsx`**: gleicher Gelesen/Ungelesen-Toggle zusätzlich direkt auf jeder Listenkarte
+  (kleiner Icon-Button mit `stopPropagation`, analog zum bestehenden Löschen-Button), damit man nicht
+  erst öffnen muss. `onClose` des Detail-Modals lädt jetzt zusätzlich `loadDocuments()` neu (vorher nur
+  `loadLeseStatus()`), damit Top-Level-Tag-Änderungen aus dem Modal nach dem Schließen auch in der
+  Liste sichtbar sind.
+- **MCP-Server** (`tools/dokumente.ts`, gleiches Registrierungs-Dreieck wie `create_document`/
+  `list_documents`): neue Tools `update_document_tags` (ersetzt die Tag-Liste eines eigenen
+  Dokuments/einer eigenen Notiz komplett, leeres Array erlaubt) und `update_document_sharing`
+  (ändert `sichtbarkeit` + `dokument_shares` eines eigenen Dokuments/einer eigenen Notiz - bei
+  "geteilt" für eine per `parent_id` angehängte Notiz wird `ebene`/`gliederung` vom Elternteil
+  übernommen, für ein Top-Level-Dokument bleiben sie unverändert; Namensauflösung für
+  `teilen_mit_namen` in eine gemeinsame Funktion `resolveTeilenMitNamen()` extrahiert, die jetzt auch
+  `create_document` nutzt statt der bisherigen duplizierten Inline-Logik). Beide Tools prüfen die
+  Eigentümerschaft (`dokumente.user_id === caller`) explizit im Tool-Code, da der MCP-Server über den
+  Service-Role-Client läuft und RLS dort nicht greift. Gelesen/Ungelesen bewusst NICHT für MCP gebaut
+  (Nutzerwunsch nannte explizit nur Tags und Teilen).
+- Verifiziert per `tsc -b`/`vite build` und `deno check --config supabase/functions/mcp-server/deno.json
+  supabase/functions/mcp-server/index.ts` (beide fehlerfrei), sowie einem statischen Test-Harness mit
+  der tatsächlich kompilierten CSS (Header-Toggle, Top-Level-TagEditor, klickbare Sichtbarkeits-Badge
+  mit geöffnetem SichtbarkeitEditor, Tag-Editor je eigener Notiz, read-only Darstellung einer fremden
+  Notiz) - danach gelöscht. Die beiden neuen MCP-Tools sind nur mit einem persönlichen Bearer-Token
+  (Settings → MCP Connection) end-to-end testbar; das ist ein Geheimnis, das nicht ins Chat-Fenster
+  gehört, deshalb primär über `deno check` + Code-Review-Konsistenz mit `createDocument`/`darfSehen()`
+  verifiziert.

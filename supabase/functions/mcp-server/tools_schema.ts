@@ -506,6 +506,41 @@ export const TOOLS = [
     },
   },
   {
+    name: 'update_document_tags',
+    description:
+      'Ersetzt die Tags eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub (Top-Level-Dokument oder per parent_id angehängte Notiz/Analyse) durch die angegebene Liste - nur der/die Ersteller*in darf das. Ein leeres Array entfernt alle Tags.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments/der eigenen Notiz (z. B. aus list_documents).' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Vollständige neue Tag-Liste (ersetzt die bisherige komplett, leeres Array = alle Tags entfernen).' },
+      },
+      required: ['dokument_id', 'tags'],
+    },
+  },
+  {
+    name: 'update_document_sharing',
+    description:
+      'Ändert nachträglich die Sichtbarkeit/Freigabe eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub - nur der/die Ersteller*in darf das. Ersetzt bestehende Freigaben komplett (kein Hinzufügen einzelner Personen). Bei sichtbarkeit="geteilt" für eine per parent_id angehängte Notiz wird die Ebene/Gliederung automatisch vom übergeordneten Dokument übernommen (das übergeordnete Dokument muss dafür selbst Ebene-weit geteilt sein); für ein Top-Level-Dokument bleibt die bisherige Ebene/Gliederung erhalten.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments/der eigenen Notiz (z. B. aus list_documents).' },
+        sichtbarkeit: {
+          type: 'string',
+          enum: ['persoenlich', 'geteilt', 'einzelpersonen'],
+          description: '"persoenlich" = nur für den Nutzer selbst, "geteilt" = für alle Mitglieder der eigenen Partei auf der Ebene sichtbar, "einzelpersonen" = nur für die in teilen_mit_namen genannten Personen zusätzlich sichtbar.',
+        },
+        teilen_mit_namen: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Namen der Partei-/Ebenen-Kolleg*innen, mit denen geteilt werden soll (Pflicht bei sichtbarkeit="einzelpersonen", sonst ignoriert). Ersetzt die bisherige Freigabe-Liste komplett. Teilstring-Suche gegen sichtbare Profile, Namen ohne eindeutigen Treffer werden in der Antwort genannt statt den Aufruf abzubrechen.',
+        },
+      },
+      required: ['dokument_id', 'sichtbarkeit'],
+    },
+  },
+  {
     name: 'search',
     description:
       'Durchsucht Titel/Inhalte von ToDo-Karten, Anträgen und Notizen (Freitext-Suche, Groß-/Kleinschreibung egal) - berücksichtigt dabei nur für den Nutzer sichtbare Einträge (eigene und geteilte). Für Fragen wie "wo ging es um XY".',

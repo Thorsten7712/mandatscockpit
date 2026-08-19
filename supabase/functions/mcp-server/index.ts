@@ -45,7 +45,7 @@ import { createAntrag, listAntraege, updateAntragStatus, listAntragFristen } fro
 import { listNotes, createSessionNote, createEventNote, createTodoNote, createAntragNote } from './tools/notes.ts'
 import { uploadPresseschau } from './tools/presseschau.ts'
 import { startFileUpload, appendFileChunk, finishFileUpload } from './tools/uploads.ts'
-import { createDocument, listDocuments } from './tools/dokumente.ts'
+import { createDocument, listDocuments, updateDocumentSharing, updateDocumentTags } from './tools/dokumente.ts'
 import { search } from './tools/search.ts'
 
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -225,6 +225,12 @@ Deno.serve(async (req) => {
           break
         case 'list_documents':
           result = await listDocuments(supabase, user.id, args)
+          break
+        case 'update_document_tags':
+          result = await updateDocumentTags(supabase, user.id, args)
+          break
+        case 'update_document_sharing':
+          result = await updateDocumentSharing(supabase, user.id, args)
           break
         case 'search':
           result = await search(supabase, user.id, args)
