@@ -1604,3 +1604,19 @@ Dokument-Eigentümerschaft (richtig so, weil "gelesen" ein reines Betrachter-Kon
   (Settings → MCP Connection) end-to-end testbar; das ist ein Geheimnis, das nicht ins Chat-Fenster
   gehört, deshalb primär über `deno check` + Code-Review-Konsistenz mit `createDocument`/`darfSehen()`
   verifiziert.
+
+## MCP-Server: Dokumententitel im Dokumenten-Hub änderbar (`update_document_titel`)
+
+Nutzerwunsch: Titel von Dokumenten im Dokumenten-Hub per MCP ändern können - ausdrücklich NICHT den
+Dateinamen eines angehängten Uploads, sondern das `titel`-Feld der `dokumente`-Zeile selbst. Neues
+Tool `update_document_titel(dokument_id, titel)`, exakt nach dem Muster von `updateDocumentTags`
+(gleiche Ownership-Prüfung: nur `dok.user_id === userId` darf ändern, RLS `dokumente_update_own`
+erlaubt ohnehin nur das - der Service-Role-Client umgeht RLS, die Prüfung läuft deshalb explizit im
+Tool-Code). Die Web-UI (`DokumentDetailModal.tsx`) zeigt den Top-Level-Titel bisher nur statisch an
+(keine Inline-Bearbeitung) - dieses Tool ist also aktuell nur über MCP nutzbar, keine Dopplung
+bestehender Funktionalität.
+
+Verifiziert per `deno check`, Deploy, und einer temporären Test-Fixtur direkt in der Live-DB
+(Test-Dokument angelegt, Ownership-Check + Update-Semantik nachgerechnet, danach gelöscht) - kein
+Bearer-Token zur Hand für einen echten End-to-End-Aufruf (siehe vorheriger Abschnitt zur selben
+Einschränkung).

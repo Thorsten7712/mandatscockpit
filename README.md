@@ -146,6 +146,7 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 - `complete_todo(todo_id, erledigt?)` – abhaken/rückgängig machen.
 - `update_todo(todo_id, titel?, beschreibung?, faellig_am?, zustaendig?, spalte?)` – `spalte` verschiebt nur die eigene Platzierung des aufrufenden Nutzers.
 - `update_antrag_status(antrag_id, status, ergebnis?, eingereicht_am?)` – `ergebnis` (`positiv`/`negativ`) ist bei `status="abgestimmt"` Pflicht; `eingereicht_am` wird beim Übergang auf `gestellt` automatisch auf heute gesetzt, falls nicht angegeben.
+- `update_document_titel(dokument_id, titel)` – ändert den Titel eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub (nicht den Dateinamen eines angehängten Datei-Uploads). Nur der/die Ersteller\*in darf das.
 - `update_document_tags(dokument_id, tags)` – ersetzt die Tags eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub komplett (leeres Array entfernt alle Tags). Nur der/die Ersteller\*in darf das.
 - `update_document_sharing(dokument_id, sichtbarkeit, teilen_mit_namen?)` – ändert nachträglich die Sichtbarkeit/Freigabe eines eigenen Dokuments/einer eigenen Notiz, ersetzt bestehende Freigaben komplett. Bei `sichtbarkeit="geteilt"` für eine per `parent_id` angehängte Notiz wird `ebene`/`gliederung` automatisch vom übergeordneten Dokument übernommen (das muss selbst Ebene-weit geteilt sein); für ein Top-Level-Dokument bleibt die bisherige Ebene/Gliederung erhalten. Nur der/die Ersteller\*in darf das.
 

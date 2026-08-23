@@ -353,6 +353,23 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   return toolTextResult(lines.join('\n'))
 }
 
+export async function updateDocumentTitel(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
+  if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
+  const titel = typeof args.titel === 'string' ? args.titel.trim() : ''
+  if (!titel) return toolTextResult('Fehler: titel ist erforderlich.', true)
+
+  const { data: dok } = await supabase.from('dokumente').select('id, user_id, titel').eq('id', dokumentId).maybeSingle()
+  if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+  if (dok.user_id !== userId) return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf dessen Titel ändern.', true)
+
+  const alterTitel = dok.titel
+  const { error } = await supabase.from('dokumente').update({ titel }).eq('id', dokumentId)
+  if (error) return toolTextResult(`Fehler beim Aktualisieren des Titels: ${error.message}`, true)
+
+  return toolTextResult(`Titel von "${alterTitel}" wurde zu "${titel}" geändert.`)
+}
+
 export async function updateDocumentTags(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
   if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)

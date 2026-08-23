@@ -506,6 +506,19 @@ export const TOOLS = [
     },
   },
   {
+    name: 'update_document_titel',
+    description:
+      'Ändert den Titel eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub (Top-Level-Dokument oder per parent_id angehängte Notiz/Analyse) - nur der/die Ersteller*in darf das. Ändert nur den angezeigten Titel, nicht den Dateinamen eines eventuell angehängten Datei-Uploads.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments/der eigenen Notiz (z. B. aus list_documents).' },
+        titel: { type: 'string', description: 'Neuer Titel.' },
+      },
+      required: ['dokument_id', 'titel'],
+    },
+  },
+  {
     name: 'update_document_tags',
     description:
       'Ersetzt die Tags eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub (Top-Level-Dokument oder per parent_id angehängte Notiz/Analyse) durch die angegebene Liste - nur der/die Ersteller*in darf das. Ein leeres Array entfernt alle Tags.',
