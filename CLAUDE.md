@@ -64,7 +64,7 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 25 Tools über
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 26 Tools über
   ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
   README.md Abschnitt 9 und `docs/CHANGELOG.md`).
 - **GitHub-Actions-Workflows**: Deploy nach GitHub Pages (inkl. `404.html`-Kopie fürs SPA-Routing),
@@ -120,6 +120,14 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 - **ICS-Import**: läuft auf Node 22 (nicht 20, wegen supabase-js Realtime-Client). URLs mit
   `webcal://`/`webcals://` müssen vor dem Fetch auf `https://` normalisiert werden
   (`normalizeIcsUrl()`) – native `fetch` kennt das Schema sonst nicht.
+- **MCP-Connector-Tool-Liste ist pro Claude-Unterhaltung eingefroren**: `tools/list` wird offenbar nur
+  beim Verbindungsaufbau einer Unterhaltung abgefragt, nicht laufend neu. Ein bereits offener Chat
+  sieht deshalb weiterhin die alten Tool-Namen (inkl. Aufrufe auf inzwischen umbenannte/entfernte
+  Tools, die serverseitig mit „Unbekanntes Tool" fehlschlagen), selbst wenn der Connector im
+  Hintergrund neu verbindet und selbst wenn Claudes eigene Connector-Einstellungsseite bereits die
+  aktuelle Liste zeigt (die fragt offenbar bei jedem Aufruf frisch ab). Nach einer Tool-Änderung im
+  MCP-Server also nicht in derselben Unterhaltung auf Sichtbarkeit der Änderung warten – dafür einen
+  neuen Chat starten.
 
 ## Geplante nächste Schritte
 
