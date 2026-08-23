@@ -9,9 +9,9 @@ import { supabase } from '../lib/supabaseClient'
 // Browser, dafür ein "Datei öffnen"-Link. 3600s Gültigkeit statt der
 // sonst üblichen 60s bei Downloads, weil das Dokument während des Lesens
 // länger geöffnet bleiben kann (gleiche Überlegung wie bei Profilfotos).
-const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'])
+export const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'])
 
-function fileExtension(path: string): string {
+export function fileExtension(path: string): string {
   return path.split('.').pop()?.toLowerCase() ?? ''
 }
 

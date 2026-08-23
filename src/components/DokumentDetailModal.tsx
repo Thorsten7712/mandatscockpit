@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Mail, MailOpen, Trash2, X } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, DokumentSichtbarkeit, Profile } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDateTime } from '../lib/format'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
+import { DetailModalShell } from './DetailModalShell'
 import { TagEditor } from './TagEditor'
 import { SichtbarkeitEditor } from './SichtbarkeitEditor'
 import { istNotizUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
@@ -77,6 +78,9 @@ export function DokumentDetailModal({
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  useEffect(() => setConfirmDelete(false), [document.id])
 
   async function loadChildren() {
     const { data } = await supabase
@@ -258,7 +262,6 @@ export function DokumentDetailModal({
   }
 
   async function handleDeleteDocument() {
-    if (!window.confirm(`"${document.titel}" wirklich löschen? Angehängte Notizen/Analysen werden mitgelöscht.`)) return
     setDeleting(true)
     if (document.datei_url) await supabase.storage.from('dokumente').remove([document.datei_url])
     await supabase.from('dokumente').delete().eq('id', document.id)
@@ -323,78 +326,82 @@ export function DokumentDetailModal({
     return namen.length > 0 ? `Geteilt mit ${namen.join(', ')}` : 'Einzelne Personen'
   }
 
-  return (
-    <div className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]" onClick={onClose}>
-      <div
-        className="mc-animate-pop flex h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+  const headerActions = (
+    <>
+      <button
+        type="button"
+        onClick={toggleGelesen}
+        aria-label={istGelesen ? 'Als ungelesen markieren' : 'Als gelesen markieren'}
+        title={istGelesen ? 'Als ungelesen markieren' : 'Als gelesen markieren'}
+        className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
-          <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-slate-900">{document.titel}</h1>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={toggleGelesen}
-              aria-label={istGelesen ? 'Als ungelesen markieren' : 'Als gelesen markieren'}
-              title={istGelesen ? 'Als ungelesen markieren' : 'Als gelesen markieren'}
-              className="mc-btn-ghost !p-2 text-slate-500"
-            >
-              {istGelesen ? <MailOpen size={17} /> : <Mail size={17} />}
+        <span className={`h-2 w-2 rounded-full ${istGelesen ? 'bg-slate-300' : 'bg-primary'}`} />
+        {istGelesen ? 'Gelesen' : 'Ungelesen'}
+      </button>
+      {document.user_id === userId &&
+        (confirmDelete ? (
+          <div className="mc-animate-pop flex items-center gap-1.5">
+            <span className="hidden text-sm text-slate-500 sm:inline">Sicher?</span>
+            <button type="button" onClick={() => setConfirmDelete(false)} className="mc-btn-ghost !px-2.5 !py-1.5 !text-sm">
+              Abbrechen
             </button>
-            {document.user_id === userId && (
-              <button
-                type="button"
-                onClick={handleDeleteDocument}
-                disabled={deleting}
-                aria-label="Dokument löschen"
-                title="Dokument löschen"
-                className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
-              >
-                <Trash2 size={17} />
-              </button>
-            )}
-            <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost !p-2">
-              <X size={18} />
+            <button type="button" onClick={handleDeleteDocument} disabled={deleting} className="mc-btn-danger !px-2.5 !py-1.5 !text-sm">
+              {deleting ? 'Lösche...' : 'Löschen'}
             </button>
           </div>
-        </header>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            aria-label="Löschen"
+            title="Löschen"
+            className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+          >
+            <Trash2 size={17} />
+          </button>
+        ))}
+    </>
+  )
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-6">
-          <div className="mc-card mb-6 p-4">
-            <div className="mb-2 flex flex-wrap items-center gap-1.5">
-              {document.ebene && (
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[document.ebene].chip}`}>
-                  {EBENE_LABEL[document.ebene]}
-                  {document.gliederung ? ` · ${document.gliederung}` : ''}
-                </span>
-              )}
-              {document.user_id !== userId &&
-                docTags.map((t) => (
-                  <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
-                    {t}
-                  </span>
-                ))}
-            </div>
-            {document.user_id === userId && (
-              <div className="mb-2">
-                <TagEditor tags={docTags} onChange={handleUpdateTopLevelTags} vorschlaege={TAG_VORSCHLAEGE} />
-              </div>
-            )}
-            {document.inhalt && <p className="mb-2 whitespace-pre-wrap text-sm text-slate-700">{document.inhalt}</p>}
-            {document.datei_url && (
-              <button
-                type="button"
-                onClick={() => setPreviewDoc({ path: document.datei_url!, name: fileNameFromPath(document.datei_url!) })}
-                className="mc-btn-ghost !text-xs"
-              >
-                📎 Original-Dokument: {fileNameFromPath(document.datei_url)}
-              </button>
-            )}
-          </div>
+  const leftColumn = (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        {document.ebene && (
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[document.ebene].chip}`}>
+            {EBENE_LABEL[document.ebene]}
+            {document.gliederung ? ` · ${document.gliederung}` : ''}
+          </span>
+        )}
+        {document.user_id !== userId &&
+          docTags.map((t) => (
+            <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
+              {t}
+            </span>
+          ))}
+      </div>
+      {document.user_id === userId && (
+        <div className="mb-2">
+          <TagEditor tags={docTags} onChange={handleUpdateTopLevelTags} vorschlaege={TAG_VORSCHLAEGE} />
+        </div>
+      )}
+      {document.inhalt && <p className="mb-2 whitespace-pre-wrap text-sm text-slate-700">{document.inhalt}</p>}
+      {document.datei_url && (
+        <button
+          type="button"
+          onClick={() => setPreviewDoc({ path: document.datei_url!, name: fileNameFromPath(document.datei_url!) })}
+          className="mc-btn-ghost !text-xs"
+        >
+          📎 Original-Dokument: {fileNameFromPath(document.datei_url)}
+        </button>
+      )}
+    </div>
+  )
 
-          <h2 className="mb-2 text-sm font-semibold text-slate-900">Meine Notizen &amp; Dokumente</h2>
-          <ul className="mb-4 space-y-2">
-            {children.map((c) => (
+  const rightColumn = (
+    <>
+      <h2 className="mb-2 font-semibold">Meine Notizen &amp; Dokumente</h2>
+      <ul className="mb-4 space-y-2">
+        {children.map((c) => (
               <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
                 <div className="mb-1 flex flex-wrap items-center gap-1.5">
                   {c.user_id === userId ? (
@@ -506,13 +513,16 @@ export function DokumentDetailModal({
             <button type="submit" disabled={saving} className="mc-btn-primary">
               {saving ? 'Speichern...' : 'Anhängen'}
             </button>
-          </form>
-        </div>
-      </div>
+      </form>
+    </>
+  )
 
+  return (
+    <>
+      <DetailModalShell title={document.titel} headerActions={headerActions} onClose={onClose} left={leftColumn} right={rightColumn} />
       {previewDoc && (
         <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} bucket="dokumente" onClose={() => setPreviewDoc(null)} />
       )}
-    </div>
+    </>
   )
 }

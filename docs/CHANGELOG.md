@@ -1620,3 +1620,50 @@ Verifiziert per `deno check`, Deploy, und einer temporären Test-Fixtur direkt i
 (Test-Dokument angelegt, Ownership-Check + Update-Semantik nachgerechnet, danach gelöscht) - kein
 Bearer-Token zur Hand für einen echten End-to-End-Aufruf (siehe vorheriger Abschnitt zur selben
 Einschränkung).
+
+## Dokumenten-Hub: Redesign mit mehr "Wow-Effekt", neues Gelesen/Ungelesen-Symbol, Suchfunktion
+
+Nutzerfeedback: Darstellung von Liste und Detail-Modal wirkte im Vergleich zum Rest der App (bereits
+komplett redesignt, siehe UI-Review-Historie weiter oben) "nicht sonderlich gelungen"; zusätzlich
+passte das `Mail`/`MailOpen`-Briefsymbol für Gelesen/Ungelesen nicht (Umschlag = falsche Metapher
+außerhalb von E-Mail-Kontexten), und eine Suchfunktion fehlte (nur Ebene-/Tag-Chip-Filter). Geplant
+via `EnterPlanMode`/`ExitPlanMode`, unter Einsatz des `impeccable`-Skills (Product-Register: die
+App ist ein Arbeitswerkzeug, kein Marketing-Surface - Wow-Effekt musste sich als Konsistenz/Polish
+äußern, nicht als Farbrausch/Gradient/Hero-Elemente).
+
+Hauptursache identifiziert: `DokumentDetailModal.tsx` war das **einzige** Detail-Modal der App, das
+noch nicht auf die gemeinsame `DetailModalShell` (2-Spalten, `max-w-5xl`, unabhängig scrollende
+Spalten - bereits von `AntragDetailModal`/`TodoDetailModal`/`TerminDetailModal` genutzt) migriert war
+- noch schmal (`max-w-2xl`), einspaltig, eigenes Chrome.
+
+- **Gelesen/Ungelesen-Symbol**: `Mail`/`MailOpen` komplett durch einen farbigen Punkt ersetzt
+  (Gmail/Linear/Slack-Konvention, `bg-primary` - funktioniert unter jedem Partei-Theme). In
+  `Dokumente.tsx` wandert der Toggle an den linken Rand der Karte (vor das Datei-Icon): ungelesen =
+  immer sichtbarer voller Punkt, gelesen = unsichtbar, bei Karten-Hover als Ring eingeblendet
+  (`group-hover`), damit "als ungelesen markieren" erreichbar bleibt ohne die Zeile zu belasten. Im
+  `DokumentDetailModal.tsx`-Header als Punkt+Text-Chip (`mc-btn-ghost`).
+- **`Dokumente.tsx` Redesign**: Zähler-Badge für ungelesene Dokumente neben dem `<h1>` (identisches
+  Pill-Vokabular wie der bereits bestehende Ungelesen-Zähler auf dem Dashboard-Nav-Link, siehe
+  `Dashboard.tsx`). Neues Suchfeld oberhalb der Filter-Chips (`searchQuery`-State, UND-verknüpft mit
+  Ebene-/Tag-Filter, durchsucht Titel/Inhalt/Tags/Autor der Top-Level-Dokumente client-seitig - Kinder-
+  Notizen bewusst nicht durchsucht, keine Doppelbedeutung mit dem bestehenden Ebene-/Tag-Filter-Muster
+  nötig). Datei-Typ-Icons (`docIcon()`) statt immer demselben `FileText`: `StickyNote` ohne Anhang,
+  `FileImage` bei Bild-Endung, `FileText` bei PDF, sonst `File` - Farbe bleibt einheitlich
+  `text-slate-400`, nur das Glyph variiert. Listen-Karten bekommen einen gestaffelten Eintritt
+  (`mc-animate-slide` + gedeckelte `animationDelay`, max. 240ms über 8 Einträge) sowie Hover-/Press-
+  Mikrointeraktion (`hover:-translate-y-0.5`/`active:scale-[0.99]`, analog zum bestehenden
+  `.mc-btn:active`-Idiom).
+- **`DokumentDetailModal.tsx` Migration auf `DetailModalShell`**: 1:1 nach dem Muster von
+  `AntragDetailModal.tsx` - `headerActions` (Gelesen-Chip + für den Owner ein inline Confirm-Delete-
+  Block mit "Sicher?"/Abbrechen/Löschen statt des bisherigen `window.confirm(...)`), `left` (bisherige
+  Dokument-Karte, jetzt `rounded-xl border bg-slate-50`-Wrapper statt `mc-card`), `right` (Notizen-
+  Liste + Anhänge-Formular unverändert). Reines JSX-Umhängen, keine Logik-Änderungen an
+  `loadChildren`/`handleAddChild`/Tag-/Sharing-Editoren. Modal wächst von `max-w-2xl` einspaltig auf
+  die gemeinsame `max-w-5xl` 2-Spalten-Shell - damit ist dieses das letzte Detail-Modal, das der
+  gemeinsamen Hülle beitritt.
+- `src/components/DocumentPreviewModal.tsx`: `fileExtension()`/`IMAGE_EXTENSIONS` exportiert (waren
+  bisher nur intern genutzt), damit `Dokumente.tsx` dieselbe Extension-Logik für die neuen Datei-Typ-
+  Icons wiederverwendet statt sie zu duplizieren.
+- Verifiziert per `tsc -b`/`vite build` sowie einem statischen Test-Harness mit der tatsächlich
+  kompilierten CSS (Listenkarten mit gemischt gelesen/ungelesen und verschiedenen Dateitypen unter dem
+  SPD-Theme, plus separate Ansicht des 2-spaltigen `DetailModalShell`-Layouts) - danach gelöscht.

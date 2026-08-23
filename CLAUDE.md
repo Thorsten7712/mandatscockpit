@@ -57,8 +57,11 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   Personen geteilt (`dokument_shares`-Tabelle, Muster von `antrag_shares`). Alles auch über den
   MCP-Server befüllbar (`create_document`/`list_documents` - der Server läuft über den
   Service-Role-Client, RLS greift dort nicht, die Sichtbarkeitsprüfung passiert deshalb explizit im
-  Tool-Code, siehe `darfSehen()` in `tools/dokumente.ts`). Ebene-/Tag-Filterchips und
-  Farbmarkierungen (`EBENE_COLOR`/`tagColor()` in `src/lib/sourceColors.ts`). Eigener Storage-Bucket
+  Tool-Code, siehe `darfSehen()` in `tools/dokumente.ts`). Ebene-/Tag-Filterchips, client-seitige
+  Volltextsuche (Titel/Inhalt/Tags/Autor der Top-Level-Dokumente) und Farbmarkierungen
+  (`EBENE_COLOR`/`tagColor()` in `src/lib/sourceColors.ts`). `DokumentDetailModal.tsx` nutzt die
+  gemeinsame `DetailModalShell` (2-Spalten). Gelesen/Ungelesen manuell umschaltbar über einen farbigen
+  Punkt-Indikator (kein Umschlag-Icon). Eigener Storage-Bucket
   `dokumente`, RLS-Sichtbarkeit über `current_user_gliederung_matches()`/`dokument_ist_geteilt_mit()`
   (`supabase/migrations/0033_dokumente.sql`, `0034_dokumente_kommentare.sql`).
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit

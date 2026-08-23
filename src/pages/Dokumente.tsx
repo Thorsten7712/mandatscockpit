@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText, Mail, MailOpen } from 'lucide-react'
+import { File, FileImage, FileText, Search, StickyNote, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, Ebene, Profile } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
-import { fileNameFromPath } from '../components/DocumentPreviewModal'
+import { fileExtension, fileNameFromPath, IMAGE_EXTENSIONS } from '../components/DocumentPreviewModal'
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { TagEditor } from '../components/TagEditor'
 import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
@@ -31,6 +31,16 @@ function chipClass(active: boolean): string {
   }`
 }
 
+/** Datei-Typ-Icon für die Listenkarte - variiert nur das Glyph, nicht die
+ *  Farbe (bewusst zurückhaltend, kein neues Farbsystem). */
+function docIcon(d: DokumentRow) {
+  if (!d.datei_url) return StickyNote
+  const ext = fileExtension(d.datei_url)
+  if (IMAGE_EXTENSIONS.has(ext)) return FileImage
+  if (ext === 'pdf') return FileText
+  return File
+}
+
 /**
  * Dokumenten-Hub: eigener Reiter neben dem Archiv für Dokumente, die für die
  * ganze Partei/Ebene/Gliederung geteilt werden (z. B. hochgeladene
@@ -51,6 +61,7 @@ export default function Dokumente() {
 
   const [ebeneFilter, setEbeneFilter] = useState<Ebene | 'alle'>('alle')
   const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const [showForm, setShowForm] = useState(false)
   const [newTitel, setNewTitel] = useState('')
@@ -198,10 +209,17 @@ export default function Dokumente() {
   const eigeneEbenen = profile?.ebenen ?? []
   const ebenenPresent = EBENEN_ORDER.filter((e) => documents.some((d) => d.ebene === e))
   const tagsPresent = Array.from(new Set(documents.flatMap((d) => d.tags))).sort((a, b) => a.localeCompare(b, 'de'))
+  const unreadCount = documents.filter((d) => istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id))).length
 
   const filtered = documents.filter((d) => {
     if (ebeneFilter !== 'alle' && d.ebene !== ebeneFilter) return false
     if (tagFilter && !d.tags.includes(tagFilter)) return false
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase()
+      const authorName = d.user_id !== userId ? authorNames.get(d.user_id) ?? '' : ''
+      const haystack = [d.titel, d.inhalt ?? '', ...d.tags, authorName].join(' ').toLowerCase()
+      if (!haystack.includes(q)) return false
+    }
     return true
   })
 
@@ -210,7 +228,14 @@ export default function Dokumente() {
       <div className="h-1.5 bg-topbar" aria-hidden="true" />
       <header className="bg-gradient-to-r from-primary to-primary-hover text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
-          <h1 className="text-lg font-bold">Dokumente</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold">Dokumente</h1>
+            {unreadCount > 0 && (
+              <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                {unreadCount}
+              </span>
+            )}
+          </div>
           <Link to="/" className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">
             Zurück zum Dashboard
           </Link>
@@ -218,6 +243,27 @@ export default function Dokumente() {
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="relative mb-3 max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Dokumente durchsuchen..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="mc-input w-full pl-9 pr-8"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Suche leeren"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-1.5">
             {ebenenPresent.length > 0 && (
@@ -311,8 +357,9 @@ export default function Dokumente() {
         )}
 
         <ul className="space-y-2">
-          {filtered.map((d) => {
+          {filtered.map((d, idx) => {
             const ungelesen = istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id))
+            const Icon = docIcon(d)
             return (
             <li
               key={d.id}
@@ -325,10 +372,27 @@ export default function Dokumente() {
                   setOpenDoc(d)
                 }
               }}
-              className="mc-card flex cursor-pointer items-start justify-between gap-3 p-3 hover:shadow-md"
+              style={{ animationDelay: `${Math.min(idx, 8) * 30}ms` }}
+              className="mc-card mc-animate-slide group flex cursor-pointer items-start justify-between gap-3 p-3 transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
             >
-              <div className="flex min-w-0 flex-1 items-start gap-3">
-                <FileText className="mt-0.5 h-6 w-6 shrink-0 text-slate-400" />
+              <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleToggleGelesen(d, ungelesen)
+                  }}
+                  aria-label={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
+                  title={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
+                  className="mt-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full hover:bg-slate-100"
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full transition-opacity ${
+                      ungelesen ? 'bg-primary opacity-100' : 'bg-transparent opacity-0 ring-1 ring-slate-300 group-hover:opacity-100'
+                    }`}
+                  />
+                </button>
+                <Icon className="mt-0.5 h-6 w-6 shrink-0 text-slate-400" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className={`truncate text-sm text-slate-900 ${ungelesen ? 'font-bold' : 'font-normal'}`}>
@@ -356,32 +420,18 @@ export default function Dokumente() {
                   {d.inhalt && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{d.inhalt}</p>}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1.5">
+              {d.user_id === userId && (
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleToggleGelesen(d, ungelesen)
+                    handleDelete(d)
                   }}
-                  aria-label={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
-                  title={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
-                  className="mc-btn-ghost !p-1.5 text-slate-400 hover:text-slate-600"
+                  className="mc-btn-danger !shrink-0 !px-2 !py-1 !text-xs"
                 >
-                  {ungelesen ? <Mail size={16} /> : <MailOpen size={16} />}
+                  Löschen
                 </button>
-                {d.user_id === userId && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDelete(d)
-                    }}
-                    className="mc-btn-danger !px-2 !py-1 !text-xs"
-                  >
-                    Löschen
-                  </button>
-                )}
-              </div>
+              )}
             </li>
             )
           })}
