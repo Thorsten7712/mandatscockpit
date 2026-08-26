@@ -109,6 +109,10 @@ export const TOOLS = [
           description:
             'Filtert auf eine Board-Spalte des Nutzers, z. B. "Wartet" (optional, Teilstring-Vergleich ohne Groß-/Kleinschreibung).',
         },
+        session_id: {
+          type: 'string',
+          description: 'Filtert auf ToDos, die mit dieser Sitzung verknüpft sind (optional).',
+        },
         limit: {
           type: 'number',
           description: 'Maximale Anzahl Karten (Standard 20, Maximum 100).',
@@ -245,7 +249,7 @@ export const TOOLS = [
   {
     name: 'update_todo',
     description:
-      'Ändert Titel, Beschreibung, Fälligkeitsdatum, Zuständigkeit und/oder Board-Spalte einer ToDo-Karte. Für Karten, die dem Nutzer gehören oder mit ihm geteilt sind - "spalte" verschiebt dabei nur die eigene Platzierung des Nutzers (jede Person hat ein eigenes Board), nicht die der anderen. Nur angegebene Felder werden geändert.',
+      'Ändert Titel, Beschreibung, Fälligkeitsdatum, Zuständigkeit, Sitzungs-Verknüpfung und/oder Board-Spalte einer ToDo-Karte. Für Karten, die dem Nutzer gehören oder mit ihm geteilt sind - "spalte" verschiebt dabei nur die eigene Platzierung des Nutzers (jede Person hat ein eigenes Board), nicht die der anderen. Nur angegebene Felder werden geändert.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -254,6 +258,10 @@ export const TOOLS = [
         beschreibung: { type: 'string', description: 'Neue Beschreibung (optional).' },
         faellig_am: { type: 'string', description: 'Neues Fälligkeitsdatum im Format YYYY-MM-DD (optional).' },
         zustaendig: { type: 'string', description: 'Neue Zuständigkeit als Freitext (optional).' },
+        session_id: {
+          type: 'string',
+          description: 'UUID einer Sitzung, mit der die Karte nachträglich verknüpft werden soll (optional, leerer String entfernt eine bestehende Verknüpfung).',
+        },
         spalte: {
           type: 'string',
           description:
@@ -303,6 +311,10 @@ export const TOOLS = [
           type: 'string',
           description: 'Filtert per Teilstring-Suche nach Ausschuss (optional).',
         },
+        session_id: {
+          type: 'string',
+          description: 'Filtert auf Anträge, die mit dieser Sitzung verknüpft sind (optional).',
+        },
         limit: {
           type: 'number',
           description: 'Maximale Anzahl Anträge (Standard 20, Maximum 100).',
@@ -313,7 +325,7 @@ export const TOOLS = [
   {
     name: 'update_antrag_status',
     description:
-      'Ändert den Status eines Antrags (z. B. von "entwurf" auf "gestellt", oder auf "abgestimmt" mit Ergebnis). Für Anträge, die dem Nutzer gehören oder mit ihm geteilt sind. Beim Übergang auf "gestellt" wird eingereicht_am automatisch auf heute gesetzt, falls nicht bereits vorhanden oder explizit angegeben.',
+      'Ändert den Status eines Antrags (z. B. von "entwurf" auf "gestellt", oder auf "abgestimmt" mit Ergebnis) und optional dessen Sitzungs-Verknüpfung. Für Anträge, die dem Nutzer gehören oder mit ihm geteilt sind. Beim Übergang auf "gestellt" wird eingereicht_am automatisch auf heute gesetzt, falls nicht bereits vorhanden oder explizit angegeben.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -331,6 +343,10 @@ export const TOOLS = [
         eingereicht_am: {
           type: 'string',
           description: 'Einreichungsdatum im Format YYYY-MM-DD, überschreibt die Automatik (optional).',
+        },
+        session_id: {
+          type: 'string',
+          description: 'UUID einer Sitzung, mit der der Antrag nachträglich verknüpft (oder neu verknüpft) werden soll (optional, leerer String entfernt eine bestehende Verknüpfung).',
         },
       },
       required: ['antrag_id', 'status'],
@@ -447,6 +463,10 @@ export const TOOLS = [
           type: 'string',
           description: 'UUID eines bestehenden Dokuments (z. B. aus list_documents), an das dieses hier als Notiz/Analyse angehängt werden soll (optional). Ohne parent_id entsteht ein eigenständiges Top-Level-Dokument.',
         },
+        session_id: {
+          type: 'string',
+          description: 'UUID einer Sitzung (z. B. aus list_sessions), mit der das Dokument verknüpft werden soll (optional).',
+        },
         ebene: {
           type: 'string',
           enum: ['kommune', 'kreis', 'land', 'bund'],
@@ -501,8 +521,28 @@ export const TOOLS = [
           description: 'Filtert geteilte Dokumente nach Ebene (optional).',
         },
         tag: { type: 'string', description: 'Filtert per Teilstring-Suche nach Tag, Groß-/Kleinschreibung egal (optional).' },
+        session_id: {
+          type: 'string',
+          description: 'Filtert auf Dokumente, die mit dieser Sitzung verknüpft sind (optional).',
+        },
         limit: { type: 'number', description: 'Maximale Anzahl Dokumente (Standard 20, Maximum 100).' },
       },
+    },
+  },
+  {
+    name: 'update_document_session',
+    description:
+      'Verknüpft ein eigenes Dokument/eine eigene Notiz im Dokumenten-Hub nachträglich mit einer Sitzung, ändert eine bestehende Verknüpfung, oder entfernt sie - nur der/die Ersteller*in darf das.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments/der eigenen Notiz (z. B. aus list_documents).' },
+        session_id: {
+          type: 'string',
+          description: 'UUID der Sitzung (z. B. aus list_sessions). Leerer String entfernt eine bestehende Verknüpfung.',
+        },
+      },
+      required: ['dokument_id', 'session_id'],
     },
   },
   {

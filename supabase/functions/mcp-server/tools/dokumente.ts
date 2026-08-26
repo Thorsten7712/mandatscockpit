@@ -131,6 +131,8 @@ export async function createDocument(supabase: SupabaseClient, userId: string, a
     ? args.tags.filter((t): t is string => typeof t === 'string' && t.trim() !== '').map((t) => t.trim())
     : []
 
+  const sessionId = typeof args.session_id === 'string' && args.session_id.trim() ? args.session_id.trim() : null
+
   const parentId = typeof args.parent_id === 'string' && args.parent_id.trim() ? args.parent_id.trim() : null
   let parent: { user_id: string; sichtbarkeit: string; ebene: string | null; gliederung: string | null } | null = null
   const caller = await loadCallerProfile(supabase, userId)
@@ -224,7 +226,7 @@ export async function createDocument(supabase: SupabaseClient, userId: string, a
 
   const { data: dokument, error } = await supabase
     .from('dokumente')
-    .insert({ user_id: userId, parent_id: parentId, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url: dateiUrl })
+    .insert({ user_id: userId, parent_id: parentId, session_id: sessionId, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url: dateiUrl })
     .select('id')
     .single()
   if (error || !dokument) return toolTextResult(`Fehler beim Anlegen des Dokuments: ${error?.message}`, true)
@@ -250,6 +252,7 @@ export async function createDocument(supabase: SupabaseClient, userId: string, a
 interface DokumentListRow {
   id: string
   parent_id: string | null
+  session_id: string | null
   titel: string
   sichtbarkeit: string
   ebene: string | null
@@ -268,6 +271,7 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
       : 'alle'
   const ebeneFilter = typeof args.ebene === 'string' && args.ebene.trim() ? args.ebene.trim() : ''
   const tag = typeof args.tag === 'string' && args.tag.trim() ? args.tag.trim().toLowerCase() : ''
+  const sessionIdFilter = typeof args.session_id === 'string' && args.session_id.trim() ? args.session_id.trim() : ''
   // Ohne parent_id: nur Top-Level-Dokumente (parent_id is null), analog zur
   // Web-UI (Dokumente.tsx) - mit parent_id: gezielt die an ein Dokument
   // angehängten Notizen/Analysen.
@@ -277,7 +281,7 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   const caller = await loadCallerProfile(supabase, userId)
   if (!caller) return toolTextResult('Fehler: eigenes Profil konnte nicht geladen werden.', true)
 
-  const cols = 'id, parent_id, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url, erstellt_am, user_id'
+  const cols = 'id, parent_id, session_id, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url, erstellt_am, user_id'
   let baseQuery = supabase.from('dokumente').select(cols)
   baseQuery = parentIdFilter ? baseQuery.eq('parent_id', parentIdFilter) : baseQuery.is('parent_id', null)
 
@@ -322,6 +326,7 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   if (sichtbarkeitFilter !== 'alle') rows = rows.filter((d) => d.sichtbarkeit === sichtbarkeitFilter)
   if (ebeneFilter) rows = rows.filter((d) => d.ebene === ebeneFilter)
   if (tag) rows = rows.filter((d) => d.tags.some((t) => t.toLowerCase().includes(tag)))
+  if (sessionIdFilter) rows = rows.filter((d) => d.session_id === sessionIdFilter)
 
   rows.sort((a, b) => b.erstellt_am.localeCompare(a.erstellt_am))
   rows = rows.slice(0, limit)
@@ -333,6 +338,13 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   if (fremdeAutorIds.length > 0) {
     const { data: authors } = await supabase.from('profiles').select('id, name').in('id', Array.from(new Set(fremdeAutorIds)))
     for (const a of authors ?? []) authorNameById.set(a.id as string, a.name as string)
+  }
+
+  const sessionIds = Array.from(new Set(rows.map((d) => d.session_id).filter((v): v is string => Boolean(v))))
+  const sessionTitelById = new Map<string, string>()
+  if (sessionIds.length > 0) {
+    const { data: sessionRows } = await supabase.from('sessions').select('id, titel').in('id', sessionIds)
+    for (const s of sessionRows ?? []) sessionTitelById.set(s.id as string, s.titel as string)
   }
 
   const lines = rows.map((d) => {
@@ -347,6 +359,7 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
     if (d.user_id !== userId) teile.push(`von ${authorNameById.get(d.user_id) ?? 'unbekannt'}`)
     if (d.tags.length > 0) teile.push(`Tags: ${d.tags.join(', ')}`)
     if (d.datei_url) teile.push(`Datei: ${fileNameFromPath(d.datei_url)}`)
+    if (d.session_id) teile.push(`Sitzung: ${sessionTitelById.get(d.session_id) ?? d.session_id}`)
     teile.push(formatDate(d.erstellt_am.slice(0, 10)))
     return teile.join(' · ')
   })
@@ -368,6 +381,35 @@ export async function updateDocumentTitel(supabase: SupabaseClient, userId: stri
   if (error) return toolTextResult(`Fehler beim Aktualisieren des Titels: ${error.message}`, true)
 
   return toolTextResult(`Titel von "${alterTitel}" wurde zu "${titel}" geändert.`)
+}
+
+export async function updateDocumentSession(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
+  if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
+  if (typeof args.session_id !== 'string') {
+    return toolTextResult('Fehler: session_id ist erforderlich (leerer String = Verknüpfung entfernen).', true)
+  }
+  const sessionId = args.session_id.trim() || null
+
+  const { data: dok } = await supabase.from('dokumente').select('id, user_id, titel').eq('id', dokumentId).maybeSingle()
+  if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+  if (dok.user_id !== userId) return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf dessen Sitzungs-Verknüpfung ändern.', true)
+
+  let sessionTitel: string | null = null
+  if (sessionId) {
+    const { data: session } = await supabase.from('sessions').select('titel').eq('id', sessionId).maybeSingle()
+    if (!session) return toolTextResult(`Fehler: Sitzung ${sessionId} wurde nicht gefunden.`, true)
+    sessionTitel = session.titel
+  }
+
+  const { error } = await supabase.from('dokumente').update({ session_id: sessionId }).eq('id', dokumentId)
+  if (error) return toolTextResult(`Fehler beim Aktualisieren der Sitzungs-Verknüpfung: ${error.message}`, true)
+
+  return toolTextResult(
+    sessionTitel
+      ? `"${dok.titel}" wurde mit Sitzung "${sessionTitel}" verknüpft.`
+      : `Sitzungs-Verknüpfung von "${dok.titel}" wurde entfernt.`,
+  )
 }
 
 export async function updateDocumentTags(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {

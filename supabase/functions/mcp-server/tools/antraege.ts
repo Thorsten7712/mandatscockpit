@@ -46,6 +46,7 @@ interface AntragListRow {
 export async function listAntraege(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const status = typeof args.status === 'string' && args.status ? args.status : 'aktiv'
   const ausschuss = typeof args.ausschuss === 'string' ? args.ausschuss.trim() : ''
+  const sessionIdFilter = typeof args.session_id === 'string' && args.session_id.trim() ? args.session_id.trim() : ''
   const limit = parseLimit(args.limit)
 
   const { data: shares } = await supabase.from('antrag_shares').select('antrag_id').eq('user_id', userId)
@@ -58,6 +59,7 @@ export async function listAntraege(supabase: SupabaseClient, userId: string, arg
     if (status === 'aktiv') q = q.in('status', ANTRAG_STATUS_AKTIV)
     else if (status !== 'alle') q = q.eq('status', status)
     if (ausschuss) q = q.ilike('ausschuss', `%${ausschuss}%`)
+    if (sessionIdFilter) q = q.eq('session_id', sessionIdFilter)
     return q
   }
   const [own, shared] = await Promise.all([
@@ -75,12 +77,20 @@ export async function listAntraege(supabase: SupabaseClient, userId: string, arg
 
   if (rows.length === 0) return toolTextResult('Keine Anträge gefunden.')
 
+  const sessionIds = Array.from(new Set(rows.map((a) => a.session_id).filter((v): v is string => Boolean(v))))
+  const sessionTitelById = new Map<string, string>()
+  if (sessionIds.length > 0) {
+    const { data: sessionRows } = await supabase.from('sessions').select('id, titel').in('id', sessionIds)
+    for (const s of sessionRows ?? []) sessionTitelById.set(s.id as string, s.titel as string)
+  }
+
   const lines = rows.map((a) => {
     const statusLabel =
       a.status === 'abgestimmt' && a.ergebnis ? `Abgestimmt · ${a.ergebnis === 'positiv' ? 'Positiv' : 'Negativ'}` : a.status
     const details: string[] = [statusLabel]
     if (a.ausschuss) details.push(a.ausschuss)
     if (a.eingereicht_am) details.push(`eingereicht ${formatDate(a.eingereicht_am)}`)
+    if (a.session_id) details.push(`Sitzung: ${sessionTitelById.get(a.session_id) ?? a.session_id}`)
     if (a.user_id !== userId) details.push('geteilt')
     return `- ${a.titel} (${details.join(' · ')}) — id: ${a.id}`
   })
@@ -125,6 +135,15 @@ export async function updateAntragStatus(supabase: SupabaseClient, userId: strin
 
   const updates: Record<string, unknown> = { status, ergebnis: status === 'abgestimmt' ? ergebnis : null }
   if (eingereichtAm !== undefined) updates.eingereicht_am = eingereichtAm
+
+  if (typeof args.session_id === 'string') {
+    const neueSessionId = args.session_id.trim() || null
+    if (neueSessionId) {
+      const { data: session } = await supabase.from('sessions').select('id').eq('id', neueSessionId).maybeSingle()
+      if (!session) return toolTextResult(`Fehler: Sitzung ${neueSessionId} wurde nicht gefunden.`, true)
+    }
+    updates.session_id = neueSessionId
+  }
 
   const { error } = await supabase.from('antraege').update(updates).eq('id', antragId)
   if (error) return toolTextResult(`Fehler beim Aktualisieren: ${error.message}`, true)

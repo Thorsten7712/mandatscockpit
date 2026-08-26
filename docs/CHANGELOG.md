@@ -1667,3 +1667,34 @@ Spalten - bereits von `AntragDetailModal`/`TodoDetailModal`/`TerminDetailModal` 
 - Verifiziert per `tsc -b`/`vite build` sowie einem statischen Test-Harness mit der tatsächlich
   kompilierten CSS (Listenkarten mit gemischt gelesen/ungelesen und verschiedenen Dateitypen unter dem
   SPD-Theme, plus separate Ansicht des 2-spaltigen `DetailModalShell`-Layouts) - danach gelöscht.
+
+## MCP-Server: Dokumente und ToDos nachträglich mit Sitzungen verknüpfbar
+
+Nutzerwunsch: „Dokumente und ToDos auch im Nachhinein über den MCP Server noch mit Sitzungen
+verknüpfen können" - `update_todo` konnte das als Beispiel genannt nicht, obwohl `todos.session_id`
+schon seit 0001_init.sql existiert (nur `create_todo` konnte sie beim Anlegen setzen). Auftrag
+ausdrücklich „in allen sinnvollen Aufrufen" erweitert, nicht nur den zwei genannten Stellen:
+
+- **`dokumente` hatte noch gar keine `session_id`-Spalte** (anders als `todos`/`antraege`) - neue
+  Migration `0036_dokumente_session.sql`. Keine neue RLS-Policy nötig, die bestehenden
+  `dokumente_select_*`-Policies sind spaltenunabhängig.
+- **Neues Tool `update_document_session(dokument_id, session_id)`** - leerer String entfernt eine
+  bestehende Verknüpfung, exakt nach dem Ownership-Prüfungs-Muster von `update_document_titel`/
+  `update_document_tags`. `create_document` bekommt `session_id` als weiteren optionalen Parameter.
+- **`update_todo`**: neuer optionaler Parameter `session_id` (leerer String = entfernen), validiert
+  vorher per Select, dass die Sitzung existiert (verständliche Fehlermeldung statt rohem
+  FK-Constraint-Fehler, gleiches Muster wie überall sonst im MCP-Server).
+- **`update_antrag_status`**: dieselbe `session_id`-Erweiterung, obwohl `create_antrag` schon
+  `session_id` unterstützt (dort nur beim Anlegen, nicht nachträglich änderbar) - gleiche Lücke wie bei
+  ToDos, deshalb mit aufgenommen statt nur die zwei explizit genannten Stellen zu fixen.
+- **Symmetrische Lese-Ergänzungen**, damit eine Verknüpfung nach dem Setzen auch sichtbar/filterbar
+  ist (sonst wäre das Schreiben ohne Nutzen): `list_todos`, `list_antraege` und `list_documents`
+  bekommen je einen optionalen `session_id`-Filter und zeigen bei verknüpften Einträgen jetzt
+  `Sitzung: <Titel>` in der Ausgabezeile (Sitzungstitel werden dafür in einer Sammelabfrage
+  nachgeladen, gleiches Muster wie in `list_notes`). `events`/`create_event_note` bleiben bewusst
+  außen vor - Termine haben kein `session_id`-Feld im Datenmodell, das Konzept passt dort nicht
+  (ein Termin ist ein rein persönlicher Kalendereintrag, keine Sitzungs-Zuordnung vorgesehen).
+- Verifiziert per `deno check`, `supabase db push` (Migration live), Deploy, und temporären
+  Test-Fixturen direkt in der Live-DB für alle drei Entitäten (ToDo/Dokument/Antrag angelegt, Link
+  gesetzt, Filter-Query nachgerechnet, danach alle drei wieder gelöscht - Bestand vorher/nachher
+  gleich null verifiziert).

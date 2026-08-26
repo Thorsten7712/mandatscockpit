@@ -72,12 +72,14 @@ interface TodoListRow {
   zustaendig: string | null
   erledigt: boolean
   erledigt_am: string | null
+  session_id: string | null
   user_id: string
 }
 
 export async function listTodos(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const status = args.status === 'erledigt' || args.status === 'alle' ? args.status : 'offen'
   const spalte = typeof args.spalte === 'string' ? args.spalte.trim().toLowerCase() : ''
+  const sessionIdFilter = typeof args.session_id === 'string' && args.session_id.trim() ? args.session_id.trim() : ''
   const limit = parseLimit(args.limit)
 
   // Die Platzierungen des Nutzers liefern beides: die Menge der für ihn sichtbaren
@@ -94,9 +96,10 @@ export async function listTodos(supabase: SupabaseClient, userId: string, args: 
   const columnTitleById = new Map((columns ?? []).map((c) => [c.id as string, c.titel as string]))
 
   const baseQuery = () => {
-    let q = supabase.from('todos').select('id, titel, faellig_am, zustaendig, erledigt, erledigt_am, user_id')
+    let q = supabase.from('todos').select('id, titel, faellig_am, zustaendig, erledigt, erledigt_am, session_id, user_id')
     if (status === 'offen') q = q.eq('erledigt', false)
     else if (status === 'erledigt') q = q.eq('erledigt', true)
+    if (sessionIdFilter) q = q.eq('session_id', sessionIdFilter)
     return q
   }
   const [own, placed] = await Promise.all([
@@ -133,6 +136,13 @@ export async function listTodos(supabase: SupabaseClient, userId: string, args: 
     )
   }
 
+  const sessionIds = Array.from(new Set(rows.map((t) => t.session_id).filter((v): v is string => Boolean(v))))
+  const sessionTitelById = new Map<string, string>()
+  if (sessionIds.length > 0) {
+    const { data: sessionRows } = await supabase.from('sessions').select('id, titel').in('id', sessionIds)
+    for (const s of sessionRows ?? []) sessionTitelById.set(s.id as string, s.titel as string)
+  }
+
   const lines = rows.map((t) => {
     const box = t.erledigt ? '[x]' : '[ ]'
     const details: string[] = []
@@ -141,6 +151,7 @@ export async function listTodos(supabase: SupabaseClient, userId: string, args: 
     const spaltenTitel = columnTitleById.get(columnIdByTodo.get(t.id) ?? '')
     if (spaltenTitel) details.push(`Spalte: ${spaltenTitel}`)
     if (t.zustaendig) details.push(`zuständig: ${t.zustaendig}`)
+    if (t.session_id) details.push(`Sitzung: ${sessionTitelById.get(t.session_id) ?? t.session_id}`)
     if (t.user_id !== userId) details.push('geteilt')
     const suffix = details.length > 0 ? ` — ${details.join(' · ')}` : ''
     return `- ${box} ${t.titel}${suffix} — id: ${t.id}`
@@ -200,6 +211,14 @@ export async function updateTodo(supabase: SupabaseClient, userId: string, args:
   if (typeof args.beschreibung === 'string') updates.beschreibung = args.beschreibung.trim() || null
   if (typeof args.faellig_am === 'string') updates.faellig_am = args.faellig_am.trim() || null
   if (typeof args.zustaendig === 'string') updates.zustaendig = args.zustaendig.trim() || null
+  if (typeof args.session_id === 'string') {
+    const neueSessionId = args.session_id.trim() || null
+    if (neueSessionId) {
+      const { data: session } = await supabase.from('sessions').select('id').eq('id', neueSessionId).maybeSingle()
+      if (!session) return toolTextResult(`Fehler: Sitzung ${neueSessionId} wurde nicht gefunden.`, true)
+    }
+    updates.session_id = neueSessionId
+  }
 
   const spalte = typeof args.spalte === 'string' ? args.spalte.trim() : ''
   let spaltenHinweis = ''
