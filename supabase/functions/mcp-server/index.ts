@@ -46,6 +46,7 @@ import { listNotes, createSessionNote, createEventNote, createTodoNote, createAn
 import { uploadPresseschau } from './tools/presseschau.ts'
 import { startFileUpload, appendFileChunk, finishFileUpload } from './tools/uploads.ts'
 import { createDocument, listDocuments, updateDocumentSession, updateDocumentSharing, updateDocumentTags, updateDocumentTitel } from './tools/dokumente.ts'
+import { linkTodoDocument, unlinkTodoDocument } from './tools/todo_dokumente.ts'
 import { search } from './tools/search.ts'
 
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -231,6 +232,12 @@ Deno.serve(async (req) => {
           break
         case 'update_document_session':
           result = await updateDocumentSession(supabase, user.id, args)
+          break
+        case 'link_todo_document':
+          result = await linkTodoDocument(supabase, user.id, args)
+          break
+        case 'unlink_todo_document':
+          result = await unlinkTodoDocument(supabase, user.id, args)
           break
         case 'update_document_tags':
           result = await updateDocumentTags(supabase, user.id, args)

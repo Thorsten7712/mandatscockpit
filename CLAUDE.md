@@ -63,11 +63,17 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   gemeinsame `DetailModalShell` (2-Spalten). Gelesen/Ungelesen manuell umschaltbar über einen farbigen
   Punkt-Indikator (kein Umschlag-Icon). Eigener Storage-Bucket
   `dokumente`, RLS-Sichtbarkeit über `current_user_gliederung_matches()`/`dokument_ist_geteilt_mit()`
-  (`supabase/migrations/0033_dokumente.sql`, `0034_dokumente_kommentare.sql`).
+  (`supabase/migrations/0033_dokumente.sql`, `0034_dokumente_kommentare.sql`). Top-Level-Dokumente
+  lassen sich zusätzlich mit einer Sitzung (`dokumente.session_id`, 1:n, `0036_dokumente_session.sql`)
+  und mit beliebig vielen ToDo-Karten verknüpfen (n:m-Jointabelle `todo_dokumente`,
+  `0037_todo_dokumente.sql` – anders als die 1:n-`session_id`-Spalten, da eine Karte mehrere Dokumente
+  und ein Dokument mehrere Karten betreffen kann). Beide Verknüpfungen sind im Detail-Modal auf beiden
+  Seiten sichtbar/editierbar (ToDo-Karte ↔ Dokument, Sitzung ↔ Dokument) und über den MCP-Server
+  steuerbar (`update_document_session`, `link_todo_document`/`unlink_todo_document`).
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 27 Tools über
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 29 Tools über
   ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
   README.md Abschnitt 9 und `docs/CHANGELOG.md`).
 - **GitHub-Actions-Workflows**: Deploy nach GitHub Pages (inkl. `404.html`-Kopie fürs SPA-Routing),

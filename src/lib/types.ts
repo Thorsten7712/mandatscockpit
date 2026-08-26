@@ -49,6 +49,8 @@ export interface DokumentRow {
   user_id: string
   /** null = Top-Level-Dokument (z. B. Sitzungsvorlage), gesetzt = angehängte Notiz/Analyse (siehe DokumentDetailModal.tsx) */
   parent_id: string | null
+  /** Optionale Verknüpfung mit einer Sitzung (0033_dokumente.sql -> 0036_dokumente_session.sql) */
+  session_id: string | null
   titel: string
   sichtbarkeit: DokumentSichtbarkeit
   /** nur bei sichtbarkeit='geteilt' gesetzt (bei Kindern vom Elternteil übernommen) */
@@ -186,6 +188,16 @@ export interface TodoPlacement {
   user_id: string
   column_id: string
   position: number
+}
+
+/** n:m-Verknüpfung zwischen ToDo-Karten und Dokumenten-Hub-Dokumenten
+ * (0037_todo_dokumente.sql) - anders als die 1:n-session_id-Spalten kann
+ * eine Karte mehrere Dokumente und ein Dokument mehrere Karten haben. */
+export interface TodoDokument {
+  id: string
+  todo_id: string
+  dokument_id: string
+  erstellt_am: string
 }
 
 export interface TodoComment {

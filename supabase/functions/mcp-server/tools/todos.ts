@@ -143,6 +143,23 @@ export async function listTodos(supabase: SupabaseClient, userId: string, args: 
     for (const s of sessionRows ?? []) sessionTitelById.set(s.id as string, s.titel as string)
   }
 
+  // Verknüpfte Dokumente (n:m über todo_dokumente, siehe 0037_todo_dokumente.sql) -
+  // je Karte eine Liste von Dokumenttiteln, gleiches Batch-Lookup-Muster wie sessionTitelById.
+  const rowIds = rows.map((t) => t.id)
+  const { data: linkRows } = await supabase.from('todo_dokumente').select('todo_id, dokument_id').in('todo_id', rowIds)
+  const dokumentIdsByTodo = new Map<string, string[]>()
+  for (const l of linkRows ?? []) {
+    const list = dokumentIdsByTodo.get(l.todo_id as string) ?? []
+    list.push(l.dokument_id as string)
+    dokumentIdsByTodo.set(l.todo_id as string, list)
+  }
+  const allDokumentIds = Array.from(new Set((linkRows ?? []).map((l) => l.dokument_id as string)))
+  const dokumentTitelById = new Map<string, string>()
+  if (allDokumentIds.length > 0) {
+    const { data: dokRows } = await supabase.from('dokumente').select('id, titel').in('id', allDokumentIds)
+    for (const d of dokRows ?? []) dokumentTitelById.set(d.id as string, d.titel as string)
+  }
+
   const lines = rows.map((t) => {
     const box = t.erledigt ? '[x]' : '[ ]'
     const details: string[] = []
@@ -152,6 +169,8 @@ export async function listTodos(supabase: SupabaseClient, userId: string, args: 
     if (spaltenTitel) details.push(`Spalte: ${spaltenTitel}`)
     if (t.zustaendig) details.push(`zuständig: ${t.zustaendig}`)
     if (t.session_id) details.push(`Sitzung: ${sessionTitelById.get(t.session_id) ?? t.session_id}`)
+    const dokTitel = (dokumentIdsByTodo.get(t.id) ?? []).map((did) => dokumentTitelById.get(did) ?? did)
+    if (dokTitel.length > 0) details.push(`Dokumente: ${dokTitel.join(', ')}`)
     if (t.user_id !== userId) details.push('geteilt')
     const suffix = details.length > 0 ? ` — ${details.join(' · ')}` : ''
     return `- ${box} ${t.titel}${suffix} — id: ${t.id}`

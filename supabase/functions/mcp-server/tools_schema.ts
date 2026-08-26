@@ -546,6 +546,31 @@ export const TOOLS = [
     },
   },
   {
+    name: 'link_todo_document',
+    description:
+      'Verknüpft eine ToDo-Karte mit einem Dokument aus dem Dokumenten-Hub (n:m - eine Karte kann mehrere Dokumente haben, ein Dokument mehrere Karten). Voraussetzung: die Karte gehört dem Nutzer oder ist mit ihm geteilt, ODER das Dokument gehört ihm. Erneutes Verknüpfen einer bereits bestehenden Verbindung ist unschädlich (kein Duplikat/Fehler).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        todo_id: { type: 'string', description: 'UUID der ToDo-Karte (z. B. aus list_todos).' },
+        dokument_id: { type: 'string', description: 'UUID des Dokuments (z. B. aus list_documents).' },
+      },
+      required: ['todo_id', 'dokument_id'],
+    },
+  },
+  {
+    name: 'unlink_todo_document',
+    description: 'Entfernt eine bestehende Verknüpfung zwischen einer ToDo-Karte und einem Dokument (siehe link_todo_document).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        todo_id: { type: 'string', description: 'UUID der ToDo-Karte.' },
+        dokument_id: { type: 'string', description: 'UUID des Dokuments.' },
+      },
+      required: ['todo_id', 'dokument_id'],
+    },
+  },
+  {
     name: 'update_document_titel',
     description:
       'Ändert den Titel eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub (Top-Level-Dokument oder per parent_id angehängte Notiz/Analyse) - nur der/die Ersteller*in darf das. Ändert nur den angezeigten Titel, nicht den Dateinamen eines eventuell angehängten Datei-Uploads.',

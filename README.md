@@ -123,7 +123,7 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 25 Tools:
+`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 29 Tools:
 
 **Anlegen:**
 - `create_todo(titel, spalte, faellig_am?, session_id?)` – Spalte wird angelegt, falls sie noch nicht existiert.
@@ -133,13 +133,13 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 - `create_document(titel, sichtbarkeit, parent_id?, session_id?, ebene?, teilen_mit_namen?, tags?, inhalt?, dateiname?, datei_base64?, datei_pfad?)` – legt ein Dokument im Dokumenten-Hub an (`/dokumente`), optional als Notiz/Analyse-Anhang an ein bestehendes Dokument (`parent_id`, z. B. eine Einschätzung zu einer hochgeladenen Sitzungsvorlage) und/oder mit einer Sitzung verknüpft (`session_id`). Drei Kategorien: `sichtbarkeit="geteilt"` (sichtbar für alle Mitglieder der eigenen Partei auf der Ebene/Gliederung – bei einem Top-Level-Dokument über `ebene` gewählt, bei einem Anhang automatisch vom übergeordneten Dokument übernommen), `sichtbarkeit="persoenlich"` (nur der Nutzer selbst) oder `sichtbarkeit="einzelpersonen"` (nur die in `teilen_mit_namen` genannten Partei-/Ebenen-Kolleg\*innen zusätzlich, Namen werden per Teilstring-Suche gegen sichtbare Profile aufgelöst).
 
 **Lesen:**
-- `list_todos(status?, spalte?, session_id?, limit?)` – eigene + mit dem Nutzer geteilte Karten.
+- `list_todos(status?, spalte?, session_id?, limit?)` – eigene + mit dem Nutzer geteilte Karten; die Ausgabe nennt zusätzlich eine verknüpfte Sitzung sowie über `link_todo_document` verknüpfte Dokumente.
 - `list_sessions(zeitraum?, gremium?, nur_meine_gremien?, limit?)` – `zeitraum`: `zukunft` (Standard)/`vergangenheit`/`alle`; `nur_meine_gremien` spiegelt die Gremien-Auswahl aus Einstellungen → Meine Gremien (analog Dashboard/Archiv).
 - `list_events(zeitraum?, limit?)` – eigene Termine, gleiche `zeitraum`-Semantik.
 - `list_antraege(status?, ausschuss?, session_id?, limit?)` – eigene + geteilte; `status` Standard `aktiv` (entwurf/gestellt/in_beratung/vertagt).
 - `list_antrag_fristen()` – errechnet Einreichungsfristen (Sitzungsdatum minus die unter Einstellungen → Antrags-Fristen konfigurierte Vorlaufzeit je Ebene) für aktive eigene Anträge mit Sitzungsbezug.
 - `list_notes(session_id?, event_id?, todo_id?, limit?)` – liest zurück, was die `create_*_note`-Tools gespeichert haben; ohne Filter die zuletzt gespeicherten Einträge, mit genau einem `*_id`-Filter alle Einträge zu diesem Objekt. Datei-Anhänge werden nur mit Dateinamen genannt, der Inhalt selbst ist über MCP nicht herunterladbar.
-- `list_documents(parent_id?, sichtbarkeit?, ebene?, tag?, session_id?, limit?)` – ohne `parent_id` nur Top-Level-Dokumente (z. B. Sitzungsvorlagen), mit `parent_id` die daran angehängten Notizen/Analysen. Eigene sowie sichtbare geteilte/individuell freigegebene Dokumente anderer Mitglieder – der MCP-Server läuft über den Service-Role-Client (RLS greift dort nicht), die Sichtbarkeitsprüfung passiert deshalb explizit im Tool-Code, nicht per RLS.
+- `list_documents(parent_id?, sichtbarkeit?, ebene?, tag?, session_id?, limit?)` – ohne `parent_id` nur Top-Level-Dokumente (z. B. Sitzungsvorlagen), mit `parent_id` die daran angehängten Notizen/Analysen. Eigene sowie sichtbare geteilte/individuell freigegebene Dokumente anderer Mitglieder – der MCP-Server läuft über den Service-Role-Client (RLS greift dort nicht), die Sichtbarkeitsprüfung passiert deshalb explizit im Tool-Code, nicht per RLS. Die Ausgabe nennt zusätzlich über `link_todo_document` verknüpfte ToDo-Karten.
 - `search(query, limit?)` – Volltextsuche über Titel/Beschreibung von ToDos, Titel/Inhalt von Anträgen und Notiz-Texten (eigene + geteilte). Durchsucht **nicht** den Dokumenten-Hub, dafür `list_documents` mit Filtern verwenden.
 
 **Bearbeiten:**
@@ -148,6 +148,7 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 - `update_antrag_status(antrag_id, status, ergebnis?, eingereicht_am?, session_id?)` – `ergebnis` (`positiv`/`negativ`) ist bei `status="abgestimmt"` Pflicht; `eingereicht_am` wird beim Übergang auf `gestellt` automatisch auf heute gesetzt, falls nicht angegeben; `session_id` verknüpft/löst den Antrag nachträglich mit einer Sitzung.
 - `update_document_titel(dokument_id, titel)` – ändert den Titel eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub (nicht den Dateinamen eines angehängten Datei-Uploads). Nur der/die Ersteller\*in darf das.
 - `update_document_session(dokument_id, session_id)` – verknüpft ein eigenes Dokument/eine eigene Notiz nachträglich mit einer Sitzung, ändert eine bestehende Verknüpfung, oder entfernt sie (leerer String). Nur der/die Ersteller\*in darf das.
+- `link_todo_document(todo_id, dokument_id)` / `unlink_todo_document(todo_id, dokument_id)` – verknüpft bzw. löst eine n:m-Verknüpfung zwischen einer ToDo-Karte und einem Dokument im Dokumenten-Hub (Tabelle `todo_dokumente`, anders als die 1:n-`session_id`-Spalten kann eine Karte mehrere Dokumente und ein Dokument mehrere Karten haben). Erfordert Zugriff auf die Karte (eigene oder mit dem Nutzer geteilte) **oder** Eigentümerschaft am Dokument.
 - `update_document_tags(dokument_id, tags)` – ersetzt die Tags eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub komplett (leeres Array entfernt alle Tags). Nur der/die Ersteller\*in darf das.
 - `update_document_sharing(dokument_id, sichtbarkeit, teilen_mit_namen?)` – ändert nachträglich die Sichtbarkeit/Freigabe eines eigenen Dokuments/einer eigenen Notiz, ersetzt bestehende Freigaben komplett. Bei `sichtbarkeit="geteilt"` für eine per `parent_id` angehängte Notiz wird `ebene`/`gliederung` automatisch vom übergeordneten Dokument übernommen (das muss selbst Ebene-weit geteilt sein); für ein Top-Level-Dokument bleibt die bisherige Ebene/Gliederung erhalten. Nur der/die Ersteller\*in darf das.
 

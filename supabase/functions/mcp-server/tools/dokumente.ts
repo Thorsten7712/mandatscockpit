@@ -347,6 +347,22 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
     for (const s of sessionRows ?? []) sessionTitelById.set(s.id as string, s.titel as string)
   }
 
+  // Verknüpfte ToDos (n:m über todo_dokumente, siehe 0037_todo_dokumente.sql).
+  const rowIds = rows.map((d) => d.id)
+  const { data: linkRows } = await supabase.from('todo_dokumente').select('todo_id, dokument_id').in('dokument_id', rowIds)
+  const todoIdsByDokument = new Map<string, string[]>()
+  for (const l of linkRows ?? []) {
+    const list = todoIdsByDokument.get(l.dokument_id as string) ?? []
+    list.push(l.todo_id as string)
+    todoIdsByDokument.set(l.dokument_id as string, list)
+  }
+  const allTodoIds = Array.from(new Set((linkRows ?? []).map((l) => l.todo_id as string)))
+  const todoTitelById = new Map<string, string>()
+  if (allTodoIds.length > 0) {
+    const { data: todoRows } = await supabase.from('todos').select('id, titel').in('id', allTodoIds)
+    for (const t of todoRows ?? []) todoTitelById.set(t.id as string, t.titel as string)
+  }
+
   const lines = rows.map((d) => {
     const teile = [`- "${d.titel}" (id: ${d.id})`]
     if (d.sichtbarkeit === 'geteilt') {
@@ -360,6 +376,8 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
     if (d.tags.length > 0) teile.push(`Tags: ${d.tags.join(', ')}`)
     if (d.datei_url) teile.push(`Datei: ${fileNameFromPath(d.datei_url)}`)
     if (d.session_id) teile.push(`Sitzung: ${sessionTitelById.get(d.session_id) ?? d.session_id}`)
+    const todoTitel = (todoIdsByDokument.get(d.id) ?? []).map((tid) => todoTitelById.get(tid) ?? tid)
+    if (todoTitel.length > 0) teile.push(`ToDos: ${todoTitel.join(', ')}`)
     teile.push(formatDate(d.erstellt_am.slice(0, 10)))
     return teile.join(' · ')
   })

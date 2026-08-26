@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, CalendarSource, Ebene, EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
+import type { AntragRow, CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
 import { AntragDetailModal } from './AntragDetailModal'
+import { DokumentDetailModal } from './DokumentDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { formatDateTime } from '../lib/format'
 import { antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
@@ -65,6 +66,9 @@ export function TerminDetailPanel({
   const [linkedAntraege, setLinkedAntraege] = useState<AntragRow[]>([])
   const [openAntragId, setOpenAntragId] = useState<string | null>(null)
 
+  const [linkedDokumente, setLinkedDokumente] = useState<DokumentRow[]>([])
+  const [openDokument, setOpenDokument] = useState<DokumentRow | null>(null)
+
   async function loadTermin() {
     setEvent(null)
     setSession(null)
@@ -110,14 +114,25 @@ export function TerminDetailPanel({
     setLinkedAntraege(data ?? [])
   }
 
+  async function loadLinkedDokumente() {
+    if (kind !== 'session') {
+      setLinkedDokumente([])
+      return
+    }
+    const { data } = await supabase.from('dokumente').select('*').eq('session_id', id).order('erstellt_am')
+    setLinkedDokumente(data ?? [])
+  }
+
   useEffect(() => {
     setEditing(false)
     setOpenTodoId(null)
     setOpenAntragId(null)
+    setOpenDokument(null)
     loadTermin()
     loadSummaries()
     loadLinkedTodos()
     loadLinkedAntraege()
+    loadLinkedDokumente()
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id)
     })
@@ -449,6 +464,24 @@ export function TerminDetailPanel({
               <li className="text-slate-400 text-sm">Keine verknüpften Anträge.</li>
             )}
           </ul>
+
+          <h3 className="mb-2 text-sm font-semibold text-slate-900">Verknüpfte Dokumente</h3>
+          <ul className="mb-6 space-y-2">
+            {linkedDokumente.map((d) => (
+              <li key={d.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenDokument(d)}
+                  className="w-full truncate rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-800 shadow-sm transition-shadow duration-150 hover:shadow-md"
+                >
+                  {d.titel}
+                </button>
+              </li>
+            ))}
+            {linkedDokumente.length === 0 && (
+              <li className="text-slate-400 text-sm">Keine verknüpften Dokumente.</li>
+            )}
+          </ul>
         </>
       )}
     </>
@@ -521,6 +554,16 @@ export function TerminDetailPanel({
       )}
       {openAntragId && (
         <AntragDetailModal id={openAntragId} onClose={() => setOpenAntragId(null)} onChanged={loadLinkedAntraege} />
+      )}
+      {openDokument && (
+        <DokumentDetailModal
+          document={openDokument}
+          onClose={() => setOpenDokument(null)}
+          onDeleted={() => {
+            setOpenDokument(null)
+            loadLinkedDokumente()
+          }}
+        />
       )}
       {previewDoc && (
         <DocumentPreviewModal

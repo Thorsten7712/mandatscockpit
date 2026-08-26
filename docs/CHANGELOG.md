@@ -1698,3 +1698,65 @@ ausdrücklich „in allen sinnvollen Aufrufen" erweitert, nicht nur den zwei gen
   Test-Fixturen direkt in der Live-DB für alle drei Entitäten (ToDo/Dokument/Antrag angelegt, Link
   gesetzt, Filter-Query nachgerechnet, danach alle drei wieder gelöscht - Bestand vorher/nachher
   gleich null verifiziert).
+
+## Alles miteinander verknüpfen: ToDos, Dokumente und Sitzungstermine (Web-UI + MCP)
+
+Nutzerwunsch: „Ich möchte alles miteinander verknüpfen können. Sowohl im Mandatscockpit selber, als
+auch über den MCP Server. Also Todos, Dokumente und Sitzungstermine. Sitzungstermine haben bereits
+einen Abschnitt 'Verknüpfte Aufgaben' und 'Verknüpfte Anträge'. [...] Diesen Abschnitt brauchen wir
+entsprechend bei den ToDos (Verknüpfte Sitzungen, Verknüpfte Dokumente) und den Dokumenten (Verknüpfte
+ToDos, Verknüpfte Sitzungen)." Der vorherige Punkt hatte die Datenebene für Sitzung↔ToDo und
+Sitzung↔Dokument bereits per MCP-Tool nachrüstbar gemacht (`0036_dokumente_session.sql`,
+`update_document_session`, `update_todo(session_id)`) - diesem Punkt fehlte noch (a) eine echte
+ToDo↔Dokument-Verknüpfung (bislang gar nicht modelliert) und (b) die Sichtbarkeit/Bedienbarkeit all
+dieser Verknüpfungen direkt in der Web-UI statt nur über MCP-Tool-Aufrufe.
+
+- **Neue n:m-Verknüpfung ToDo↔Dokument** (`0037_todo_dokumente.sql`, Jointabelle `todo_dokumente`
+  mit `todo_id`, `dokument_id`, unique-Constraint auf dem Paar). Bewusst eine eigene Tabelle statt
+  Wiederverwendung der bestehenden `todos.dokument_id`-Spalte bzw. der `documents`-Tabelle: beide sind
+  laut Roadmap in CLAUDE.md für das künftige RIS-Dokumenten-Import-Feature (Phase 2) reserviert und
+  komplett unabhängig vom neuen Dokumenten-Hub (Tabelle `dokumente`, seit 0033). Anders als die
+  1:n-`session_id`-Spalten auf `todos`/`dokumente` (eine Karte/ein Dokument hat höchstens eine
+  Sitzung) kann hier eine Karte mehrere Dokumente und ein Dokument mehrere Karten betreffen, daher
+  eine echte Jointabelle statt einer FK-Spalte. RLS: sichtbar/anlegbar/löschbar, wenn der Nutzer
+  entweder Zugriff auf die ToDo-Karte hat (Eigentümer oder per `todo_placements` geteilt) oder
+  Eigentümer des Dokuments ist - keine der beiden Seiten muss beide Bedingungen erfüllen, ein Teilen
+  in eine Richtung reicht (z. B. ein per Ebene geteiltes Dokument mit der eigenen privaten Karte
+  verknüpfen).
+- **Neue MCP-Tools `link_todo_document`/`unlink_todo_document`** (`tools/todo_dokumente.ts`, neues
+  Modul) - beide prüfen dieselbe Zugriffs-Bedingung wie die RLS-Policy explizit im Tool-Code (der
+  MCP-Server läuft über den Service-Role-Client, RLS greift dort nicht). `link_todo_document` upsertet
+  mit `onConflict: 'todo_id,dokument_id', ignoreDuplicates: true` statt vorher separat auf Duplikate zu
+  prüfen.
+- **Symmetrische Lese-Ergänzungen**: `list_todos` und `list_documents` laden die jeweils verknüpften
+  Gegenstücke per Sammelabfrage nach (gleiches Muster wie der `Sitzung: <Titel>`-Zusatz aus dem
+  vorherigen Punkt) und zeigen sie als `Dokumente: X, Y` bzw. `ToDos: X, Y` in der Ausgabezeile.
+- **Web-UI, `TodoDetailModal.tsx`**: neuer Abschnitt „Verknüpfte Sitzungen" (Anzeige der bereits
+  bestehenden `linkedSession`, read-only - das Setzen der Sitzung läuft weiterhin über das
+  Bearbeiten-Formular der Karte) und „Verknüpfte Dokumente" (Liste mit „Lösen"-Button je Eintrag plus
+  Such-Dropdown zum Verknüpfen neuer Dokumente, exakt das gleiche Interaktionsmuster wie der
+  bestehende „Kolleg*in suchen"-Sharing-Dropdown: `onFocus`/`onBlur`-Timeout-Pattern, `onMouseDown`
+  statt `onClick` in der Trefferliste, damit der Klick vor dem `onBlur`-Schließen ankommt).
+- **Web-UI, `DokumentDetailModal.tsx`**: neuer Abschnitt „Verknüpfte Sitzung" (für den/die
+  Ersteller*in editierbar als `<select>` aus den eigenen Sitzungen, sonst nur Lesevisualisierung) und
+  „Verknüpfte ToDos" (gleiches Lösen+Suchen-Muster wie oben, gespiegelt). Beim Implementieren des
+  Sitzungs-`<select>`-Handlers zunächst versehentlich direkt `document.session_id = ...` mutiert -
+  verstößt gegen den dokumentierten Grundsatz der Komponente, dass die `document`-Prop unveränderlich
+  ist (sicher nur, weil `Dokumente.tsx` beim Wechsel des Dokuments die Komponente immer erst
+  unmountet). Selbst bemerkt und korrigiert: neuer lokaler State-Spiegel `docSessionId` nach dem
+  bereits bestehenden `docTags`-Muster in derselben Datei, plus ein dedizierter
+  `useEffect([docSessionId])`, der die verknüpfte Sitzung neu lädt (nötig, weil ein State-Setter
+  nicht synchron in derselben Funktion sichtbar wird).
+- **Web-UI, `TerminDetailPanel.tsx` (Sitzungsansicht)**: zusätzlich zu den beiden explizit gewünschten
+  Stellen ergänzt um einen dritten, nicht explizit verlangten, aber im Sinne von „alles miteinander
+  verknüpfen" naheliegenden Abschnitt „Verknüpfte Dokumente" (nur bei `kind === 'session'`, da
+  `dokumente.session_id` nur für Sitzungen existiert, nicht für private Termine) - liest
+  `dokumente` gefiltert nach `session_id`, Klick öffnet das bestehende `DokumentDetailModal` direkt
+  aus der Sitzungsansicht heraus (analog zum bestehenden Öffnen von ToDo-/Antrags-Detail-Modalen aus
+  demselben Panel).
+- `src/lib/types.ts`: neue `TodoDokument`-Interface für die Jointabelle; `session_id` auf
+  `DokumentRow` war bereits vorhanden.
+- Verifiziert per `deno check`, `supabase functions deploy`, temporären Test-Fixturen in der Live-DB
+  (ToDo + Dokument angelegt, in beide Richtungen verknüpft/gequeried, wieder gelöst, beide gelöscht,
+  Bestand danach wieder null) sowie `npm run build` (vollständiger `tsc -b` + `vite build` über alle
+  drei geänderten Komponenten).

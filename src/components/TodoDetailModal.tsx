@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type {
+  DokumentRow,
   Ebene,
   EventRow,
   Profile,
@@ -74,6 +75,15 @@ export function TodoDetailModal({
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
+  // Verknüpfte Dokumente aus dem Dokumenten-Hub (n:m über todo_dokumente,
+  // siehe 0037_todo_dokumente.sql) - bewusst getrennt von "documents" oben
+  // (das sind Datei-Uploads direkt an der Karte, summaries-Tabelle).
+  const [linkedDokumente, setLinkedDokumente] = useState<DokumentRow[]>([])
+  const [dokumentSearch, setDokumentSearch] = useState('')
+  const [dokumentSearchResults, setDokumentSearchResults] = useState<DokumentRow[]>([])
+  const [dokumentDropdownOpen, setDokumentDropdownOpen] = useState(false)
+  const [linkDokumentError, setLinkDokumentError] = useState<string | null>(null)
+
   const [confirmDelete, setConfirmDelete] = useState(false)
   useEffect(() => setConfirmDelete(false), [id])
 
@@ -129,6 +139,47 @@ export function TodoDetailModal({
     setDocuments(data ?? [])
   }
 
+  // RLS auf todo_dokumente/dokumente filtert bereits auf das für den Nutzer
+  // Sichtbare (siehe 0037_todo_dokumente.sql) - die Web-UI läuft mit der
+  // echten Nutzer-Session, anders als der MCP-Server über Service-Role.
+  async function loadLinkedDokumente() {
+    const { data: links } = await supabase.from('todo_dokumente').select('dokument_id').eq('todo_id', id)
+    const ids = (links ?? []).map((l) => l.dokument_id as string)
+    if (ids.length === 0) {
+      setLinkedDokumente([])
+      return
+    }
+    const { data } = await supabase.from('dokumente').select('*').in('id', ids).order('erstellt_am', { ascending: false })
+    setLinkedDokumente(data ?? [])
+  }
+
+  async function handleSearchDokumente(query: string) {
+    setDokumentSearch(query)
+    if (!query.trim()) {
+      setDokumentSearchResults([])
+      return
+    }
+    const { data } = await supabase.from('dokumente').select('*').ilike('titel', `%${query.trim()}%`).limit(8)
+    setDokumentSearchResults((data ?? []).filter((d) => !linkedDokumente.some((ld) => ld.id === d.id)))
+  }
+
+  async function handleLinkDokument(dokumentId: string) {
+    setLinkDokumentError(null)
+    const { error } = await supabase.from('todo_dokumente').insert({ todo_id: id, dokument_id: dokumentId })
+    if (error) {
+      setLinkDokumentError(error.message)
+      return
+    }
+    setDokumentSearch('')
+    setDokumentSearchResults([])
+    await loadLinkedDokumente()
+  }
+
+  async function handleUnlinkDokument(dokumentId: string) {
+    await supabase.from('todo_dokumente').delete().eq('todo_id', id).eq('dokument_id', dokumentId)
+    await loadLinkedDokumente()
+  }
+
   // Volle Platzierungsliste dieser Karte (alle Personen, für die sie auf dem
   // Board erscheint) - für den Ersteller der Checkbox-Zustand in der
   // Kandidatenliste, für alle anderen die read-only "Geteilt mit"-Anzeige.
@@ -170,6 +221,7 @@ export function TodoDetailModal({
     loadTodo()
     loadComments()
     loadDocuments()
+    loadLinkedDokumente()
     loadSharing()
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
@@ -603,6 +655,71 @@ export function TodoDetailModal({
             {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
           </form>
         )}
+
+      <h2 className="font-semibold mb-2">Verknüpfte Sitzungen</h2>
+      <ul className="mb-6 space-y-2">
+        {linkedSession && (
+          <li>
+            <Link
+              to={`/termin/session/${linkedSession.id}`}
+              className="block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm transition-shadow duration-150 hover:shadow-md"
+            >
+              {linkedSession.titel} ({formatDate(linkedSession.datum)})
+            </Link>
+          </li>
+        )}
+        {!linkedSession && <li className="text-slate-400 text-sm">Keine verknüpfte Sitzung.</li>}
+      </ul>
+
+      <h2 className="font-semibold mb-2">Verknüpfte Dokumente</h2>
+      <ul className="mb-2 space-y-2">
+        {linkedDokumente.map((d) => (
+          <li
+            key={d.id}
+            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+          >
+            <span className="truncate text-sm font-medium text-slate-800">{d.titel}</span>
+            <button
+              type="button"
+              onClick={() => handleUnlinkDokument(d.id)}
+              className="mc-btn-ghost !shrink-0 !px-2 !py-1 !text-xs"
+            >
+              Lösen
+            </button>
+          </li>
+        ))}
+        {linkedDokumente.length === 0 && <li className="text-slate-400 text-sm">Keine verknüpften Dokumente.</li>}
+      </ul>
+      <div className="relative mb-6">
+        <input
+          type="text"
+          placeholder="Dokument suchen und verknüpfen..."
+          value={dokumentSearch}
+          onChange={(e) => handleSearchDokumente(e.target.value)}
+          onFocus={() => setDokumentDropdownOpen(true)}
+          onBlur={() => setTimeout(() => setDokumentDropdownOpen(false), 150)}
+          className="mc-input w-full"
+        />
+        {dokumentDropdownOpen && dokumentSearch.trim() && (
+          <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+            {dokumentSearchResults.map((d) => (
+              <li key={d.id}>
+                <button
+                  type="button"
+                  onMouseDown={() => handleLinkDokument(d.id)}
+                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                >
+                  {d.titel}
+                </button>
+              </li>
+            ))}
+            {dokumentSearchResults.length === 0 && (
+              <li className="px-3 py-1.5 text-sm text-slate-400">Keine Treffer.</li>
+            )}
+          </ul>
+        )}
+      </div>
+      {linkDokumentError && <p className="mb-4 text-sm text-red-600">{linkDokumentError}</p>}
 
       <h2 className="font-semibold mb-2">Teilen</h2>
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{teilenTab}</div>

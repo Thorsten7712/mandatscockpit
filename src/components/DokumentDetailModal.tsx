@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { DokumentRow, DokumentSichtbarkeit, Profile } from '../lib/types'
+import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
-import { formatDateTime } from '../lib/format'
+import { formatDate, formatDateTime } from '../lib/format'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
 import { TagEditor } from './TagEditor'
@@ -44,12 +45,25 @@ export function DokumentDetailModal({
 
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
+  // Verknüpfte Sitzung (1:n, dokumente.session_id - 0036_dokumente_session.sql)
+  // und verknüpfte ToDos (n:m über todo_dokumente - 0037_todo_dokumente.sql).
+  const [linkedSession, setLinkedSession] = useState<SessionRow | null>(null)
+  const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
+  const [savingSession, setSavingSession] = useState(false)
+  const [linkedTodos, setLinkedTodos] = useState<TodoRow[]>([])
+  const [todoSearch, setTodoSearch] = useState('')
+  const [todoSearchResults, setTodoSearchResults] = useState<TodoRow[]>([])
+  const [todoDropdownOpen, setTodoDropdownOpen] = useState(false)
+  const [linkTodoError, setLinkTodoError] = useState<string | null>(null)
+
   // Lokaler Spiegel der Top-Level-Tags: document ist eine unveränderliche
   // Prop (siehe Dokumente.tsx), Tag-Änderungen brauchen aber sofortiges
   // visuelles Feedback in dieser Sitzung - sicher, weil Dokumente.tsx diese
   // Komponente beim Wechsel auf ein anderes Dokument immer erst unmountet
   // (openDoc geht durch null), nie direkt mit neuer document-Prop remountet.
   const [docTags, setDocTags] = useState<string[]>(document.tags)
+  // Gleiches Muster wie docTags: lokaler Spiegel statt Mutation der Prop.
+  const [docSessionId, setDocSessionId] = useState<string | null>(document.session_id)
 
   // Manuelles Gelesen/Ungelesen (zusätzlich zum automatischen Markieren beim
   // Öffnen, siehe useEffect unten) - initial true, weil das Öffnen ohnehin
@@ -91,13 +105,91 @@ export function DokumentDetailModal({
     setChildren(data ?? [])
   }
 
+  async function loadLinkedSession() {
+    setLinkedSession(null)
+    if (!docSessionId) return
+    const { data } = await supabase.from('sessions').select('*').eq('id', docSessionId).single()
+    if (data) setLinkedSession(data)
+  }
+
+  // RLS auf todo_dokumente/todos filtert bereits auf das für den Nutzer
+  // Sichtbare (siehe 0037_todo_dokumente.sql) - die Web-UI läuft mit der
+  // echten Nutzer-Session.
+  async function loadLinkedTodos() {
+    const { data: links } = await supabase.from('todo_dokumente').select('todo_id').eq('dokument_id', document.id)
+    const ids = (links ?? []).map((l) => l.todo_id as string)
+    if (ids.length === 0) {
+      setLinkedTodos([])
+      return
+    }
+    const { data } = await supabase.from('todos').select('*').in('id', ids).order('created_at', { ascending: false })
+    setLinkedTodos(data ?? [])
+  }
+
+  async function handleSetSession(sessionId: string) {
+    setSavingSession(true)
+    const { error } = await supabase.from('dokumente').update({ session_id: sessionId || null }).eq('id', document.id)
+    setSavingSession(false)
+    if (!error) {
+      setDocSessionId(sessionId || null)
+    }
+  }
+
+  async function handleSearchTodos(query: string) {
+    setTodoSearch(query)
+    if (!query.trim() || !userId) {
+      setTodoSearchResults([])
+      return
+    }
+    // Eigene ToDos reichen hier aus (RLS todos_select_own_or_placed würde
+    // ohnehin auch mit geteilten Karten antworten, aber Verknüpfen von hier
+    // aus macht am ehesten für die eigenen Karten Sinn).
+    const { data } = await supabase
+      .from('todos')
+      .select('*')
+      .eq('user_id', userId)
+      .ilike('titel', `%${query.trim()}%`)
+      .limit(8)
+    setTodoSearchResults((data ?? []).filter((t) => !linkedTodos.some((lt) => lt.id === t.id)))
+  }
+
+  async function handleLinkTodo(todoId: string) {
+    setLinkTodoError(null)
+    const { error } = await supabase.from('todo_dokumente').insert({ todo_id: todoId, dokument_id: document.id })
+    if (error) {
+      setLinkTodoError(error.message)
+      return
+    }
+    setTodoSearch('')
+    setTodoSearchResults([])
+    await loadLinkedTodos()
+  }
+
+  async function handleUnlinkTodo(todoId: string) {
+    await supabase.from('todo_dokumente').delete().eq('todo_id', todoId).eq('dokument_id', document.id)
+    await loadLinkedTodos()
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadLinkedSession()
+  }, [docSessionId])
+
   useEffect(() => {
     loadChildren()
+    loadLinkedTodos()
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       setUserId(data.user.id)
       const { data: profileRow } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
       setMyProfile(profileRow)
+
+      const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
+      const gremien = (mine ?? []).map((g) => g.gremium)
+      if (gremien.length > 0) {
+        const { data: sessions } = await supabase.from('sessions').select('*').in('gremium', gremien).order('datum')
+        setOwnSessions(sessions ?? [])
+      }
 
       const { data: gelesenRows } = await supabase
         .from('dokument_gelesen')
@@ -394,11 +486,85 @@ export function DokumentDetailModal({
           📎 Original-Dokument: {fileNameFromPath(document.datei_url)}
         </button>
       )}
+      <div className="mt-4 border-t border-slate-200 pt-3">
+        <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Verknüpfte Sitzung</h3>
+        {document.user_id === userId ? (
+          <select
+            value={docSessionId ?? ''}
+            onChange={(e) => handleSetSession(e.target.value)}
+            disabled={savingSession}
+            className="mc-input !text-sm"
+          >
+            <option value="">Keine Sitzung</option>
+            {ownSessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.titel} ({formatDate(s.datum)})
+              </option>
+            ))}
+          </select>
+        ) : linkedSession ? (
+          <Link to={`/termin/session/${linkedSession.id}`} className="text-sm text-blue-700 hover:underline">
+            {linkedSession.titel} ({formatDate(linkedSession.datum)})
+          </Link>
+        ) : (
+          <p className="text-sm text-slate-500">Keine verknüpfte Sitzung.</p>
+        )}
+      </div>
     </div>
   )
 
   const rightColumn = (
     <>
+      <h2 className="font-semibold mb-2">Verknüpfte ToDos</h2>
+      <ul className="mb-2 space-y-2">
+        {linkedTodos.map((t) => (
+          <li
+            key={t.id}
+            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+          >
+            <span className="truncate text-sm font-medium text-slate-800">{t.titel}</span>
+            <button
+              type="button"
+              onClick={() => handleUnlinkTodo(t.id)}
+              className="mc-btn-ghost !shrink-0 !px-2 !py-1 !text-xs"
+            >
+              Lösen
+            </button>
+          </li>
+        ))}
+        {linkedTodos.length === 0 && <li className="text-slate-400 text-sm">Keine verknüpften ToDos.</li>}
+      </ul>
+      <div className="relative mb-6">
+        <input
+          type="text"
+          placeholder="ToDo suchen und verknüpfen..."
+          value={todoSearch}
+          onChange={(e) => handleSearchTodos(e.target.value)}
+          onFocus={() => setTodoDropdownOpen(true)}
+          onBlur={() => setTimeout(() => setTodoDropdownOpen(false), 150)}
+          className="mc-input w-full"
+        />
+        {todoDropdownOpen && todoSearch.trim() && (
+          <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+            {todoSearchResults.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onMouseDown={() => handleLinkTodo(t.id)}
+                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                >
+                  {t.titel}
+                </button>
+              </li>
+            ))}
+            {todoSearchResults.length === 0 && (
+              <li className="px-3 py-1.5 text-sm text-slate-400">Keine Treffer.</li>
+            )}
+          </ul>
+        )}
+      </div>
+      {linkTodoError && <p className="mb-4 text-sm text-red-600">{linkTodoError}</p>}
+
       <h2 className="mb-2 font-semibold">Meine Notizen &amp; Dokumente</h2>
       <ul className="mb-4 space-y-2">
         {children.map((c) => (
