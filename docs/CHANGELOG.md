@@ -1760,3 +1760,16 @@ dieser Verknüpfungen direkt in der Web-UI statt nur über MCP-Tool-Aufrufe.
   (ToDo + Dokument angelegt, in beide Richtungen verknüpft/gequeried, wieder gelöst, beide gelöscht,
   Bestand danach wieder null) sowie `npm run build` (vollständiger `tsc -b` + `vite build` über alle
   drei geänderten Komponenten).
+
+**Nachbesserung (Bug-Root-Cause):** Nutzer meldete, dass ein per MCP-Tool gesetzter Sitzungslink
+(`Sammeldokument Seniorenbeirat` → Sitzung „Seniorenbeirat" vom 02.09.2026) laut Datenbank korrekt
+gesetzt war, im neuen „Verknüpfte Sitzung"-`<select>` in `DokumentDetailModal.tsx` aber „Keine
+Sitzung" anzeigte. Root Cause: die Dropdown-Optionsliste (`ownSessions`) ist auf die unter Einstellungen
+→ Meine Gremien ausgewählten Gremien des Nutzers gefiltert - „Seniorenbeirat" war dort nicht
+angehakt. Der `<select>`-Wert (`docSessionId`) war korrekt gesetzt, aber da kein `<option>` diesem
+Wert entsprach, fiel der Browser stillschweigend auf die erste Option („Keine Sitzung") zurück - ein
+reiner Anzeigefehler, kein Datenverlust (der zugrunde liegende State/DB-Wert blieb beim Speichern
+unangetastet, aber die Anzeige war irreführend). Fix: die aktuell verknüpfte Sitzung wird jetzt immer
+als zusätzliche `<option>` eingefügt, falls sie nicht schon in `ownSessions` enthalten ist - sowohl in
+`DokumentDetailModal.tsx` als auch (gleiche Ursache, gleiches Muster) im bestehenden
+Sitzungs-`<select>` des ToDo-Bearbeiten-Formulars in `TodoDetailModal.tsx`.

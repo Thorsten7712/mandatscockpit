@@ -496,6 +496,14 @@ export function DokumentDetailModal({
             className="mc-input !text-sm"
           >
             <option value="">Keine Sitzung</option>
+            {/* linkedSession kann außerhalb der eigenen Gremien-Auswahl liegen (z. B. per MCP-Tool
+                gesetzt) - ohne diesen Zusatz würde der <select> dann klanglos auf "Keine Sitzung"
+                zurückfallen, obwohl tatsächlich eine Verknüpfung besteht. */}
+            {linkedSession && !ownSessions.some((s) => s.id === linkedSession.id) && (
+              <option value={linkedSession.id}>
+                {linkedSession.titel} ({formatDate(linkedSession.datum)})
+              </option>
+            )}
             {ownSessions.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.titel} ({formatDate(s.datum)})

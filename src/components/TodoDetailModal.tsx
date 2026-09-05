@@ -626,6 +626,14 @@ export function TodoDetailModal({
                   className="mc-input w-full"
                 >
                   <option value="">Bitte wählen...</option>
+                  {/* linkedSession kann außerhalb der eigenen Gremien-Auswahl liegen (z. B. per
+                      MCP-Tool gesetzt) - ohne diesen Zusatz würde der <select> dann klanglos auf
+                      "Bitte wählen..." zurückfallen, obwohl tatsächlich eine Verknüpfung besteht. */}
+                  {linkedSession && !ownSessions.some((se) => se.id === linkedSession.id) && (
+                    <option value={linkedSession.id}>
+                      {linkedSession.titel} ({formatDate(linkedSession.datum)})
+                    </option>
+                  )}
                   {ownSessions.map((se) => (
                     <option key={se.id} value={se.id}>
                       {se.titel} ({formatDate(se.datum)})
