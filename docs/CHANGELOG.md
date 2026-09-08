@@ -1773,3 +1773,160 @@ unangetastet, aber die Anzeige war irreführend). Fix: die aktuell verknüpfte S
 als zusätzliche `<option>` eingefügt, falls sie nicht schon in `ownSessions` enthalten ist - sowohl in
 `DokumentDetailModal.tsx` als auch (gleiche Ursache, gleiches Muster) im bestehenden
 Sitzungs-`<select>` des ToDo-Bearbeiten-Formulars in `TodoDetailModal.tsx`.
+
+---
+
+## Dokumenten-Archiv, Paginierung, Gremien-Schnellfilter und „Zahlen und Fakten" (2026-09-08)
+
+Vier Nutzerwünsche in einem Zug. Vor der Umsetzung wurden drei Punkte rückgefragt, weil sie den
+Zuschnitt materiell verändert hätten; die Antworten stehen jeweils bei der Entscheidung.
+
+### 1. Archiv für den Dokumenten-Hub (`0038_dokumente_archiv.sql`)
+
+Nutzerwunsch: „Dokumente die in vergangenen Sitzungen auf der Agenda standen sollen ins Archiv
+verschoben werden. Das Archiv soll bei der Suche mit einbezogen werden."
+
+**Entschieden (Rückfrage): automatisch UND manuell.** Ein Dokument gilt als archiviert, wenn
+entweder die per `dokumente.session_id` verknüpfte Sitzung vorbei ist (`sessions.datum <` Beginn des
+heutigen Tages) **oder** `archiviert_am` gesetzt wurde. Die zweite Variante war der ausdrückliche
+Wunsch, damit sich auch Dokumente ohne Sitzungsverknüpfung wegräumen (und zurückholen) lassen.
+
+Die automatische Regel wird **nicht** in die Spalte materialisiert – kein Trigger, kein Cron-Job.
+Sie ist eine reine Funktion aus `sessions.datum` und müsste sonst täglich nachgezogen werden; sie
+wird stattdessen beim Anzeigen abgeleitet (`archivGrund()` in `src/lib/dokumenteArchiv.ts`).
+`archiviert_am` speichert also ausschließlich die manuelle Entscheidung. Keine neue RLS-Policy
+nötig: die bestehenden `dokumente_select_*`-Policies sind spaltenunabhängig, `archiviert_am`
+ändert nur, in welcher Liste ein Dokument auftaucht, nicht wer es sehen darf.
+
+**Datumsvergleich numerisch, nicht lexikografisch:** PostgREST liefert `timestamptz` als
+`...+00:00`, `startOfTodayIso()` erzeugt `...Z`. Als Strings wären zwei Schreibweisen desselben
+Zeitpunkts nicht gleich (und ein Dokument mit einer Sitzung exakt um Mitternacht wäre fälschlich
+archiviert). Deshalb `Date.parse(a) < Date.parse(b)` – geprüft mit beiden Formaten.
+
+Nicht gefundene/nicht sichtbare Sitzungen archivieren bewusst **nicht**: lieber ein Dokument zu viel
+in der Arbeitsliste als eines, das unauffindbar wird.
+
+- `src/pages/Dokumente.tsx` blendet Archiviertes standardmäßig aus, zeigt einen Chip
+  „Archiv (n)" zum Einblenden und ein graues Archiv-Fähnchen an den betroffenen Karten.
+- **Suche bezieht das Archiv automatisch ein** (der zweite Halbsatz des Nutzerwunsches): sobald ein
+  Suchbegriff eingegeben ist, gilt `zeigeArchiv` unabhängig vom Chip, der Chip wird deaktiviert und
+  ein Hinweis „Die Suche schließt das Archiv mit ein." eingeblendet. Begründung: wer sucht, sucht im
+  Gesamtbestand, nicht im aktuellen Arbeitsvorrat.
+- `src/components/DokumentDetailModal.tsx`: Knopf „Archivieren"/„Im Archiv" im Header (nur für
+  Eigentümer\*innen), plus eine Zeile unter „Verknüpfte Sitzung", die den Archiv-Grund benennt.
+  Lokaler State-Spiegel `archiviertAm` nach dem bereits etablierten `docTags`/`docSessionId`-Muster.
+- **Wo im Archiv (Rückfrage):** in den **bestehenden** „Dokumente"-Reiter von `Archiv.tsx`, nicht in
+  einen neuen fünften Tab. Der Reiter führt jetzt zwei Quellen in einer nach Datum sortierten Liste
+  zusammen – angehängte Datei-Uploads (`summaries`) und archivierte Hub-Dokumente – mit
+  unterschiedlichem Klickverhalten je Art (Vorschau vs. `DokumentDetailModal`, wo Notizen, Tags und
+  ToDo-Verknüpfungen dranhängen). Hub-Einträge tragen ein Fähnchen mit dem Sitzungstitel bzw.
+  „Von Hand archiviert". Die Archiv-Regel ist nicht server-seitig filterbar, weil sie an
+  `sessions.datum` hängt und nicht an einer Spalte von `dokumente` – daher werden alle Top-Level-
+  Dokumente geladen und beim Rendern gefiltert.
+
+### 2. Paginierung der Dokumentenliste
+
+Nutzerwunsch: „Ich möchte auswählen können wieviele Dokumente ich pro Seite sehen kann."
+Auswahl 10/25/50/100/Alle (Standard 25), Vor/Zurück und eine Bereichsanzeige („1–25 von 32").
+
+Die Seitenzahl wird beim Rendern **geklemmt** (`Math.min(seite, seitenAnzahl)`) statt per Effekt
+zurückgesetzt: schrumpft die Treffermenge durch einen Filter, landet man sofort auf der letzten
+gültigen Seite, ohne einen Zwischen-Render mit leerer Liste. Jede Filteränderung springt zusätzlich
+über `mitSeitenreset()` auf Seite 1.
+
+Die gewählte Seitengröße liegt in `localStorage` – die **einzige** Stelle im Projekt, die das nutzt.
+Begründung: eine reine Anzeige-Vorliebe pro Gerät, für die sich weder Tabelle noch RLS-Policy lohnen
+(anders als `todo_board_settings`, das die Board-Struktur geräteübergreifend halten muss). Lesen und
+Schreiben sind gekapselt und in `try/catch`, damit ein gesperrter Storage (privates Fenster,
+blockierte Site-Daten) die Seite nicht beim Rendern abstürzen lässt.
+
+**Bug beim Testen gefunden und behoben:** `Number(localStorage.getItem(key))` ist `0`, wenn nichts
+gespeichert ist – und `0` ist ein gültiger Wert („Alle"). Ohne gespeicherte Vorliebe startete die
+Seite daher ohne jede Aufteilung. Fix: explizite `null`-Prüfung vor dem `Number()`.
+
+### 3. Schnellfilter „Meine Gremien"
+
+Filtert auf Dokumente, deren verknüpfte Sitzung zu einem Gremium aus `user_gremien`
+(`0005_user_gremien.sql`) gehört. Dokumente **ohne** Sitzungsverknüpfung fallen unter diesem Filter
+bewusst heraus – ohne Sitzung lässt sich kein Gremium bestimmen. Der Chip erscheint nur, wenn
+überhaupt Gremien gepflegt sind, und nennt sie im `title`-Tooltip.
+
+### 4. Neuer Menüpunkt „Zahlen & Fakten" (`0039_fakten.sql`, `src/pages/ZahlenUndFakten.tsx`)
+
+Nutzerwunsch: „Als weiteren Menüpunkt in der Kopfleiste möchte ich neben Archiv und Dokumente noch
+Zahlen und Fakten. Dort sollen in geeigneter Form Argumentationshilfen, Sprachvorgaben und Zahlen
+und Fakten ersichtlich sein." Route `/fakten`, Link in der Dashboard-Kopfleiste vor „Einstellungen".
+
+**Entschieden (Rückfrage): eigene Tabelle `fakten`**, nicht eine Tag-Sicht auf `dokumente`. Fakten
+sind kurze, wiederverwendbare Textbausteine mit Belegpflicht (`quelle` + `stand`) und – bei
+`kategorie = 'zahl'` – einer herausgehobenen Kennzahl. Ein Dokument dagegen ist ein einzelnes,
+datiertes Artefakt mit Datei-Anhang, Notizen-Baum und Gelesen-Status. Beides in einer Tabelle würde
+entweder den Dokumenten-Hub mit Kennzahl-Spalten aufblähen oder die Fakten in einer nach Datum
+sortierten Dokumentenliste untergehen lassen.
+
+- Drei Kategorien als Reiter: `argumentationshilfe` (Argument + Erwiderung), `sprachregelung` (wie
+  wir worüber sprechen – und wie nicht), `zahl` (belegte Kennzahl).
+- `kennzahl` ist bewusst `text`, nicht `numeric`: Kennzahlen aus Veröffentlichungen kommen mit
+  Tausenderpunkten, Näherungen („rund 1.200") und Spannen („8–12"), die eine Zahlenspalte entweder
+  verfälschen oder ganz ablehnen würde. `einheit` steht daneben („%", „Mio. €", „Wohnungen").
+- Zwei Darstellungen: die Textkategorien als Liste mit Fließtext, `zahl` als Kachelraster mit dem
+  Wert in `text-3xl` – der Wert ist dort die Botschaft und soll ohne Lesen erfassbar sein.
+- Fehlt der Beleg, steht statt der Quellenzeile ein sichtbares „Keine Quelle hinterlegt" in Amber –
+  ein Fakt ohne Quelle ist in der Debatte wertlos, das soll auffallen statt still zu fehlen.
+- Sichtbarkeit nur `persoenlich`/`geteilt`, **kein** `einzelpersonen` wie bei Hub-Notizen: ein Fakt
+  ist Fraktionsmaterial, keine private Analyse zu einem einzelnen Vorgang. RLS spiegelt exakt die
+  vier `dokumente`-Policies inkl. der SECURITY-DEFINER-Helper `current_user_partei()`,
+  `current_user_ebenen()` (0020) und `current_user_gliederung_matches()` (0033). `gliederung` wird
+  wie dort **immer** aus dem eigenen Profil übernommen, nie als Eingabe entgegengenommen.
+- Ein Formularzustand für Anlegen **und** Bearbeiten (`editId === null` heißt „neu"), gleiches
+  Muster wie das Bearbeiten von Notizen im `DokumentDetailModal`. `TagEditor` wiederverwendet;
+  `SichtbarkeitEditor` bewusst **nicht** – der hat drei fest verdrahtete Optionen inklusive
+  Personensuche, hier reichen zwei Radios, und ein Umbau der geteilten Komponente für genau einen
+  Aufrufer wäre nach der Projekt-Faustregel („beim 3. Vorkommen extrahieren") verfrüht.
+
+### Verifikation
+
+Login-Rundgänge sind im Browser tabu (Passwort-Eingabe, siehe CLAUDE.md), daher:
+
+- `tsc -b` + `vite build` über alle geänderten Dateien.
+- Ein Node-Testlauf über die reine Logik: sieben Fälle für `archivGrund()` (ohne Sitzung, vergangene
+  Sitzung, künftige Sitzung, Sitzung heute später am Tag, manuell ohne Sitzung, manuell schlägt
+  künftige Sitzung, unbekannte Sitzung) sowie sechs Fälle für die Paginierungs-Arithmetik inkl.
+  Klemmen einer zu hohen Seitenzahl und „Alle"; zusätzlich der Formatvergleich `+00:00` gegen `Z`.
+- Ein temporärer statischer Test-Harness (Vite-Alias auf einen `supabaseClient`-Stub mit 32
+  Beispieldokumenten, vier Sitzungen und sechs Fakten), um alle drei Seiten ohne Login im Browser zu
+  rendern und die Filter durchzuklicken: 32 gesamt → 20 sichtbar bei 12 archivierten, „Meine
+  Gremien" → 5, Suche „Vorlage" ohne Archiv-Chip → 10 Treffer davon 5 archiviert plus Hinweiszeile.
+  Der Harness wurde danach wieder entfernt.
+
+**Noch offen / bewusst nicht gemacht:** Für die `fakten`-Tabelle gibt es keine MCP-Tools – nicht
+Teil des Auftrags, additiv nachrüstbar (Punkt 5 der Roadmap in CLAUDE.md).
+
+### Nachtrag: MCP-Server kennt das Archiv (gleicher Tag)
+
+Nutzerwunsch direkt im Anschluss: „Der MCP Server sollte auch das Archiv kennen."
+
+- **`list_documents` bekommt `archiv`** (`ohne` = Standard, `alle`, `nur`). Der Standard spiegelt
+  bewusst die Web-UI, die Archiviertes ebenfalls ausblendet – die Tool-Beschreibung und die
+  „keine Treffer"-Meldung nennen den Parameter, damit das Ausblenden nicht still passiert.
+  Archivierte Treffer sind in der Ausgabezeile mit `ARCHIV (Sitzung vorbei)` bzw. `ARCHIV (von Hand)`
+  markiert.
+  Beim Einbauen fiel auf, dass die Sitzungs-Nachladung bisher **nach** dem `limit`-Slice lief – für
+  die Archiv-Regel wird `sessions.datum` aber schon zum Filtern gebraucht. Die Abfrage wurde deshalb
+  vorgezogen und liefert jetzt `titel` **und** `datum` in einem Rutsch; der Titel wird unten
+  unverändert für die Ausgabe weiterverwendet, es kommt also keine zweite Abfrage dazu.
+- **Neues Tool `update_document_archiv(dokument_id, archivieren)`** – setzt/löscht `archiviert_am`,
+  nur für Eigentümer\*innen. Beim Zurückholen eines Dokuments, dessen verknüpfte Sitzung vorbei ist,
+  meldet das Tool ausdrücklich, dass es trotzdem im Archiv bleibt, und verweist auf
+  `update_document_session` – sonst sähe der Aufruf nach einem Fehlschlag aus.
+- Die Archiv-Regel ist in `tools/dokumente.ts` ein **bewusster Spiegel** von
+  `src/lib/dokumenteArchiv.ts` (kein gemeinsames Build-Tooling zwischen Deno und React, gleiche
+  Begründung wie bei ICS-Parsing/Hash-Helpern). Inklusive des numerischen Zeitstempel-Vergleichs.
+  `startOfTodayIso()` rechnet in der Edge Function in UTC statt in lokaler Zeit – die Abweichung von
+  bis zu zwei Stunden ist folgenlos, weil keine Sitzung zwischen Mitternacht und 2 Uhr stattfindet
+  (gleiche Vereinfachung wie in `listSessions()`).
+- Damit 30 statt 29 MCP-Tools. **Achtung beim Testen:** Die Tool-Liste eines Claude-Connectors ist
+  pro Unterhaltung eingefroren – das neue Tool wird erst in einem **neuen Chat** sichtbar (siehe
+  Fallstrick in CLAUDE.md).
+- Verifiziert per `deno check --config supabase/functions/mcp-server/deno.json` und einem
+  JSON-RPC-Smoke-Test gegen die deployte Function.

@@ -1,0 +1,19 @@
+-- Archiv für den Dokumenten-Hub (Dokumente.tsx -> Archiv.tsx).
+--
+-- Ein Dokument gilt aus ZWEI Gründen als archiviert:
+--   1. automatisch: es ist mit einer Sitzung verknüpft (dokumente.session_id,
+--      0036_dokumente_session.sql), deren Datum in der Vergangenheit liegt -
+--      die Sitzungsvorlage stand dort auf der Agenda und ist damit erledigt.
+--   2. manuell: archiviert_am ist gesetzt (Nutzerwunsch: auch Dokumente ohne
+--      Sitzungsverknüpfung von Hand ins Archiv legen bzw. zurückholen).
+--
+-- Regel 1 wird bewusst NICHT in die Spalte materialisiert (kein Trigger, kein
+-- Cron): sie ist eine reine Funktion aus sessions.datum und würde sonst
+-- täglich nachgezogen werden müssen. Sie wird beim Anzeigen abgeleitet, siehe
+-- istArchiviert() in src/lib/dokumenteArchiv.ts. archiviert_am speichert
+-- deshalb ausschließlich die manuelle Entscheidung.
+--
+-- Keine neue RLS-Policy nötig: die bestehenden dokumente_select_*-Policies
+-- (0033_dokumente.sql) sind spaltenunabhängig, archiviert_am ändert die
+-- Sichtbarkeitslogik nicht - nur, in welcher Liste ein Dokument auftaucht.
+alter table public.dokumente add column archiviert_am timestamptz;

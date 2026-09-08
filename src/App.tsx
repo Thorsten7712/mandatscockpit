@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Archiv from './pages/Archiv'
 import Dokumente from './pages/Dokumente'
+import ZahlenUndFakten from './pages/ZahlenUndFakten'
 import TerminDetail from './pages/TerminDetail'
 import Impressum from './pages/Impressum'
 import Datenschutz from './pages/Datenschutz'
@@ -47,6 +48,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Dokumente />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/fakten"
+          element={
+            <ProtectedRoute>
+              <ZahlenUndFakten />
             </ProtectedRoute>
           }
         />

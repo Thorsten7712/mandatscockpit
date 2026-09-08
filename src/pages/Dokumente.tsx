@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { File, FileImage, FileText, Search, StickyNote, X } from 'lucide-react'
+import { Archive, ChevronLeft, ChevronRight, File, FileImage, FileText, Search, StickyNote, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, Ebene, Profile } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
@@ -9,12 +9,45 @@ import { fileExtension, fileNameFromPath, IMAGE_EXTENSIONS } from '../components
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { TagEditor } from '../components/TagEditor'
 import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
+import { archivGrund, ladeSessionInfos, type SessionInfo } from '../lib/dokumenteArchiv'
 
 // Vorschläge, keine feste Liste - Nutzer können jederzeit eigene Tags
 // eintragen (siehe Eingabefeld im Formular unten).
 const TAG_VORSCHLAEGE = ['Antrag', 'Fact Sheet', 'Argumentationshilfe']
 
 const EBENEN_ORDER: Ebene[] = ['kommune', 'kreis', 'land', 'bund']
+
+/** 0 = "Alle" (keine Seitenaufteilung). */
+const SEITENGROESSEN = [10, 25, 50, 100, 0]
+const SEITENGROESSE_KEY = 'mc.dokumente.proSeite'
+const SEITENGROESSE_STANDARD = 25
+
+// Einzige Stelle im Projekt, die localStorage nutzt: eine reine Anzeige-
+// Vorliebe pro Gerät, für die sich weder eine Tabelle noch eine RLS-Policy
+// lohnen würde (anders als todo_board_settings, das die Board-Struktur
+// geräteübergreifend halten muss). Lesen/Schreiben gekapselt, damit ein
+// gesperrter Storage (Privates Fenster, blockierte Site-Daten) die Seite
+// nicht beim Rendern abstürzen lässt.
+function ladeSeitengroesse(): number {
+  try {
+    // Erst auf null prüfen: Number(null) ist 0, und 0 ist ein gültiger Wert
+    // ("Alle") - ohne diese Zeile startet die Seite ohne Aufteilung.
+    const gespeichert = window.localStorage.getItem(SEITENGROESSE_KEY)
+    if (gespeichert === null) return SEITENGROESSE_STANDARD
+    const wert = Number(gespeichert)
+    return SEITENGROESSEN.includes(wert) ? wert : SEITENGROESSE_STANDARD
+  } catch {
+    return SEITENGROESSE_STANDARD
+  }
+}
+
+function speichereSeitengroesse(wert: number) {
+  try {
+    window.localStorage.setItem(SEITENGROESSE_KEY, String(wert))
+  } catch {
+    // Anzeige-Vorliebe geht verloren, mehr nicht - kein Grund für eine Fehlermeldung.
+  }
+}
 
 /** Bund braucht keine Gliederung - es gibt nur einen Bundestag (analog src/lib/gliederung.ts). */
 function gliederungFuer(profile: Profile | null, ebene: Ebene): string | null {
@@ -62,6 +95,16 @@ export default function Dokumente() {
   const [ebeneFilter, setEbeneFilter] = useState<Ebene | 'alle'>('alle')
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [nurMeineGremien, setNurMeineGremien] = useState(false)
+  const [archivEinbeziehen, setArchivEinbeziehen] = useState(false)
+
+  // Verknüpfte Sitzungen (Archiv-Regel + "Meine Gremien"-Filter) und die
+  // eigenen Gremien aus user_gremien (0005_user_gremien.sql).
+  const [sessionById, setSessionById] = useState<Map<string, SessionInfo>>(new Map())
+  const [meineGremien, setMeineGremien] = useState<string[]>([])
+
+  const [seite, setSeite] = useState(1)
+  const [proSeite, setProSeite] = useState(ladeSeitengroesse)
 
   const [showForm, setShowForm] = useState(false)
   const [newTitel, setNewTitel] = useState('')
@@ -79,7 +122,11 @@ export default function Dokumente() {
 
   async function loadDocuments() {
     const { data } = await supabase.from('dokumente').select('*').is('parent_id', null).order('erstellt_am', { ascending: false })
-    setDocuments(data ?? [])
+    const rows = data ?? []
+    setDocuments(rows)
+    // Datum/Gremium der verknüpften Sitzungen: entscheidet, ob ein Dokument
+    // archiviert ist (Sitzung vorbei) und ob es unter "Meine Gremien" fällt.
+    setSessionById(await ladeSessionInfos(supabase, rows))
     setLoading(false)
   }
 
@@ -109,6 +156,8 @@ export default function Dokumente() {
       setUserId(data.user.id)
       const { data: profileRow } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
       setProfile(profileRow)
+      const { data: gremienRows } = await supabase.from('user_gremien').select('gremium').eq('user_id', data.user.id)
+      setMeineGremien((gremienRows ?? []).map((g) => g.gremium as string))
       await loadLeseStatus(data.user.id)
     })
   }, [])
@@ -211,7 +260,25 @@ export default function Dokumente() {
   const tagsPresent = Array.from(new Set(documents.flatMap((d) => d.tags))).sort((a, b) => a.localeCompare(b, 'de'))
   const unreadCount = documents.filter((d) => istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id))).length
 
+  // Archiv-Zustand einmal je Render für alle Dokumente (siehe
+  // src/lib/dokumenteArchiv.ts) - wird sowohl zum Ausblenden als auch für das
+  // Archiv-Fähnchen an der Karte gebraucht.
+  const archivGrundById = new Map(documents.map((d) => [d.id, archivGrund(d, sessionById)]))
+  const archivGesamt = Array.from(archivGrundById.values()).filter(Boolean).length
+
+  // Wer sucht, sucht im Gesamtbestand: eine aktive Suche zieht das Archiv
+  // automatisch mit hinein, auch ohne den Archiv-Schalter (Nutzerwunsch).
+  const sucheAktiv = searchQuery.trim().length > 0
+  const zeigeArchiv = archivEinbeziehen || sucheAktiv
+
   const filtered = documents.filter((d) => {
+    if (!zeigeArchiv && archivGrundById.get(d.id)) return false
+    if (nurMeineGremien) {
+      // Ohne verknüpfte Sitzung lässt sich kein Gremium bestimmen - solche
+      // Dokumente fallen unter diesem Filter bewusst heraus.
+      const gremium = d.session_id ? sessionById.get(d.session_id)?.gremium : null
+      if (!gremium || !meineGremien.includes(gremium)) return false
+    }
     if (ebeneFilter !== 'alle' && d.ebene !== ebeneFilter) return false
     if (tagFilter && !d.tags.includes(tagFilter)) return false
     if (searchQuery.trim()) {
@@ -222,6 +289,30 @@ export default function Dokumente() {
     }
     return true
   })
+
+  // proSeite === 0 heißt "Alle" - dann gibt es genau eine Seite. Die Seitenzahl
+  // wird beim Rendern geklemmt statt per Effekt zurückgesetzt: schrumpft die
+  // Treffermenge (Filter/Suche), landet man sofort auf der letzten gültigen
+  // Seite, ohne einen Zwischen-Render mit leerer Liste.
+  const seitenAnzahl = proSeite === 0 ? 1 : Math.max(1, Math.ceil(filtered.length / proSeite))
+  const aktuelleSeite = Math.min(seite, seitenAnzahl)
+  const sichtbare =
+    proSeite === 0 ? filtered : filtered.slice((aktuelleSeite - 1) * proSeite, aktuelleSeite * proSeite)
+
+  function handleProSeite(wert: number) {
+    setProSeite(wert)
+    speichereSeitengroesse(wert)
+    setSeite(1)
+  }
+
+  /** Jede Filteränderung beginnt wieder auf Seite 1 - sonst zeigt eine frisch
+   *  gefilterte Liste eine leere Seite 4. */
+  function mitSeitenreset<T>(setter: (wert: T) => void): (wert: T) => void {
+    return (wert) => {
+      setter(wert)
+      setSeite(1)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -249,13 +340,13 @@ export default function Dokumente() {
             type="text"
             placeholder="Dokumente durchsuchen..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => mitSeitenreset(setSearchQuery)(e.target.value)}
             className="mc-input w-full pl-9 pr-8"
           />
           {searchQuery && (
             <button
               type="button"
-              onClick={() => setSearchQuery('')}
+              onClick={() => mitSeitenreset(setSearchQuery)('')}
               aria-label="Suche leeren"
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             >
@@ -263,16 +354,57 @@ export default function Dokumente() {
             </button>
           )}
         </div>
+        {sucheAktiv && archivGesamt > 0 && (
+          <p className="mb-3 flex items-center gap-1.5 text-xs text-slate-500">
+            <Archive className="h-3.5 w-3.5" />
+            Die Suche schließt das Archiv mit ein.
+          </p>
+        )}
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-1.5">
+            {meineGremien.length > 0 && (
+              <button
+                type="button"
+                onClick={() => mitSeitenreset(setNurMeineGremien)(!nurMeineGremien)}
+                title={`Nur Dokumente aus Sitzungen von: ${meineGremien.join(', ')}`}
+                className={chipClass(nurMeineGremien)}
+              >
+                Meine Gremien
+              </button>
+            )}
+            {archivGesamt > 0 && (
+              <button
+                type="button"
+                onClick={() => mitSeitenreset(setArchivEinbeziehen)(!archivEinbeziehen)}
+                disabled={sucheAktiv}
+                title={
+                  sucheAktiv
+                    ? 'Bei aktiver Suche ist das Archiv immer eingeschlossen.'
+                    : 'Auch Dokumente vergangener Sitzungen anzeigen'
+                }
+                className={`${chipClass(zeigeArchiv)} inline-flex items-center gap-1 disabled:cursor-not-allowed`}
+              >
+                <Archive className="h-3 w-3" />
+                Archiv ({archivGesamt})
+              </button>
+            )}
             {ebenenPresent.length > 0 && (
               <>
-                <button type="button" onClick={() => setEbeneFilter('alle')} className={chipClass(ebeneFilter === 'alle')}>
+                <button
+                  type="button"
+                  onClick={() => mitSeitenreset(setEbeneFilter)('alle')}
+                  className={chipClass(ebeneFilter === 'alle')}
+                >
                   Alle Ebenen
                 </button>
                 {ebenenPresent.map((e) => (
-                  <button key={e} type="button" onClick={() => setEbeneFilter(e)} className={chipClass(ebeneFilter === e)}>
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => mitSeitenreset(setEbeneFilter)(e)}
+                    className={chipClass(ebeneFilter === e)}
+                  >
                     {EBENE_LABEL[e]}
                   </button>
                 ))}
@@ -282,7 +414,7 @@ export default function Dokumente() {
               <button
                 key={t}
                 type="button"
-                onClick={() => setTagFilter((cur) => (cur === t ? null : t))}
+                onClick={() => mitSeitenreset(setTagFilter)(tagFilter === t ? null : t)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-opacity ${tagColor(t).chip} ${
                   tagFilter === t ? `ring-2 ring-offset-1 ${tagColor(t).ring}` : 'opacity-60 hover:opacity-100'
                 }`}
@@ -357,9 +489,10 @@ export default function Dokumente() {
         )}
 
         <ul className="space-y-2">
-          {filtered.map((d, idx) => {
+          {sichtbare.map((d, idx) => {
             const ungelesen = istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id))
             const Icon = docIcon(d)
+            const grund = archivGrundById.get(d.id)
             return (
             <li
               key={d.id}
@@ -411,6 +544,19 @@ export default function Dokumente() {
                         {t}
                       </span>
                     ))}
+                    {grund && (
+                      <span
+                        title={
+                          grund === 'sitzung'
+                            ? 'Archiviert: die verknüpfte Sitzung ist vorbei'
+                            : 'Von Hand archiviert'
+                        }
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500"
+                      >
+                        <Archive className="h-2.5 w-2.5" />
+                        Archiv
+                      </span>
+                    )}
                   </div>
                   <p className="mt-0.5 text-xs text-slate-500">
                     {d.user_id !== userId && `${authorNames.get(d.user_id) ?? 'Unbekannt'} · `}
@@ -441,6 +587,57 @@ export default function Dokumente() {
             </li>
           )}
         </ul>
+
+        {filtered.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
+            <label className="flex items-center gap-2">
+              <span>Pro Seite</span>
+              <select
+                value={proSeite}
+                onChange={(e) => handleProSeite(Number(e.target.value))}
+                className="mc-input !w-auto !py-1 !text-sm"
+              >
+                {SEITENGROESSEN.map((g) => (
+                  <option key={g} value={g}>
+                    {g === 0 ? 'Alle' : g}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-center gap-2">
+              <span>
+                {proSeite === 0
+                  ? `${filtered.length} von ${documents.length}`
+                  : `${(aktuelleSeite - 1) * proSeite + 1}–${Math.min(aktuelleSeite * proSeite, filtered.length)} von ${filtered.length}`}
+              </span>
+              {seitenAnzahl > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSeite(aktuelleSeite - 1)}
+                    disabled={aktuelleSeite <= 1}
+                    aria-label="Vorherige Seite"
+                    className="mc-btn-ghost !p-1.5"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="tabular-nums">
+                    Seite {aktuelleSeite} / {seitenAnzahl}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSeite(aktuelleSeite + 1)}
+                    disabled={aktuelleSeite >= seitenAnzahl}
+                    aria-label="Nächste Seite"
+                    className="mc-btn-ghost !p-1.5"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {openDoc && (

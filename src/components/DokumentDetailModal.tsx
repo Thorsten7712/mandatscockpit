@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
-import { formatDate, formatDateTime } from '../lib/format'
+import { formatDate, formatDateTime, startOfTodayIso } from '../lib/format'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
 import { TagEditor } from './TagEditor'
@@ -64,6 +64,12 @@ export function DokumentDetailModal({
   const [docTags, setDocTags] = useState<string[]>(document.tags)
   // Gleiches Muster wie docTags: lokaler Spiegel statt Mutation der Prop.
   const [docSessionId, setDocSessionId] = useState<string | null>(document.session_id)
+  // Manuelles Archivieren (0038_dokumente_archiv.sql), ebenfalls als lokaler
+  // Spiegel. Die zweite, automatische Archiv-Regel (verknüpfte Sitzung ist
+  // vorbei) steht nicht in der Spalte, sondern wird aus linkedSession
+  // abgeleitet - siehe src/lib/dokumenteArchiv.ts.
+  const [archiviertAm, setArchiviertAm] = useState<string | null>(document.archiviert_am)
+  const [savingArchiv, setSavingArchiv] = useState(false)
 
   // Manuelles Gelesen/Ungelesen (zusätzlich zum automatischen Markieren beim
   // Öffnen, siehe useEffect unten) - initial true, weil das Öffnen ohnehin
@@ -124,6 +130,14 @@ export function DokumentDetailModal({
     }
     const { data } = await supabase.from('todos').select('*').in('id', ids).order('created_at', { ascending: false })
     setLinkedTodos(data ?? [])
+  }
+
+  async function handleToggleArchiv() {
+    setSavingArchiv(true)
+    const neuerWert = archiviertAm ? null : new Date().toISOString()
+    const { error } = await supabase.from('dokumente').update({ archiviert_am: neuerWert }).eq('id', document.id)
+    setSavingArchiv(false)
+    if (!error) setArchiviertAm(neuerWert)
   }
 
   async function handleSetSession(sessionId: string) {
@@ -418,8 +432,35 @@ export function DokumentDetailModal({
     return namen.length > 0 ? `Geteilt mit ${namen.join(', ')}` : 'Einzelne Personen'
   }
 
+  // Nur die automatische Regel, ohne archiviert_am - für den Hinweistext am
+  // Archivieren-Knopf (dieselbe Bedingung wie archivGrund() === 'sitzung' in
+  // src/lib/dokumenteArchiv.ts, hier auf der bereits geladenen Sitzung).
+  const durchSitzungArchiviert = Boolean(
+    linkedSession && Date.parse(linkedSession.datum) < Date.parse(startOfTodayIso()),
+  )
+
   const headerActions = (
     <>
+      {document.user_id === userId && (
+        <button
+          type="button"
+          onClick={handleToggleArchiv}
+          disabled={savingArchiv}
+          title={
+            archiviertAm
+              ? durchSitzungArchiviert
+                ? 'Zurückholen - bleibt wegen der vergangenen Sitzung trotzdem im Archiv'
+                : 'Zurück in die Dokumentenliste holen'
+              : durchSitzungArchiviert
+                ? 'Liegt wegen der vergangenen Sitzung bereits im Archiv - zusätzlich dauerhaft archivieren'
+                : 'Ins Archiv legen'
+          }
+          className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs"
+        >
+          {archiviertAm ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+          {archiviertAm ? 'Im Archiv' : 'Archivieren'}
+        </button>
+      )}
       <button
         type="button"
         onClick={toggleGelesen}
@@ -516,6 +557,14 @@ export function DokumentDetailModal({
           </Link>
         ) : (
           <p className="text-sm text-slate-500">Keine verknüpfte Sitzung.</p>
+        )}
+        {(durchSitzungArchiviert || archiviertAm) && (
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
+            <Archive className="h-3.5 w-3.5 shrink-0" />
+            {durchSitzungArchiviert
+              ? 'Liegt im Archiv – die verknüpfte Sitzung ist vorbei.'
+              : `Liegt im Archiv – von Hand archiviert am ${formatDate(archiviertAm as string)}.`}
+          </p>
         )}
       </div>
     </div>

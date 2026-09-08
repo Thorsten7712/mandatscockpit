@@ -103,6 +103,12 @@ export default function Dashboard() {
               )}
             </Link>
             <Link
+              to="/fakten"
+              className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white"
+            >
+              Zahlen &amp; Fakten
+            </Link>
+            <Link
               to="/settings"
               className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white"
             >

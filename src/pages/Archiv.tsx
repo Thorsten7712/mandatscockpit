@@ -1,14 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckSquare, FileText, Gavel, History, Plus } from 'lucide-react'
+import { Archive, CheckSquare, FileText, Gavel, History, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, CalendarSource, Ebene, SessionRow, SummaryRow, TodoRow } from '../lib/types'
+import type { AntragRow, CalendarSource, DokumentRow, Ebene, SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TerminDetailModal } from '../components/TerminDetailModal'
 import { TodoDetailModal } from '../components/TodoDetailModal'
 import { AntragDetailModal } from '../components/AntragDetailModal'
+import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from '../components/DocumentPreviewModal'
 import { formatDate, formatDateTime, formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
-import { EBENE_LABEL, sourceColorById } from '../lib/sourceColors'
+import { EBENE_COLOR, EBENE_LABEL, sourceColorById, tagColor } from '../lib/sourceColors'
+import { archivGrund, ladeSessionInfos, type SessionInfo } from '../lib/dokumenteArchiv'
 import { ANTRAG_STATUS_ABGESCHLOSSEN, antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 
 type Tab = 'sitzungen' | 'aufgaben' | 'dokumente' | 'antraege'
@@ -49,6 +51,13 @@ export default function Archiv() {
   const [documents, setDocuments] = useState<SummaryRow[]>([])
   const [docLabels, setDocLabels] = useState<Map<string, string>>(new Map())
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
+
+  // Archivierte Dokumente aus dem Dokumenten-Hub (Dokumente.tsx) - stehen im
+  // selben Reiter wie die hochgeladenen summaries-Dateien, siehe
+  // src/lib/dokumenteArchiv.ts für die Archiv-Regel.
+  const [hubDokumente, setHubDokumente] = useState<DokumentRow[]>([])
+  const [hubSessionById, setHubSessionById] = useState<Map<string, SessionInfo>>(new Map())
+  const [openHubDoc, setOpenHubDoc] = useState<DokumentRow | null>(null)
 
   const [entschiedeneAntraege, setEntschiedeneAntraege] = useState<AntragRow[]>([])
   const [antragDocsById, setAntragDocsById] = useState<Map<string, SummaryRow>>(new Map())
@@ -217,10 +226,28 @@ export default function Archiv() {
     setDocLabels(labels)
   }
 
+  // Top-Level-Dokumente des Dokumenten-Hubs samt Datum der verknüpften
+  // Sitzungen; welche davon archiviert sind, entscheidet archivGrund() beim
+  // Rendern (src/lib/dokumenteArchiv.ts). Bewusst nicht server-seitig
+  // gefiltert: die Archiv-Regel hängt an sessions.datum, nicht an einer
+  // Spalte von dokumente, und ist in PostgREST nicht in einer Abfrage
+  // ausdrückbar.
+  async function loadHubDokumente() {
+    const { data } = await supabase
+      .from('dokumente')
+      .select('*')
+      .is('parent_id', null)
+      .order('erstellt_am', { ascending: false })
+    const rows = data ?? []
+    setHubDokumente(rows)
+    setHubSessionById(await ladeSessionInfos(supabase, rows))
+  }
+
   useEffect(() => {
     loadNotizenFlags()
     loadCompletedTodos()
     loadDocuments()
+    loadHubDokumente()
     loadEntschiedeneAntraege()
     supabase
       .from('calendar_sources')
@@ -233,6 +260,27 @@ export default function Archiv() {
   }, [])
 
   const sourceById = new Map(sources.map((s) => [s.id, s]))
+
+  // Der Dokumente-Reiter führt zwei Quellen zusammen: an Sitzungen/Termine/
+  // Aufgaben/Anträge angehängte Datei-Uploads (summaries) und archivierte
+  // Dokumente aus dem Dokumenten-Hub. Gemeinsame, nach Datum absteigend
+  // sortierte Liste mit unterschiedlichem Klickverhalten je Art - Vorschau
+  // für die reinen Dateien, Detail-Modal für die Hub-Dokumente (dort hängen
+  // Notizen, Tags und ToDo-Verknüpfungen dran).
+  const archivierteHubDokumente = hubDokumente
+    .map((d) => ({ dokument: d, grund: archivGrund(d, hubSessionById) }))
+    .filter((e): e is { dokument: DokumentRow; grund: NonNullable<ReturnType<typeof archivGrund>> } => e.grund !== null)
+
+  type ArchivDokument =
+    | { art: 'datei'; id: string; datum: string; row: SummaryRow }
+    | { art: 'hub'; id: string; datum: string; row: DokumentRow; grund: 'manuell' | 'sitzung' }
+
+  const archivDokumente: ArchivDokument[] = [
+    ...documents.map((d): ArchivDokument => ({ art: 'datei', id: d.id, datum: d.erstellt_am, row: d })),
+    ...archivierteHubDokumente.map(
+      ({ dokument, grund }): ArchivDokument => ({ art: 'hub', id: dokument.id, datum: dokument.erstellt_am, row: dokument, grund }),
+    ),
+  ].sort((a, b) => b.datum.localeCompare(a.datum))
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -482,34 +530,78 @@ export default function Archiv() {
         {tab === 'dokumente' && (
           <section className="mc-animate-fade max-w-2xl">
             <ul className="space-y-2">
-              {documents.map((d) => (
-                <li key={d.id}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })
-                    }
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-slate-900">
-                        📎 {fileNameFromPath(d.datei_url!)}
+              {archivDokumente.map((eintrag) =>
+                eintrag.art === 'datei' ? (
+                  <li key={`datei-${eintrag.id}`}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewDoc({ path: eintrag.row.datei_url!, name: fileNameFromPath(eintrag.row.datei_url!) })
+                      }
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-slate-900">
+                          📎 {fileNameFromPath(eintrag.row.datei_url!)}
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                          {docLabels.get(eintrag.id) && (
+                            <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                              {docLabels.get(eintrag.id)}
+                            </span>
+                          )}
+                          <span className="shrink-0">{formatDateTime(eintrag.row.erstellt_am)}</span>
+                        </span>
                       </span>
-                      <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                        {docLabels.get(d.id) && (
-                          <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-                            {docLabels.get(d.id)}
+                    </button>
+                  </li>
+                ) : (
+                  <li key={`hub-${eintrag.id}`}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenHubDoc(eintrag.row)}
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="truncate text-sm font-medium text-slate-900">{eintrag.row.titel}</span>
+                          {eintrag.row.ebene && (
+                            <span
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[eintrag.row.ebene].chip}`}
+                            >
+                              {EBENE_LABEL[eintrag.row.ebene]}
+                            </span>
+                          )}
+                          {eintrag.row.tags.map((t) => (
+                            <span
+                              key={t}
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-medium">
+                            <Archive className="h-3 w-3" />
+                            {eintrag.grund === 'sitzung'
+                              ? hubSessionById.get(eintrag.row.session_id ?? '')?.titel ?? 'Vergangene Sitzung'
+                              : 'Von Hand archiviert'}
                           </span>
-                        )}
-                        <span className="shrink-0">{formatDateTime(d.erstellt_am)}</span>
+                          {eintrag.row.datei_url && (
+                            <span className="truncate">📎 {fileNameFromPath(eintrag.row.datei_url)}</span>
+                          )}
+                          <span className="shrink-0">{formatDateTime(eintrag.row.erstellt_am)}</span>
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-              {documents.length === 0 && (
+                    </button>
+                  </li>
+                ),
+              )}
+              {archivDokumente.length === 0 && (
                 <li className="mc-card p-6 text-center text-sm text-slate-400">
-                  Noch keine Dokumente hochgeladen.
+                  Noch keine Dokumente hochgeladen. Dokumente aus dem Dokumenten-Hub landen hier, sobald ihre
+                  verknüpfte Sitzung vorbei ist oder sie von Hand archiviert werden.
                 </li>
               )}
             </ul>
@@ -580,6 +672,19 @@ export default function Archiv() {
           id={openAntragId}
           onClose={() => setOpenAntragId(null)}
           onChanged={loadEntschiedeneAntraege}
+        />
+      )}
+      {openHubDoc && (
+        <DokumentDetailModal
+          document={openHubDoc}
+          onClose={() => {
+            setOpenHubDoc(null)
+            loadHubDokumente()
+          }}
+          onDeleted={() => {
+            setOpenHubDoc(null)
+            loadHubDokumente()
+          }}
         />
       )}
       {previewDoc && (

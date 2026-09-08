@@ -45,7 +45,15 @@ import { createAntrag, listAntraege, updateAntragStatus, listAntragFristen } fro
 import { listNotes, createSessionNote, createEventNote, createTodoNote, createAntragNote } from './tools/notes.ts'
 import { uploadPresseschau } from './tools/presseschau.ts'
 import { startFileUpload, appendFileChunk, finishFileUpload } from './tools/uploads.ts'
-import { createDocument, listDocuments, updateDocumentSession, updateDocumentSharing, updateDocumentTags, updateDocumentTitel } from './tools/dokumente.ts'
+import {
+  createDocument,
+  listDocuments,
+  updateDocumentArchiv,
+  updateDocumentSession,
+  updateDocumentSharing,
+  updateDocumentTags,
+  updateDocumentTitel,
+} from './tools/dokumente.ts'
 import { linkTodoDocument, unlinkTodoDocument } from './tools/todo_dokumente.ts'
 import { search } from './tools/search.ts'
 
@@ -232,6 +240,9 @@ Deno.serve(async (req) => {
           break
         case 'update_document_session':
           result = await updateDocumentSession(supabase, user.id, args)
+          break
+        case 'update_document_archiv':
+          result = await updateDocumentArchiv(supabase, user.id, args)
           break
         case 'link_todo_document':
           result = await linkTodoDocument(supabase, user.id, args)

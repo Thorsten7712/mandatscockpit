@@ -28,7 +28,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
 - **ToDo-Board:** Kanban-Stil mit frei definierbaren Spalten (`todo_columns`) statt fester Status,
   Drag & Drop via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~33 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~39 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 
@@ -70,12 +70,30 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   und ein Dokument mehrere Karten betreffen kann). Beide Verknüpfungen sind im Detail-Modal auf beiden
   Seiten sichtbar/editierbar (ToDo-Karte ↔ Dokument, Sitzung ↔ Dokument) und über den MCP-Server
   steuerbar (`update_document_session`, `link_todo_document`/`unlink_todo_document`).
+  **Archiv:** Ein Dokument gilt als archiviert, wenn entweder die verknüpfte Sitzung vorbei ist oder
+  `dokumente.archiviert_am` gesetzt wurde (`0038_dokumente_archiv.sql`, Regel in
+  `src/lib/dokumenteArchiv.ts`). Archiviertes ist in der Liste ausgeblendet (Chip „Archiv (n)" blendet
+  es ein), wird von der Suche aber **immer** mitdurchsucht. Es erscheint zusätzlich im „Dokumente"-
+  Reiter des Archivs, gemischt mit den `summaries`-Datei-Uploads. Dazu: Paginierung mit wählbarer
+  Seitengröße (10/25/50/100/Alle) und ein Schnellfilter „Meine Gremien" (über die Sitzung des
+  Dokuments, `user_gremien`).
+- **Zahlen & Fakten** (`/fakten`, eigener Reiter in der Kopfleiste): Argumentationshilfen,
+  Sprachregelungen und belegte Kennzahlen als eigene Tabelle `fakten` (`0039_fakten.sql`) – bewusst
+  **nicht** als Tag-Sicht auf `dokumente`, Begründung im Migrationskopf. Drei Kategorien-Reiter,
+  `kategorie='zahl'` als Kachelraster mit herausgestelltem Wert (`kennzahl` ist `text`, nicht
+  `numeric`: „rund 1.200", „8–12"), die beiden Textkategorien als Fließtext-Liste. Belegpflicht
+  sichtbar gemacht: fehlt `quelle`/`stand`, steht dort „Keine Quelle hinterlegt" in Amber.
+  Sichtbarkeit nur `persoenlich`/`geteilt` (kein `einzelpersonen`), RLS spiegelt exakt die vier
+  `dokumente`-Policies. Kein MCP-Tool dafür.
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 29 Tools über
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 30 Tools über
   ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
-  README.md Abschnitt 9 und `docs/CHANGELOG.md`).
+  README.md Abschnitt 9 und `docs/CHANGELOG.md`). `list_documents` kennt das Dokumenten-Archiv
+  (Parameter `archiv`, Standard „ohne" wie in der Web-UI), `update_document_archiv` legt ein
+  Dokument von Hand hinein bzw. holt es zurück. Die Archiv-Regel ist in `tools/dokumente.ts`
+  bewusst gespiegelt statt geteilt (kein gemeinsames Build-Tooling zwischen Deno und Frontend).
 - **GitHub-Actions-Workflows**: Deploy nach GitHub Pages (inkl. `404.html`-Kopie fürs SPA-Routing),
   Supabase-Keep-Alive, täglicher ICS-Import (`import-ics.yml`, 04:00 UTC), Edge-Function-Deploy
   (`deploy-edge-functions.yml`, deployt bei jeder Änderung unter `supabase/functions/**` alle
@@ -113,6 +131,18 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   bewusst dupliziert – kein gemeinsames Backend/Build-Tooling, das eine Abstraktion rechtfertigen
   würde. Faustregel im Projekt: 2 Vorkommen sind tolerierbar, beim 3. wird in eine gemeinsame Stelle
   extrahiert (Beispiel: `fileNameFromPath`, `DetailModalShell`).
+- **Zeitstempel-Vergleiche client-seitig immer numerisch**: PostgREST liefert `timestamptz` als
+  `...+00:00`, `startOfTodayIso()` erzeugt `...Z` – ein String-Vergleich derselben Zeitpunkte in den
+  zwei Schreibweisen ist falsch. `Date.parse(a) < Date.parse(b)` verwenden (siehe
+  `src/lib/dokumenteArchiv.ts`). Server-seitig ist `.lt('datum', ...)` unproblematisch.
+- **`Number(localStorage.getItem(...))` ist `0`, wenn nichts gespeichert ist** – tückisch, wenn `0`
+  ein gültiger Wert der Einstellung ist (in `Dokumente.tsx` bedeutet 0 „Alle anzeigen"). Immer erst
+  explizit auf `null` prüfen. `localStorage` wird im Projekt nur an dieser einen Stelle genutzt, für
+  eine reine Anzeige-Vorliebe pro Gerät; alles, was geräteübergreifend gelten muss, gehört in die DB.
+- **Abgeleitete Zustände nicht materialisieren, wenn sie nur an einer Zeit hängen**: Die Archiv-Regel
+  „verknüpfte Sitzung ist vorbei" steht bewusst in keiner Spalte – sie ist eine Funktion aus
+  `sessions.datum` und bräuchte sonst einen täglichen Job. Folge: sie ist in PostgREST nicht
+  filterbar, die Liste wird geladen und beim Rendern gefiltert (`Dokumente.tsx`, `Archiv.tsx`).
 - **Titel-basiertes Spalten-Matching**: Sonderverhalten für ToDo-Spalten wie „Neu"/„Fertig" läuft über
   case-insensitiven Titel-Vergleich, nicht über stabile IDs – bricht, wenn der Nutzer die Spalte
   umbenennt (bewusster Trade-off, da Spalten frei umbenennbar sind).
@@ -153,6 +183,9 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
    0033_dokumente.sql), der geteilte/persönliche, selbst hochgeladene Dokumente verwaltet und davon
    unabhängig ist.
 4. **iCal-Export** des zusammengeführten persönlichen Kalenders.
+5. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
+   `list_fakten`/`create_fakt` nach dem Muster von `tools/dokumente.ts` wäre additiv – dabei die
+   Sichtbarkeitsprüfung wie dort explizit im Tool-Code nachbauen, der MCP-Server umgeht RLS.
 
 Bekannte offene Frage bei der Quellen-UI: aktuell kann jedes Mitglied jede selbst angelegte Quelle auch
 wieder löschen (`calendar_sources_delete_own`-Policy), auch wenn andere Mitglieder sie bereits

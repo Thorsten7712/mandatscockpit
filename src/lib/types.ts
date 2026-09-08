@@ -60,6 +60,10 @@ export interface DokumentRow {
   tags: string[]
   inhalt: string | null
   datei_url: string | null
+  /** Manuell ins Archiv gelegt (0038_dokumente_archiv.sql). Die automatische
+   * Archivierung über eine vergangene verknüpfte Sitzung steht NICHT hier
+   * drin, sondern wird beim Anzeigen abgeleitet - siehe src/lib/dokumenteArchiv.ts. */
+  archiviert_am: string | null
   erstellt_am: string
 }
 
@@ -76,6 +80,37 @@ export interface DokumentShareRow {
   id: string
   dokument_id: string
   user_id: string
+}
+
+/** Kategorien der "Zahlen und Fakten"-Seite (0039_fakten.sql). 'zahl' ist die
+ * einzige Kategorie, die kennzahl/einheit nutzt - die beiden anderen sind
+ * reine Textbausteine. */
+export type FaktKategorie = 'argumentationshilfe' | 'sprachregelung' | 'zahl'
+
+/** Kein 'einzelpersonen' wie bei DokumentSichtbarkeit: ein Fakt ist
+ * Fraktionsmaterial, keine private Analyse zu einem einzelnen Vorgang. */
+export type FaktSichtbarkeit = 'persoenlich' | 'geteilt'
+
+export interface FaktRow {
+  id: string
+  user_id: string
+  kategorie: FaktKategorie
+  titel: string
+  inhalt: string | null
+  /** Nur bei kategorie='zahl': herausgestellter Wert ("12,5", "rund 1.200") - bewusst
+   * Text, weil Kennzahlen aus Veröffentlichungen Näherungen und Spannen enthalten. */
+  kennzahl: string | null
+  einheit: string | null
+  /** Belegangaben - entscheiden darüber, ob der Fakt zitierfähig ist. */
+  quelle: string | null
+  stand: string | null
+  tags: string[]
+  sichtbarkeit: FaktSichtbarkeit
+  /** nur bei sichtbarkeit='geteilt' gesetzt (analog DokumentRow) */
+  ebene: Ebene | null
+  gliederung: string | null
+  erstellt_am: string
+  geaendert_am: string
 }
 
 export interface CalendarSource {

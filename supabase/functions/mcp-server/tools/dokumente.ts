@@ -13,6 +13,38 @@ const EBENE_LABEL: Record<string, string> = {
   bund: 'Bund',
 }
 
+/** Beginn des heutigen Tages als ISO-String - Grundlage der Archiv-Regel.
+ *  Edge Functions laufen in UTC, die Web-UI rechnet in der lokalen Zeitzone des
+ *  Browsers; die Abweichung von bis zu zwei Stunden ist hier folgenlos, weil
+ *  keine Sitzung zwischen Mitternacht und 2 Uhr stattfindet. Gleiche
+ *  Vereinfachung wie in listSessions() (tools/sessions.ts). */
+function startOfTodayIso(): string {
+  const d = new Date()
+  d.setUTCHours(0, 0, 0, 0)
+  return d.toISOString()
+}
+
+/** Bewusster Spiegel von archivGrund() in src/lib/dokumenteArchiv.ts - zwischen
+ *  Deno und dem React-Frontend gibt es kein gemeinsames Build-Tooling, das eine
+ *  Abstraktion rechtfertigen würde (siehe CLAUDE.md). Ein Dokument gilt als
+ *  archiviert, wenn entweder die verknüpfte Sitzung vorbei ist ODER
+ *  archiviert_am gesetzt wurde (0038_dokumente_archiv.sql). Eine nicht
+ *  gefundene Sitzung archiviert nicht - lieber ein Dokument zu viel in der
+ *  Arbeitsliste als eines, das unauffindbar wird. */
+function archivGrund(
+  dokument: { session_id: string | null; archiviert_am: string | null },
+  sessionDatumById: Map<string, string>,
+  stichtagIso: string,
+): 'manuell' | 'sitzung' | null {
+  if (dokument.archiviert_am) return 'manuell'
+  if (!dokument.session_id) return null
+  const datum = sessionDatumById.get(dokument.session_id)
+  if (!datum) return null
+  // Numerisch statt lexikografisch: PostgREST liefert timestamptz als
+  // "...+00:00", startOfTodayIso() erzeugt "...Z".
+  return Date.parse(datum) < Date.parse(stichtagIso) ? 'sitzung' : null
+}
+
 interface CallerProfile {
   partei: string | null
   ebenen: string[]
@@ -260,6 +292,7 @@ interface DokumentListRow {
   tags: string[]
   inhalt: string | null
   datei_url: string | null
+  archiviert_am: string | null
   erstellt_am: string
   user_id: string
 }
@@ -272,6 +305,9 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   const ebeneFilter = typeof args.ebene === 'string' && args.ebene.trim() ? args.ebene.trim() : ''
   const tag = typeof args.tag === 'string' && args.tag.trim() ? args.tag.trim().toLowerCase() : ''
   const sessionIdFilter = typeof args.session_id === 'string' && args.session_id.trim() ? args.session_id.trim() : ''
+  // Standard "ohne" spiegelt die Web-UI (Dokumente.tsx blendet Archiviertes
+  // aus). "alle"/"nur" für den Blick ins Archiv, siehe archivGrund() oben.
+  const archivFilter = args.archiv === 'alle' || args.archiv === 'nur' ? args.archiv : 'ohne'
   // Ohne parent_id: nur Top-Level-Dokumente (parent_id is null), analog zur
   // Web-UI (Dokumente.tsx) - mit parent_id: gezielt die an ein Dokument
   // angehängten Notizen/Analysen.
@@ -281,7 +317,8 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   const caller = await loadCallerProfile(supabase, userId)
   if (!caller) return toolTextResult('Fehler: eigenes Profil konnte nicht geladen werden.', true)
 
-  const cols = 'id, parent_id, session_id, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url, erstellt_am, user_id'
+  const cols =
+    'id, parent_id, session_id, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url, archiviert_am, erstellt_am, user_id'
   let baseQuery = supabase.from('dokumente').select(cols)
   baseQuery = parentIdFilter ? baseQuery.eq('parent_id', parentIdFilter) : baseQuery.is('parent_id', null)
 
@@ -328,23 +365,42 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   if (tag) rows = rows.filter((d) => d.tags.some((t) => t.toLowerCase().includes(tag)))
   if (sessionIdFilter) rows = rows.filter((d) => d.session_id === sessionIdFilter)
 
+  // Sitzungen VOR dem Archiv-Filter laden: deren Datum entscheidet mit
+  // darüber, welche Zeilen überhaupt übrig bleiben (das Limit greift erst
+  // danach). Titel derselben Abfrage werden unten für die Ausgabe genutzt.
+  const sessionIds = Array.from(new Set(rows.map((d) => d.session_id).filter((v): v is string => Boolean(v))))
+  const sessionTitelById = new Map<string, string>()
+  const sessionDatumById = new Map<string, string>()
+  if (sessionIds.length > 0) {
+    const { data: sessionRows } = await supabase.from('sessions').select('id, titel, datum').in('id', sessionIds)
+    for (const sitzung of sessionRows ?? []) {
+      sessionTitelById.set(sitzung.id as string, sitzung.titel as string)
+      sessionDatumById.set(sitzung.id as string, sitzung.datum as string)
+    }
+  }
+
+  const stichtag = startOfTodayIso()
+  const archivGrundById = new Map(rows.map((d) => [d.id, archivGrund(d, sessionDatumById, stichtag)]))
+  if (archivFilter === 'ohne') rows = rows.filter((d) => !archivGrundById.get(d.id))
+  else if (archivFilter === 'nur') rows = rows.filter((d) => archivGrundById.get(d.id))
+
   rows.sort((a, b) => b.erstellt_am.localeCompare(a.erstellt_am))
   rows = rows.slice(0, limit)
 
-  if (rows.length === 0) return toolTextResult('Keine Dokumente gefunden.')
+  if (rows.length === 0) {
+    if (archivFilter === 'nur') return toolTextResult('Keine archivierten Dokumente gefunden.')
+    return toolTextResult(
+      archivFilter === 'ohne'
+        ? 'Keine Dokumente gefunden (archivierte sind ausgeblendet - archiv="alle" oder archiv="nur" zeigt sie).'
+        : 'Keine Dokumente gefunden.',
+    )
+  }
 
   const authorNameById = new Map<string, string>()
   const fremdeAutorIds = rows.filter((d) => d.user_id !== userId).map((d) => d.user_id)
   if (fremdeAutorIds.length > 0) {
     const { data: authors } = await supabase.from('profiles').select('id, name').in('id', Array.from(new Set(fremdeAutorIds)))
     for (const a of authors ?? []) authorNameById.set(a.id as string, a.name as string)
-  }
-
-  const sessionIds = Array.from(new Set(rows.map((d) => d.session_id).filter((v): v is string => Boolean(v))))
-  const sessionTitelById = new Map<string, string>()
-  if (sessionIds.length > 0) {
-    const { data: sessionRows } = await supabase.from('sessions').select('id, titel').in('id', sessionIds)
-    for (const s of sessionRows ?? []) sessionTitelById.set(s.id as string, s.titel as string)
   }
 
   // Verknüpfte ToDos (n:m über todo_dokumente, siehe 0037_todo_dokumente.sql).
@@ -376,6 +432,8 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
     if (d.tags.length > 0) teile.push(`Tags: ${d.tags.join(', ')}`)
     if (d.datei_url) teile.push(`Datei: ${fileNameFromPath(d.datei_url)}`)
     if (d.session_id) teile.push(`Sitzung: ${sessionTitelById.get(d.session_id) ?? d.session_id}`)
+    const grund = archivGrundById.get(d.id)
+    if (grund) teile.push(grund === 'sitzung' ? 'ARCHIV (Sitzung vorbei)' : 'ARCHIV (von Hand)')
     const todoTitel = (todoIdsByDokument.get(d.id) ?? []).map((tid) => todoTitelById.get(tid) ?? tid)
     if (todoTitel.length > 0) teile.push(`ToDos: ${todoTitel.join(', ')}`)
     teile.push(formatDate(d.erstellt_am.slice(0, 10)))
@@ -428,6 +486,50 @@ export async function updateDocumentSession(supabase: SupabaseClient, userId: st
       ? `"${dok.titel}" wurde mit Sitzung "${sessionTitel}" verknüpft.`
       : `Sitzungs-Verknüpfung von "${dok.titel}" wurde entfernt.`,
   )
+}
+
+/** Setzt/entfernt NUR die manuelle Archivierung (dokumente.archiviert_am).
+ *  Die zweite Archiv-Regel - verknüpfte Sitzung ist vorbei - lässt sich nicht
+ *  abschalten, weil sie in keiner Spalte steht (siehe archivGrund() oben und
+ *  0038_dokumente_archiv.sql). Deshalb weist die Rückmeldung beim Zurückholen
+ *  ausdrücklich darauf hin, wenn das Dokument trotzdem im Archiv bleibt. */
+export async function updateDocumentArchiv(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
+  if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
+  if (typeof args.archivieren !== 'boolean') {
+    return toolTextResult('Fehler: archivieren ist erforderlich (true = ins Archiv, false = zurückholen).', true)
+  }
+  const archivieren = args.archivieren
+
+  const { data: dok } = await supabase
+    .from('dokumente')
+    .select('id, user_id, titel, session_id, archiviert_am')
+    .eq('id', dokumentId)
+    .maybeSingle()
+  if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+  if (dok.user_id !== userId) {
+    return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf es archivieren oder zurückholen.', true)
+  }
+
+  const { error } = await supabase
+    .from('dokumente')
+    .update({ archiviert_am: archivieren ? new Date().toISOString() : null })
+    .eq('id', dokumentId)
+  if (error) return toolTextResult(`Fehler beim Aktualisieren des Archiv-Status: ${error.message}`, true)
+
+  if (archivieren) return toolTextResult(`"${dok.titel}" wurde ins Archiv gelegt.`)
+
+  const sessionDatumById = new Map<string, string>()
+  if (dok.session_id) {
+    const { data: session } = await supabase.from('sessions').select('id, datum, titel').eq('id', dok.session_id).maybeSingle()
+    if (session) sessionDatumById.set(session.id as string, session.datum as string)
+    if (archivGrund({ session_id: dok.session_id, archiviert_am: null }, sessionDatumById, startOfTodayIso())) {
+      return toolTextResult(
+        `Manuelle Archivierung von "${dok.titel}" wurde aufgehoben - das Dokument bleibt aber im Archiv, weil die verknüpfte Sitzung "${session?.titel ?? dok.session_id}" vorbei ist. Zum vollständigen Zurückholen die Sitzungs-Verknüpfung mit update_document_session lösen.`,
+      )
+    }
+  }
+  return toolTextResult(`"${dok.titel}" wurde aus dem Archiv zurückgeholt.`)
 }
 
 export async function updateDocumentTags(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {

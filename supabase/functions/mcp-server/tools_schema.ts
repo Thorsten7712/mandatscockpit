@@ -502,7 +502,7 @@ export const TOOLS = [
   {
     name: 'list_documents',
     description:
-      'Listet Dokumente aus dem Dokumenten-Hub auf - eigene (persönlich, geteilt und einzelpersonen) sowie die geteilten bzw. mit dem Nutzer individuell geteilten Dokumente anderer Mitglieder. Ohne parent_id nur Top-Level-Dokumente (z. B. hochgeladene Sitzungsvorlagen); mit parent_id gezielt die an ein bestimmtes Dokument angehängten Notizen/Analysen. Liefert je Dokument auch die id (für parent_id bei create_document oder spätere Verwaltung) und ggf. den Ersteller-Namen bei fremden Dokumenten.',
+      'Listet Dokumente aus dem Dokumenten-Hub auf - eigene (persönlich, geteilt und einzelpersonen) sowie die geteilten bzw. mit dem Nutzer individuell geteilten Dokumente anderer Mitglieder. Ohne parent_id nur Top-Level-Dokumente (z. B. hochgeladene Sitzungsvorlagen); mit parent_id gezielt die an ein bestimmtes Dokument angehängten Notizen/Analysen. Liefert je Dokument auch die id (für parent_id bei create_document oder spätere Verwaltung) und ggf. den Ersteller-Namen bei fremden Dokumenten. Archivierte Dokumente sind standardmäßig ausgeblendet (siehe Parameter archiv) und in der Ausgabe mit ARCHIV markiert.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -525,8 +525,30 @@ export const TOOLS = [
           type: 'string',
           description: 'Filtert auf Dokumente, die mit dieser Sitzung verknüpft sind (optional).',
         },
-        limit: { type: 'number', description: 'Maximale Anzahl Dokumente (Standard 20, Maximum 100).' },
+        archiv: {
+          type: 'string',
+          enum: ['ohne', 'alle', 'nur'],
+          description:
+            'Umgang mit archivierten Dokumenten (Standard "ohne", wie in der Web-UI). Ein Dokument gilt als archiviert, wenn seine verknüpfte Sitzung vorbei ist ODER es per update_document_archiv von Hand archiviert wurde. "alle" listet zusätzlich das Archiv, "nur" ausschließlich das Archiv.',
+        },
+        limit: { type: 'number', description: 'Maximale Anzahl Dokumente (Standard 20, Maximum 100). Greift erst nach dem Archiv-Filter.' },
       },
+    },
+  },
+  {
+    name: 'update_document_archiv',
+    description:
+      'Legt ein eigenes Dokument im Dokumenten-Hub von Hand ins Archiv oder holt es zurück - nur der/die Ersteller*in darf das. Betrifft ausschließlich die manuelle Archivierung: ein Dokument, dessen verknüpfte Sitzung vorbei ist, gilt weiterhin als archiviert und lässt sich nur durch Lösen der Sitzungs-Verknüpfung (update_document_session) zurückholen.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments/der eigenen Notiz (z. B. aus list_documents).' },
+        archivieren: {
+          type: 'boolean',
+          description: 'true = ins Archiv legen, false = manuelle Archivierung wieder aufheben.',
+        },
+      },
+      required: ['dokument_id', 'archivieren'],
     },
   },
   {
