@@ -1930,3 +1930,39 @@ Nutzerwunsch direkt im Anschluss: „Der MCP Server sollte auch das Archiv kenne
   Fallstrick in CLAUDE.md).
 - Verifiziert per `deno check --config supabase/functions/mcp-server/deno.json` und einem
   JSON-RPC-Smoke-Test gegen die deployte Function.
+
+### Nachtrag 2: Fakten immer Ebenen-weit, Kopfleiste aufgeräumt (gleicher Tag)
+
+Drei Nutzerwünsche direkt im Anschluss.
+
+**Fakten sind nie privat** (`0040_fakten_immer_geteilt.sql`). 0039 hatte das Sichtbarkeitsmodell von
+`dokumente` übernommen (`persoenlich`/`geteilt`); die Entscheidung danach: Fakten sollen
+„grundsätzlich immer allen auf der entsprechenden Ebene zur Verfügung stehen". Eine private
+Argumentationshilfe widerspricht dem Zweck der Seite – wer etwas nur für sich notieren will, hat
+dafür den Dokumenten-Hub mit `sichtbarkeit='persoenlich'`.
+
+Die Migration schränkt den Check-Constraint auf `sichtbarkeit = 'geteilt'` ein, setzt den Default
+entsprechend und macht `ebene` zur Pflicht (ohne Ebene kann `fakten_select_shared` nicht
+entscheiden, für wen der Fakt gilt). Gefahrlos, weil die Tabelle zu diesem Zeitpunkt noch leer war –
+vor dem Schreiben der Migration per Query gegen die Live-DB geprüft (0 Zeilen), ebenso der
+Constraint-Name. Die Spalte `sichtbarkeit` bleibt bewusst erhalten statt gedroppt zu werden: die
+bestehende Policy liest sie, und ein Drop wäre destruktiv ohne Gewinn – so dokumentiert der
+Constraint die Entscheidung genau an der Stelle, an der sie gilt.
+
+Im Frontend entfallen damit die Sichtbarkeits-Radios; übrig bleibt „Gilt für Ebene" plus der
+Hinweis, dass Fakten immer allen auf dieser Ebene zur Verfügung stehen. Ohne hinterlegte Ebene ist
+der Anlegen-Knopf deaktiviert, mit Verweis auf Einstellungen → Meine Gremien. `FaktSichtbarkeit`
+entfällt in `types.ts`, `FaktRow.ebene` ist nicht mehr nullable.
+
+**Kopfleiste**: Reihenfolge jetzt Dokumente, Zahlen & Fakten, Archiv (vorher stand Archiv vorn).
+
+**Profilmenü**: Einstellungen und Abmelden sind aus der Leiste in ein Klappmenü hinter dem eigenen
+Profilbild gewandert – die Leiste zeigt damit nur noch inhaltliche Ziele. Das Profilbild sitzt links
+neben dem Titel und ist jetzt ein Button mit kleinem Chevron-Abzeichen; das Menü schließt per Klick
+daneben (`mousedown`, nicht `click`, damit es zu ist, bevor der Klick beim Element dahinter ankommt)
+und per Escape. Beide Listener hängen nur, solange das Menü offen ist.
+
+Verifiziert per `tsc -b` und erneut über den statischen Test-Harness: Menü öffnet/schließt korrekt
+(Außenklick und Escape geprüft), Link-Reihenfolge in der Kopfleiste ausgelesen, Fakten-Formular ohne
+Sichtbarkeits-Radios, ein Kreis-Fakt trägt jetzt sein Ebenen-Badge statt der früheren
+„Persönlich"-Markierung.

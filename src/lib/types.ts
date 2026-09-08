@@ -87,10 +87,6 @@ export interface DokumentShareRow {
  * reine Textbausteine. */
 export type FaktKategorie = 'argumentationshilfe' | 'sprachregelung' | 'zahl'
 
-/** Kein 'einzelpersonen' wie bei DokumentSichtbarkeit: ein Fakt ist
- * Fraktionsmaterial, keine private Analyse zu einem einzelnen Vorgang. */
-export type FaktSichtbarkeit = 'persoenlich' | 'geteilt'
-
 export interface FaktRow {
   id: string
   user_id: string
@@ -105,9 +101,13 @@ export interface FaktRow {
   quelle: string | null
   stand: string | null
   tags: string[]
-  sichtbarkeit: FaktSichtbarkeit
-  /** nur bei sichtbarkeit='geteilt' gesetzt (analog DokumentRow) */
-  ebene: Ebene | null
+  /** Immer 'geteilt' (0040_fakten_immer_geteilt.sql): Fakten stehen grundsätzlich
+   * allen auf der jeweiligen Ebene zur Verfügung, es gibt keine privaten Fakten.
+   * Die Spalte bleibt, weil die RLS-Policy fakten_select_shared sie liest. */
+  sichtbarkeit: 'geteilt'
+  /** Pflichtfeld - ohne Ebene kann die RLS-Policy nicht entscheiden, für wen der Fakt gilt. */
+  ebene: Ebene
+  /** null nur bei ebene='bund' (es gibt nur einen Bundestag), sonst aus dem Profil übernommen. */
   gliederung: string | null
   erstellt_am: string
   geaendert_am: string

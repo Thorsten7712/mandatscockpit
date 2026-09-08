@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart3, MessageSquareQuote, Pencil, Scale, Search, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { Ebene, FaktKategorie, FaktRow, FaktSichtbarkeit, Profile } from '../lib/types'
+import type { Ebene, FaktKategorie, FaktRow, Profile } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
 import { TagEditor } from '../components/TagEditor'
@@ -15,6 +15,11 @@ import { TagEditor } from '../components/TagEditor'
  * Fakten kurze, wiederverwendbare Bausteine mit Belegpflicht sind und keine
  * datierten Artefakte mit Datei, Notizen-Baum und Gelesen-Status - Begründung
  * ausführlich in supabase/migrations/0039_fakten.sql.
+ *
+ * Fakten sind **immer** Ebenen-Material: es gibt keine privaten Fakten
+ * (0040_fakten_immer_geteilt.sql). Wer etwas nur für sich notieren will, nutzt
+ * den Dokumenten-Hub. Deshalb hat das Formular keine Sichtbarkeits-Auswahl,
+ * nur die Frage, für welche der eigenen Ebenen der Fakt gilt.
  *
  * RLS (0039_fakten.sql) filtert server-seitig auf Eigenes + für die eigene
  * Partei/Ebene/Gliederung Geteiltes; hier wird nur noch nach Kategorie, Tag
@@ -61,7 +66,6 @@ const LEERES_FORMULAR = {
   quelle: '',
   stand: '',
   tags: [] as string[],
-  sichtbarkeit: 'geteilt' as FaktSichtbarkeit,
   ebene: '' as Ebene | '',
 }
 
@@ -135,8 +139,7 @@ export default function ZahlenUndFakten() {
       // <input type="date"> erwartet YYYY-MM-DD; stand ist bereits ein date.
       stand: f.stand ?? '',
       tags: f.tags,
-      sichtbarkeit: f.sichtbarkeit,
-      ebene: f.ebene ?? '',
+      ebene: f.ebene,
     })
     setFormError(null)
     setShowForm(true)
@@ -165,19 +168,18 @@ export default function ZahlenUndFakten() {
       setFormError('Text ist erforderlich.')
       return
     }
-    if (form.sichtbarkeit === 'geteilt' && !form.ebene) {
-      setFormError('Zum Teilen ist eine Ebene erforderlich.')
+    if (!form.ebene) {
+      setFormError('Ebene ist erforderlich - ein Fakt gilt immer für eine bestimmte Ebene.')
       return
     }
 
     setSaving(true)
     setFormError(null)
 
-    // ebene/gliederung nur bei "geteilt"; gliederung kommt IMMER aus dem
-    // eigenen Profil, nie aus einer Eingabe - sonst landet Material in der
-    // falschen Gliederung (gleiche Regel wie im Dokumenten-Hub, siehe
-    // 0033_dokumente.sql).
-    const ebene = form.sichtbarkeit === 'geteilt' ? (form.ebene as Ebene) : null
+    // gliederung kommt IMMER aus dem eigenen Profil, nie aus einer Eingabe -
+    // sonst landet Material in der falschen Gliederung (gleiche Regel wie im
+    // Dokumenten-Hub, siehe 0033_dokumente.sql).
+    const ebene = form.ebene as Ebene
     const werte = {
       kategorie,
       titel: form.titel.trim(),
@@ -187,9 +189,9 @@ export default function ZahlenUndFakten() {
       quelle: form.quelle.trim() || null,
       stand: form.stand || null,
       tags: form.tags,
-      sichtbarkeit: form.sichtbarkeit,
+      sichtbarkeit: 'geteilt' as const,
       ebene,
-      gliederung: ebene ? gliederungFuer(profile, ebene) : null,
+      gliederung: gliederungFuer(profile, ebene),
     }
 
     const { error } = editId
@@ -254,9 +256,6 @@ export default function ZahlenUndFakten() {
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-2 text-xs text-slate-500">
         {beleg(f)}
         {f.user_id !== userId && <span className="shrink-0">von {authorNames.get(f.user_id) ?? 'Unbekannt'}</span>}
-        {f.sichtbarkeit === 'persoenlich' && (
-          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 font-medium">Persönlich</span>
-        )}
         {f.user_id === userId && (
           <span className="ml-auto flex shrink-0 gap-1">
             <button
@@ -280,14 +279,12 @@ export default function ZahlenUndFakten() {
   function badges(f: FaktRow) {
     return (
       <>
-        {f.ebene && (
-          <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[f.ebene].chip}`}
-          >
-            {EBENE_LABEL[f.ebene]}
-            {f.gliederung ? ` · ${f.gliederung}` : ''}
-          </span>
-        )}
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[f.ebene].chip}`}
+        >
+          {EBENE_LABEL[f.ebene]}
+          {f.gliederung ? ` · ${f.gliederung}` : ''}
+        </span>
         {f.tags.map((t) => (
           <span key={t} className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
             {t}
@@ -356,11 +353,27 @@ export default function ZahlenUndFakten() {
           <button
             type="button"
             onClick={() => (showForm ? schliesseForm() : oeffneNeu())}
+            disabled={!showForm && eigeneEbenen.length === 0}
+            title={
+              eigeneEbenen.length === 0
+                ? 'Trage zuerst unter Einstellungen → Meine Gremien deine Ebene(n) ein.'
+                : undefined
+            }
             className={showForm ? 'mc-btn-ghost' : 'mc-btn-primary'}
           >
             {showForm ? 'Abbrechen' : `+ ${kategorie === 'zahl' ? 'Zahl' : kategorie === 'sprachregelung' ? 'Sprachregelung' : 'Argumentationshilfe'}`}
           </button>
         </div>
+
+        {eigeneEbenen.length === 0 && (
+          <p className="mb-4 text-sm text-amber-600">
+            Trage zuerst unter{' '}
+            <Link to="/settings" className="underline">
+              Einstellungen → Meine Gremien
+            </Link>{' '}
+            deine Ebene(n) ein, um eigene Einträge anzulegen – ein Fakt gilt immer für eine bestimmte Ebene.
+          </p>
+        )}
 
         {tagsPresent.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-1.5">
@@ -446,54 +459,31 @@ export default function ZahlenUndFakten() {
               <TagEditor tags={form.tags} onChange={(tags) => setForm({ ...form, tags })} vorschlaege={TAG_VORSCHLAEGE} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Sichtbarkeit</label>
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="radio"
-                    checked={form.sichtbarkeit === 'persoenlich'}
-                    onChange={() => setForm({ ...form, sichtbarkeit: 'persoenlich' })}
-                  />
-                  Nur ich
-                </label>
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="radio"
-                    checked={form.sichtbarkeit === 'geteilt'}
-                    onChange={() => setForm({ ...form, sichtbarkeit: 'geteilt' })}
-                    disabled={eigeneEbenen.length === 0}
-                  />
-                  Ganze Ebene
-                </label>
-                {form.sichtbarkeit === 'geteilt' && (
-                  <select
-                    value={form.ebene}
-                    onChange={(e) => setForm({ ...form, ebene: e.target.value as Ebene })}
-                    className="mc-input !w-auto !py-1 !text-sm"
-                  >
-                    <option value="">Ebene wählen...</option>
-                    {eigeneEbenen.map((e) => {
-                      const gl = gliederungFuer(profile, e)
-                      const fehlendeGliederung = e !== 'bund' && !gl
-                      return (
-                        <option key={e} value={e} disabled={fehlendeGliederung}>
-                          {EBENE_LABEL[e]}
-                          {gl ? ` (${gl})` : fehlendeGliederung ? ' - keine Gliederung hinterlegt' : ''}
-                        </option>
-                      )
-                    })}
-                  </select>
-                )}
-              </div>
-              {eigeneEbenen.length === 0 && (
-                <p className="mt-1 text-sm text-amber-600">
-                  Zum Teilen zuerst unter{' '}
-                  <Link to="/settings" className="underline">
-                    Einstellungen → Meine Gremien
-                  </Link>{' '}
-                  eine Ebene eintragen.
-                </p>
-              )}
+              <label className="mb-1 block text-xs font-medium text-slate-500" htmlFor="fakt-ebene">
+                Gilt für Ebene
+              </label>
+              <select
+                id="fakt-ebene"
+                value={form.ebene}
+                onChange={(e) => setForm({ ...form, ebene: e.target.value as Ebene })}
+                className="mc-input !w-auto !text-sm"
+                required
+              >
+                <option value="">Bitte wählen...</option>
+                {eigeneEbenen.map((e) => {
+                  const gl = gliederungFuer(profile, e)
+                  const fehlendeGliederung = e !== 'bund' && !gl
+                  return (
+                    <option key={e} value={e} disabled={fehlendeGliederung}>
+                      {EBENE_LABEL[e]}
+                      {gl ? ` (${gl})` : fehlendeGliederung ? ' - keine Gliederung hinterlegt' : ''}
+                    </option>
+                  )
+                })}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Fakten stehen immer allen Mitgliedern deiner Partei auf dieser Ebene zur Verfügung.
+              </p>
             </div>
             {formError && <p className="text-sm text-red-600">{formError}</p>}
             <div className="flex gap-2">

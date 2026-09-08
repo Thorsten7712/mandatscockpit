@@ -83,8 +83,14 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   `kategorie='zahl'` als Kachelraster mit herausgestelltem Wert (`kennzahl` ist `text`, nicht
   `numeric`: „rund 1.200", „8–12"), die beiden Textkategorien als Fließtext-Liste. Belegpflicht
   sichtbar gemacht: fehlt `quelle`/`stand`, steht dort „Keine Quelle hinterlegt" in Amber.
-  Sichtbarkeit nur `persoenlich`/`geteilt` (kein `einzelpersonen`), RLS spiegelt exakt die vier
+  **Immer Ebenen-Material**: es gibt keine privaten Fakten
+  (`0040_fakten_immer_geteilt.sql` schränkt `sichtbarkeit` auf `'geteilt'` ein und macht `ebene`
+  zur Pflicht) – wer etwas nur für sich notieren will, nutzt den Dokumenten-Hub. Das Formular fragt
+  deshalb nur noch, für welche der eigenen Ebenen der Fakt gilt. RLS spiegelt exakt die vier
   `dokumente`-Policies. Kein MCP-Tool dafür.
+- **Kopfleiste des Dashboards**: die drei inhaltlichen Ziele in fester Reihenfolge – Dokumente,
+  Zahlen & Fakten, Archiv. Einstellungen und Abmelden liegen in einem Klappmenü hinter dem eigenen
+  Profilbild links (schließt per Klick daneben und per Escape).
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
