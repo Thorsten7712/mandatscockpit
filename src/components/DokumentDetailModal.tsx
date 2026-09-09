@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ArchiveRestore, Trash2 } from 'lucide-react'
+import { AlertTriangle, Archive, ArchiveRestore, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
@@ -99,8 +99,19 @@ export function DokumentDetailModal({
   const [formError, setFormError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Löschen ist nur noch hier möglich (nicht mehr in der Listenansicht) und
+  // läuft über einen ausdrücklichen Bestätigungsdialog. Bei einem Dokument,
+  // das andere sehen, wird zusätzlich eine Checkbox verlangt: der Löschvorgang
+  // trifft dann nicht nur den eigenen Bestand, und parent_id kaskadiert
+  // (0034_dokumente_kommentare.sql) auch alle daran hängenden fremden Notizen.
   const [confirmDelete, setConfirmDelete] = useState(false)
-  useEffect(() => setConfirmDelete(false), [document.id])
+  const [loeschenVerstanden, setLoeschenVerstanden] = useState(false)
+  /** Namen, mit denen DIESES Top-Level-Dokument per 'einzelpersonen' geteilt ist. */
+  const [ownShareNames, setOwnShareNames] = useState<string[]>([])
+  useEffect(() => {
+    setConfirmDelete(false)
+    setLoeschenVerstanden(false)
+  }, [document.id])
 
   async function loadChildren() {
     const { data } = await supabase
@@ -234,6 +245,28 @@ export function DokumentDetailModal({
         .then(({ data }) => setAuthorNames(new Map((data ?? []).map((p) => [p.id as string, p.name as string]))))
     } else {
       setAuthorNames(new Map())
+    }
+
+    // Für die Löschwarnung: mit wem genau dieses Dokument geteilt ist
+    // (nur relevant bei sichtbarkeit='einzelpersonen', bei 'geteilt' ergibt
+    // sich der Kreis aus Ebene/Gliederung).
+    if (document.sichtbarkeit === 'einzelpersonen') {
+      supabase
+        .from('dokument_shares')
+        .select('user_id')
+        .eq('dokument_id', document.id)
+        .then(async ({ data: shares }) => {
+          const userIds = Array.from(new Set((shares ?? []).map((sh) => sh.user_id as string)))
+          if (userIds.length === 0) {
+            setOwnShareNames([])
+            return
+          }
+          const { data: profs } = await supabase.from('profiles').select('id, name').in('id', userIds)
+          const nameById = new Map((profs ?? []).map((pr) => [pr.id as string, pr.name as string]))
+          setOwnShareNames(userIds.map((uid) => nameById.get(uid) ?? '…'))
+        })
+    } else {
+      setOwnShareNames([])
     }
 
     const eigeneEinzelpersonenIds = children.filter((c) => c.user_id === userId && c.sichtbarkeit === 'einzelpersonen').map((c) => c.id)
@@ -471,29 +504,101 @@ export function DokumentDetailModal({
         <span className={`h-2 w-2 rounded-full ${istGelesen ? 'bg-slate-300' : 'bg-primary'}`} />
         {istGelesen ? 'Gelesen' : 'Ungelesen'}
       </button>
-      {document.user_id === userId &&
-        (confirmDelete ? (
-          <div className="mc-animate-pop flex items-center gap-1.5">
-            <span className="hidden text-sm text-slate-500 sm:inline">Sicher?</span>
-            <button type="button" onClick={() => setConfirmDelete(false)} className="mc-btn-ghost !px-2.5 !py-1.5 !text-sm">
-              Abbrechen
-            </button>
-            <button type="button" onClick={handleDeleteDocument} disabled={deleting} className="mc-btn-danger !px-2.5 !py-1.5 !text-sm">
-              {deleting ? 'Lösche...' : 'Löschen'}
-            </button>
+      {document.user_id === userId && (
+        <button
+          type="button"
+          onClick={() => {
+            setLoeschenVerstanden(false)
+            setConfirmDelete(true)
+          }}
+          aria-label="Löschen"
+          title="Löschen"
+          className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+        >
+          <Trash2 size={17} />
+        </button>
+      )}
+    </>
+  )
+
+  // Wen trifft das Löschen außer mir? 'geteilt' erreicht die ganze Ebene,
+  // 'einzelpersonen' die namentlich Freigegebenen. Nur bei 'persoenlich'
+  // (möglich bei Notizen) betrifft es niemanden sonst.
+  const geteiltMitAnderen =
+    document.sichtbarkeit === 'geteilt' || (document.sichtbarkeit === 'einzelpersonen' && ownShareNames.length > 0)
+  // Fremde Notizen, die durch das ON-DELETE-CASCADE auf parent_id mitgehen
+  // (0034_dokumente_kommentare.sql). RLS zeigt nur die für mich sichtbaren -
+  // es können also mehr sein, deshalb unten "mindestens".
+  const fremdeNotizen = children.filter((c) => c.user_id !== userId).length
+
+  const loeschDialog = confirmDelete && (
+    <div
+      className="mc-animate-fade fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4"
+      onClick={() => setConfirmDelete(false)}
+    >
+      <div
+        className="mc-animate-pop w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+            <AlertTriangle size={18} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-slate-900">Dokument löschen?</h2>
+            <p className="mt-0.5 break-words text-sm text-slate-500">„{document.titel}"</p>
+          </div>
+        </div>
+
+        {geteiltMitAnderen ? (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <p className="font-semibold">Dieses Dokument ist nicht nur für dich sichtbar.</p>
+            <p className="mt-1">
+              {document.sichtbarkeit === 'geteilt'
+                ? `Es ist für alle Mitglieder deiner Partei auf Ebene ${EBENE_LABEL[document.ebene ?? ''] ?? document.ebene}${
+                    document.gliederung ? ` (${document.gliederung})` : ''
+                  } freigegeben.`
+                : `Es ist geteilt mit: ${ownShareNames.join(', ')}.`}{' '}
+              Beim Löschen verschwindet es für alle – das lässt sich nicht rückgängig machen.
+            </p>
+            {fremdeNotizen > 0 && (
+              <p className="mt-1">
+                Mitgelöscht werden außerdem alle daran hängenden Notizen, darunter mindestens{' '}
+                {fremdeNotizen} von anderen Personen.
+              </p>
+            )}
+            <label className="mt-3 flex items-start gap-2 font-medium">
+              <input
+                type="checkbox"
+                checked={loeschenVerstanden}
+                onChange={(e) => setLoeschenVerstanden(e.target.checked)}
+                className="mt-0.5"
+              />
+              Ja, ich möchte dieses Dokument für alle löschen.
+            </label>
           </div>
         ) : (
+          <p className="mb-4 text-sm text-slate-600">
+            Das Dokument wird endgültig gelöscht.
+            {children.length > 0 && ' Die daran hängenden Notizen werden mitgelöscht.'}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setConfirmDelete(false)} className="mc-btn-ghost">
+            Abbrechen
+          </button>
           <button
             type="button"
-            onClick={() => setConfirmDelete(true)}
-            aria-label="Löschen"
-            title="Löschen"
-            className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+            onClick={handleDeleteDocument}
+            disabled={deleting || (geteiltMitAnderen && !loeschenVerstanden)}
+            className="mc-btn-danger"
           >
-            <Trash2 size={17} />
+            {deleting ? 'Lösche...' : geteiltMitAnderen ? 'Für alle löschen' : 'Löschen'}
           </button>
-        ))}
-    </>
+        </div>
+      </div>
+    </div>
   )
 
   const leftColumn = (
@@ -743,6 +848,7 @@ export function DokumentDetailModal({
   return (
     <>
       <DetailModalShell title={document.titel} headerActions={headerActions} onClose={onClose} left={leftColumn} right={rightColumn} />
+      {loeschDialog}
       {previewDoc && (
         <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} bucket="dokumente" onClose={() => setPreviewDoc(null)} />
       )}

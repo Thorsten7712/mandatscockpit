@@ -76,7 +76,9 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   es ein), wird von der Suche aber **immer** mitdurchsucht. Es erscheint zusätzlich im „Dokumente"-
   Reiter des Archivs, gemischt mit den `summaries`-Datei-Uploads. Dazu: Paginierung mit wählbarer
   Seitengröße (10/25/50/100/Alle) und ein Schnellfilter „Meine Gremien" (über die Sitzung des
-  Dokuments, `user_gremien`).
+  Dokuments, `user_gremien`). **Löschen nur im Detail-Modal**, nicht aus der Liste heraus: bei einem
+  geteilten Dokument verlangt der Dialog eine ausdrückliche Bestätigung per Checkbox, weil es für
+  alle verschwindet und `parent_id` (ON DELETE CASCADE) auch fremde Notizen mitnimmt.
 - **Zahlen & Fakten** (`/fakten`, eigener Reiter in der Kopfleiste): Argumentationshilfen,
   Sprachregelungen und belegte Kennzahlen als eigene Tabelle `fakten` (`0039_fakten.sql`) – bewusst
   **nicht** als Tag-Sicht auf `dokumente`, Begründung im Migrationskopf. Drei Kategorien-Reiter,
@@ -145,6 +147,13 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   ein gültiger Wert der Einstellung ist (in `Dokumente.tsx` bedeutet 0 „Alle anzeigen"). Immer erst
   explizit auf `null` prüfen. `localStorage` wird im Projekt nur an dieser einen Stelle genutzt, für
   eine reine Anzeige-Vorliebe pro Gerät; alles, was geräteübergreifend gelten muss, gehört in die DB.
+- **Zwei zusammengehörige States immer im selben Tick setzen**: `loadDocuments()` in `Dokumente.tsx`
+  setzt erst die Sitzungs-Map und dann die Dokumente. Umgekehrt rendert React einmal mit voller
+  Dokumentenliste und leerer Sitzungs-Map – und dann gilt kein Dokument als archiviert, das Archiv
+  ist für einen Moment sichtbar in der Liste. Alles nach demselben `await` wird gebatcht, davor nicht.
+- **Fehler bei Hilfsabfragen nicht verschlucken**: `ladeSessionInfos()` meldet Fehler und
+  unvollständige Ergebnisse zurück, weil ohne Sitzungsdaten stillschweigend *jedes* Dokument als
+  nicht archiviert gilt – das sähe aus wie ein kaputter Archiv-Filter statt wie ein Ladefehler.
 - **Abgeleitete Zustände nicht materialisieren, wenn sie nur an einer Zeit hängen**: Die Archiv-Regel
   „verknüpfte Sitzung ist vorbei" steht bewusst in keiner Spalte – sie ist eine Funktion aus
   `sessions.datum` und bräuchte sonst einen täglichen Job. Folge: sie ist in PostgREST nicht

@@ -239,8 +239,9 @@ export default function Archiv() {
       .is('parent_id', null)
       .order('erstellt_am', { ascending: false })
     const rows = data ?? []
+    const { sessions } = await ladeSessionInfos(supabase, rows)
+    setHubSessionById(sessions)
     setHubDokumente(rows)
-    setHubSessionById(await ladeSessionInfos(supabase, rows))
   }
 
   useEffect(() => {

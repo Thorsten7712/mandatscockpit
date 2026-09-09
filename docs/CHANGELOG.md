@@ -1966,3 +1966,49 @@ Verifiziert per `tsc -b` und erneut über den statischen Test-Harness: Menü öf
 (Außenklick und Escape geprüft), Link-Reihenfolge in der Kopfleiste ausgelesen, Fakten-Formular ohne
 Sichtbarkeits-Radios, ein Kreis-Fakt trägt jetzt sein Ebenen-Badge statt der früheren
 „Persönlich"-Markierung.
+
+### Nachtrag 3: Archiv-Ausblendung gehärtet, Löschen nur noch im Modal (2026-09-09)
+
+**Meldung:** „Die ins Archiv verschobenen Dokumente sind nach wie vor im Dokumentenhub sichtbar."
+
+Zuerst nachgemessen statt geraten – und dabei zeigte sich, dass die Regel selbst korrekt ist:
+
+- Live-DB: 88 Top-Level-Dokumente, davon 7 mit der vergangenen Sitzung „Seniorenbeirat"
+  (2026-09-02), 0 von Hand archiviert.
+- `list_documents` mit `archiv="nur"` über den MCP-Connector liefert genau diese 7, jeweils mit
+  `ARCHIV (Sitzung vorbei)`.
+- Das **deployte** Bundle (`assets/index-CKf_gGdW.js`) enthält `archivGrund()` und den Filter
+  `if(!G&&Ze.get(I.id))return!1` – die Auslieferung war also nicht das Problem.
+- Der komplette Frontend-Datenfluss, gefüttert mit einem echten Export dieser 88 Dokumente und
+  11 Sitzungen, blendet exakt die 7 aus (81 bleiben übrig).
+
+Reproduzieren ließ sich der gemeldete Zustand damit nicht. Gefunden wurde aber eine reale Ursache
+für genau dieses Bild, plus eine zweite, die es dauerhaft erzeugen könnte:
+
+1. **Sichtbares Render-Fenster beim Laden.** `loadDocuments()` setzte erst `documents`, wartete dann
+   auf die Sitzungsabfrage und setzte danach `sessionById`. Zwischen beiden rendert React einmal mit
+   voller Liste und leerer Sitzungs-Map – und dann gilt kein Dokument als archiviert, das Archiv
+   steht also für einen Moment mit in der Liste. Zwei `setState` nach *demselben* `await` werden
+   gebatcht, zwei durch ein `await` getrennte nicht. Fix: Sitzungen vor den Dokumenten abwarten und
+   beide States zusammen setzen – damit gibt es das Fenster nicht mehr.
+2. **Verschluckter Fehler der Sitzungsabfrage.** `ladeSessionInfos()` las nur `data` und ignorierte
+   `error`. Schlägt die Abfrage fehl oder liefert sie nichts, hält `archivGrund()` *jedes* Dokument
+   für nicht archiviert – das Ergebnis sieht exakt wie ein kaputter Archiv-Filter aus, ohne jeden
+   Hinweis. Die Funktion meldet jetzt `fehler` und `unvollstaendig` zurück; `Dokumente.tsx` zeigt in
+   dem Fall einen Hinweisstreifen, statt still die falsche Liste zu rendern.
+
+**Löschen nur noch im Detail-Modal** (Nutzerwunsch im selben Zug). Der „Löschen"-Knopf an der
+Listenzeile ist weg; `handleDelete()` in `Dokumente.tsx` entfällt damit ersatzlos. Im Modal ersetzt
+ein richtiger Bestätigungsdialog das frühere Inline-„Sicher?": Er nennt das Dokument, und wenn es
+nicht nur für den Nutzer sichtbar ist (`sichtbarkeit='geteilt'`, oder `'einzelpersonen'` mit
+Freigaben), warnt er ausdrücklich – inklusive des Kreises, den es trifft (Ebene + Gliederung bzw. die
+namentlich Freigegebenen), und eines Hinweises auf die durch `parent_id ON DELETE CASCADE`
+(0034_dokumente_kommentare.sql) mitgelöschten fremden Notizen. Die Zahl ist als „mindestens N"
+formuliert, weil RLS nur die für den Nutzer sichtbaren Notizen zeigt. Der Knopf „Für alle löschen"
+bleibt gesperrt, bis die Checkbox „Ja, ich möchte dieses Dokument für alle löschen." gesetzt ist.
+Der Dialog liegt als `fixed`-Overlay über dem Modal (z-60) – innerhalb der `DetailModalShell` wäre er
+sonst vom Scroll-Container abgeschnitten worden.
+
+Verifiziert im Harness gegen die echten exportierten Daten: 81 von 88 sichtbar, kein Seniorenbeirat-
+Dokument mehr in der Liste, null „Löschen"-Knöpfe in den Listenzeilen, und der Dialog-Knopf ist ohne
+Haken deaktiviert und mit Haken frei.

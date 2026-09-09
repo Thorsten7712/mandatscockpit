@@ -83,7 +83,9 @@ function docIcon(d: DokumentRow) {
  * DokumentDetailModal, wo eigene (persönliche, Ebene-weite oder mit
  * einzelnen Personen geteilte) Notizen/Analysen daran angehängt werden -
  * eine frühere separate "Meine Dokumente"-Ansicht entfällt dadurch, siehe
- * docs/CHANGELOG.md.
+ * docs/CHANGELOG.md. Gelöscht wird bewusst NUR dort und nicht aus dieser
+ * Liste heraus: ein geteiltes Dokument verschwindet für alle, das gehört
+ * hinter die Detailansicht mit ihrer Warnung, nicht neben einen Listeneintrag.
  */
 export default function Dokumente() {
   const [userId, setUserId] = useState<string | null>(null)
@@ -101,6 +103,9 @@ export default function Dokumente() {
   // Verknüpfte Sitzungen (Archiv-Regel + "Meine Gremien"-Filter) und die
   // eigenen Gremien aus user_gremien (0005_user_gremien.sql).
   const [sessionById, setSessionById] = useState<Map<string, SessionInfo>>(new Map())
+  // Ohne Sitzungsdaten wäre kein Dokument archiviert - das darf nicht
+  // stillschweigend wie eine leere Archiv-Ablage aussehen.
+  const [sessionFehler, setSessionFehler] = useState<string | null>(null)
   const [meineGremien, setMeineGremien] = useState<string[]>([])
 
   const [seite, setSeite] = useState(1)
@@ -123,10 +128,18 @@ export default function Dokumente() {
   async function loadDocuments() {
     const { data } = await supabase.from('dokumente').select('*').is('parent_id', null).order('erstellt_am', { ascending: false })
     const rows = data ?? []
-    setDocuments(rows)
     // Datum/Gremium der verknüpften Sitzungen: entscheidet, ob ein Dokument
     // archiviert ist (Sitzung vorbei) und ob es unter "Meine Gremien" fällt.
-    setSessionById(await ladeSessionInfos(supabase, rows))
+    //
+    // Die Sitzungen werden VOR setDocuments() abgewartet und beide States
+    // zusammen gesetzt. Umgekehrt (erst Dokumente, dann Sitzungen) rendert
+    // React dazwischen einmal mit leerer Sitzungs-Map - und dann gilt kein
+    // Dokument als archiviert, die Liste zeigt also für einen Moment auch das
+    // Archiv. Auf langsamer Verbindung ist dieses Fenster gut sichtbar.
+    const { sessions, fehler } = await ladeSessionInfos(supabase, rows)
+    setSessionById(sessions)
+    setSessionFehler(fehler)
+    setDocuments(rows)
     setLoading(false)
   }
 
@@ -247,14 +260,6 @@ export default function Dokumente() {
     await loadLeseStatus(userId)
   }
 
-  async function handleDelete(d: DokumentRow) {
-    if (!window.confirm(`"${d.titel}" wirklich löschen?`)) return
-    if (d.datei_url) await supabase.storage.from('dokumente').remove([d.datei_url])
-    await supabase.from('dokumente').delete().eq('id', d.id)
-    setOpenDoc(null)
-    await loadDocuments()
-  }
-
   const eigeneEbenen = profile?.ebenen ?? []
   const ebenenPresent = EBENEN_ORDER.filter((e) => documents.some((d) => d.ebene === e))
   const tagsPresent = Array.from(new Set(documents.flatMap((d) => d.tags))).sort((a, b) => a.localeCompare(b, 'de'))
@@ -354,6 +359,12 @@ export default function Dokumente() {
             </button>
           )}
         </div>
+        {sessionFehler && (
+          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Sitzungsdaten konnten nicht geladen werden ({sessionFehler}) – Dokumente vergangener Sitzungen
+            werden deshalb gerade nicht ins Archiv einsortiert.
+          </p>
+        )}
         {sucheAktiv && archivGesamt > 0 && (
           <p className="mb-3 flex items-center gap-1.5 text-xs text-slate-500">
             <Archive className="h-3.5 w-3.5" />
@@ -566,18 +577,6 @@ export default function Dokumente() {
                   {d.inhalt && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{d.inhalt}</p>}
                 </div>
               </div>
-              {d.user_id === userId && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleDelete(d)
-                  }}
-                  className="mc-btn-danger !shrink-0 !px-2 !py-1 !text-xs"
-                >
-                  Löschen
-                </button>
-              )}
             </li>
             )
           })}

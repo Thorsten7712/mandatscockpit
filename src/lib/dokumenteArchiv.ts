@@ -53,14 +53,31 @@ export function istArchiviert(
  * Lädt datum/gremium/titel aller Sitzungen, auf die die übergebenen Dokumente
  * zeigen. Bewusst nur die tatsächlich referenzierten Ids statt der ganzen
  * sessions-Tabelle (gleiches Muster wie loadDocuments() in Archiv.tsx).
+ *
+ * Meldet einen Fehler ausdrücklich zurück, statt ihn zu verschlucken: ohne
+ * Sitzungsdaten hält archivGrund() JEDES Dokument für nicht archiviert, das
+ * Archiv wirkt dann schlicht kaputt. Der Aufrufer soll das anzeigen können,
+ * statt still die falsche Liste zu rendern.
+ *
+ * `unvollstaendig` deckt den zweiten, leiseren Fall ab: die Abfrage lief, hat
+ * aber nicht alle angefragten Sitzungen geliefert (z. B. weil eine Sitzung
+ * inzwischen gelöscht wurde oder per RLS nicht sichtbar ist).
  */
+export interface SessionInfoErgebnis {
+  sessions: Map<string, SessionInfo>
+  fehler: string | null
+  unvollstaendig: boolean
+}
+
 export async function ladeSessionInfos(
   supabase: SupabaseClient,
   dokumente: Pick<DokumentRow, 'session_id'>[],
-): Promise<Map<string, SessionInfo>> {
+): Promise<SessionInfoErgebnis> {
   const ids = Array.from(new Set(dokumente.map((d) => d.session_id).filter((id): id is string => Boolean(id))))
-  if (ids.length === 0) return new Map()
-  const { data } = await supabase.from('sessions').select('id, datum, gremium, titel').in('id', ids)
+  if (ids.length === 0) return { sessions: new Map(), fehler: null, unvollstaendig: false }
+  const { data, error } = await supabase.from('sessions').select('id, datum, gremium, titel').in('id', ids)
+  if (error) return { sessions: new Map(), fehler: error.message, unvollstaendig: true }
   const rows = (data ?? []) as { id: string; datum: string; gremium: string | null; titel: string }[]
-  return new Map(rows.map((s) => [s.id, { datum: s.datum, gremium: s.gremium, titel: s.titel }]))
+  const sessions = new Map(rows.map((s) => [s.id, { datum: s.datum, gremium: s.gremium, titel: s.titel }]))
+  return { sessions, fehler: null, unvollstaendig: sessions.size < ids.length }
 }
