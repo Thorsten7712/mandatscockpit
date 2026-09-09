@@ -21,6 +21,7 @@ import { EBENE_LABEL } from '../lib/sourceColors'
 import { gleicheGliederung } from '../lib/gliederung'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
+import { useLoeschDialog } from './LoeschDialog'
 
 export function AntragDetailModal({
   id,
@@ -49,7 +50,6 @@ export function AntragDetailModal({
   const [editEingereichtAm, setEditEingereichtAm] = useState('')
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Teilen mit Kolleg*innen gleicher Partei+Ebene - gleiches Modell wie bei
   // ToDo-Karten (siehe TodoDetailModal.tsx), nur ohne Board-Position: hier
@@ -73,8 +73,7 @@ export function AntragDetailModal({
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  useEffect(() => setConfirmDelete(false), [id])
+  const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
 
   async function loadAntrag() {
     const { data, error } = await supabase.from('antraege').select('*').eq('id', id).single()
@@ -250,16 +249,24 @@ export function AntragDetailModal({
 
   async function handleDelete() {
     if (!antrag || !userId) return
-    setDeleteError(null)
     const { error } = istErsteller
       ? await supabase.from('antraege').delete().eq('id', antrag.id)
       : await supabase.from('antrag_shares').delete().eq('antrag_id', antrag.id).eq('user_id', userId)
-    if (error) {
-      setDeleteError(error.message)
-      return
-    }
+    if (error) throw new Error(error.message)
     onChanged()
     onClose()
+  }
+
+  /** Mit wem der Antrag außer mir freigegeben ist (antrag_shares). */
+  const andereNamen = shares.filter((sh) => sh.user_id !== userId).map((sh) => shareNames.get(sh.user_id) ?? 'Unbekannt')
+
+  /** Kommentare und Dokumente an einem geteilten Antrag sehen alle Freigegebenen. */
+  function geteilteAntragFolgen(was: string): string[] | undefined {
+    if (andereNamen.length === 0) return undefined
+    return [
+      `${was} an diesem Antrag ist auch für ${andereNamen.join(', ')} sichtbar und verschwindet dort ebenfalls.`,
+      'Das lässt sich nicht rückgängig machen.',
+    ]
   }
 
   async function handleToggleShare(targetUserId: string, aktuellGeteilt: boolean) {
@@ -528,7 +535,6 @@ export function AntragDetailModal({
               </div>
 
               {editError && <p className="text-red-600 text-sm">{editError}</p>}
-              {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
             </form>
           )}
 
@@ -547,31 +553,40 @@ export function AntragDetailModal({
       >
         {editSaving ? 'Speichern...' : 'Speichern'}
       </button>
-      {confirmDelete ? (
-        <div className="mc-animate-pop flex items-center gap-1.5">
-          <span className="hidden text-sm text-slate-500 sm:inline">Sicher?</span>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(false)}
-            className="mc-btn-ghost !px-2.5 !py-1.5 !text-sm"
-          >
-            Abbrechen
-          </button>
-          <button type="button" onClick={handleDelete} className="mc-btn-danger !px-2.5 !py-1.5 !text-sm">
-            {istErsteller ? 'Löschen' : 'Entfernen'}
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(true)}
-          aria-label={istErsteller ? 'Löschen' : 'Entfernen'}
-          title={istErsteller ? 'Löschen' : 'Entfernen'}
-          className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
-        >
-          <Trash2 size={17} />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() =>
+          loeschRueckfrage(
+            istErsteller
+              ? {
+                  titel: antrag?.titel ?? '',
+                  was: 'Der Antrag',
+                  folgen:
+                    andereNamen.length > 0
+                      ? [
+                          `Der Antrag ist freigegeben für ${andereNamen.join(', ')} und verschwindet dort ebenfalls.`,
+                          'Kommentare und Dokumente am Antrag gehen mit verloren.',
+                          'Das lässt sich nicht rückgängig machen.',
+                        ]
+                      : undefined,
+                  bestaetigungsText: 'Ja, ich möchte diesen Antrag für alle löschen.',
+                  ausfuehren: handleDelete,
+                }
+              : {
+                  // Ohne Ersteller-Rolle wird nur die eigene Freigabe entfernt.
+                  titel: antrag?.titel ?? '',
+                  was: 'Der Antrag',
+                  aktionLabel: 'Entfernen',
+                  ausfuehren: handleDelete,
+                },
+          )
+        }
+        aria-label={istErsteller ? 'Löschen' : 'Entfernen'}
+        title={istErsteller ? 'Löschen' : 'Entfernen'}
+        className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+      >
+        <Trash2 size={17} />
+      </button>
     </>
   )
 
@@ -595,7 +610,14 @@ export function AntragDetailModal({
               <span className="text-xs text-slate-400">{formatDateTime(d.erstellt_am)}</span>
               <button
                 type="button"
-                onClick={() => handleDeleteDocument(d.id)}
+                onClick={() =>
+                  loeschRueckfrage({
+                    titel: fileNameFromPath(d.datei_url ?? ''),
+                    was: 'Das Dokument',
+                    folgen: geteilteAntragFolgen('Das Dokument'),
+                    ausfuehren: () => handleDeleteDocument(d.id),
+                  })
+                }
                 className="mc-btn-danger !px-2 !py-1 !text-xs"
               >
                 Löschen
@@ -628,7 +650,14 @@ export function AntragDetailModal({
               </span>
               <button
                 type="button"
-                onClick={() => handleDeleteComment(c.id)}
+                onClick={() =>
+                  loeschRueckfrage({
+                    titel: c.inhalt.length > 70 ? `${c.inhalt.slice(0, 70)}…` : c.inhalt,
+                    was: 'Der Kommentar',
+                    folgen: geteilteAntragFolgen('Der Kommentar'),
+                    ausfuehren: () => handleDeleteComment(c.id),
+                  })
+                }
                 className="mc-btn-danger !px-2 !py-1 !text-xs"
               >
                 Löschen
@@ -665,6 +694,7 @@ export function AntragDetailModal({
         left={leftColumn}
         right={rightColumn}
       />
+      {loeschDialog}
       {previewDoc && (
         <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} onClose={() => setPreviewDoc(null)} />
       )}

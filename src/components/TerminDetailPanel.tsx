@@ -5,6 +5,7 @@ import { TodoDetailModal } from './TodoDetailModal'
 import { AntragDetailModal } from './AntragDetailModal'
 import { DokumentDetailModal } from './DokumentDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
+import { useLoeschDialog } from './LoeschDialog'
 import { formatDateTime } from '../lib/format'
 import { antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 
@@ -52,6 +53,7 @@ export function TerminDetailPanel({
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
 
   const [summaries, setSummaries] = useState<SummaryRow[]>([])
   const [newInhalt, setNewInhalt] = useState('')
@@ -208,15 +210,11 @@ export function TerminDetailPanel({
   }
 
   async function handleDelete() {
-    setDeleteError(null)
     const { error } =
       kind === 'event' && event
         ? await supabase.from('events').delete().eq('id', event.id)
         : await supabase.from('sessions').delete().eq('id', session!.id)
-    if (error) {
-      setDeleteError(error.message)
-      return
-    }
+    if (error) throw new Error(error.message)
     onDeleted?.()
   }
 
@@ -311,7 +309,30 @@ export function TerminDetailPanel({
                       {event.status === 'abgesagt' ? 'Reaktivieren' : 'Absagen'}
                     </button>
                   )}
-                  <button type="button" onClick={handleDelete} className="mc-btn-danger !px-2 !py-1 !text-xs">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      loeschRueckfrage({
+                        titel: titel ?? '',
+                        was: kind === 'event' ? 'Der Termin' : 'Die Sitzung',
+                        // Ein eigener Termin gehört nur mir. Eine nachgetragene
+                        // Sitzung sehen dagegen alle, die dieselbe Kalenderquelle
+                        // abonniert haben - und daran hängende Notizen/Dokumente
+                        // anderer verlieren ihren Bezugspunkt.
+                        folgen:
+                          kind === 'session'
+                            ? [
+                                'Die Sitzung ist für alle sichtbar, die dieselbe Kalenderquelle abonniert haben, und verschwindet dort ebenfalls.',
+                                'Daran hängende Notizen und Dokumente verlieren ihren Bezug.',
+                                'Das lässt sich nicht rückgängig machen.',
+                              ]
+                            : undefined,
+                        bestaetigungsText: 'Ja, ich möchte diese Sitzung für alle löschen.',
+                        ausfuehren: handleDelete,
+                      })
+                    }
+                    className="mc-btn-danger !px-2 !py-1 !text-xs"
+                  >
                     Löschen
                   </button>
                 </div>
@@ -508,7 +529,20 @@ export function TerminDetailPanel({
               {s.user_id === userId && (
                 <button
                   type="button"
-                  onClick={() => handleDeleteSummary(s.id)}
+                  onClick={() =>
+                    loeschRueckfrage({
+                      titel: s.datei_url ? fileNameFromPath(s.datei_url) : (s.inhalt ?? '').slice(0, 70),
+                      was: s.datei_url ? 'Das Dokument' : 'Die Notiz',
+                      folgen:
+                        s.sichtbarkeit === 'geteilt'
+                          ? [
+                              'Der Eintrag ist geteilt und verschwindet auch für die anderen.',
+                              'Das lässt sich nicht rückgängig machen.',
+                            ]
+                          : undefined,
+                      ausfuehren: () => handleDeleteSummary(s.id),
+                    })
+                  }
                   className="mc-btn-danger !px-2 !py-1 !text-xs"
                 >
                   Löschen
@@ -584,6 +618,7 @@ export function TerminDetailPanel({
         </div>
         <div className="min-h-0 overflow-y-auto p-6">{notesBlock}</div>
         {nestedModals}
+        {loeschDialog}
       </div>
     )
   }
@@ -594,6 +629,7 @@ export function TerminDetailPanel({
       {linkedBlock}
       {notesBlock}
       {nestedModals}
+      {loeschDialog}
     </div>
   )
 }

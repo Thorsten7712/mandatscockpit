@@ -166,6 +166,16 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   clientseitig in `loadCandidates()`.
 - **Detail-Modals**: gemeinsame Hülle `src/components/DetailModalShell.tsx` (2-Spalten-Layout,
   `headerActions`-Slot) – für neue Entity-Detail-Modals wiederverwenden statt eigenes Chrome zu bauen.
+- **Löschen läuft überall über `src/components/LoeschDialog.tsx`** – kein `window.confirm` und kein
+  eigenes Inline-„Sicher?" mehr. Der Hook `useLoeschDialog()` liefert `fragen({...})` für den Knopf
+  und `dialog` fürs JSX; eine Komponente mit mehreren Löschzielen braucht dadurch nur eine Instanz.
+  Entscheidend ist `folgen`: leer = schlichte Rückfrage „Bist du sicher?", gefüllt = roter Kasten mit
+  den Konsequenzen und eine Checkbox, die den Knopf erst freigibt. `folgen` füllen, sobald das
+  Löschen **andere** trifft (Ebene-weit geteilt, mit Einzelpersonen geteilt, auf fremden Boards,
+  gemeinsam verwaltete Kalenderquelle, fremde Notizen per ON DELETE CASCADE). Der Dialog liegt als
+  `fixed`-Overlay (z-60), weil Aufrufer teils in scrollenden Modal-Spalten sitzen. Löschfunktionen
+  **werfen** jetzt bei Fehlern, statt sie in einen eigenen State zu schreiben – der Dialog zeigt sie
+  an und bleibt offen, sonst sähe ein Fehlschlag wie ein Erfolg aus.
 - **Login-Tests**: Passwort-Eingabe im Browser ist tabu (Sicherheitsregel), daher keine echten
   Login-Rundgänge – Verifikation läuft über `tsc -b`/`vite build` + statische Test-Harnesses. Nur
   Seiten ohne Login (Impressum/Datenschutz) lassen sich echt im Browser testen.

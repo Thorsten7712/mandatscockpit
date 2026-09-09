@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useLoeschDialog } from './LoeschDialog'
 import type { KontaktAnfrage } from '../lib/types'
 import { formatDateTime } from '../lib/format'
 
@@ -11,6 +12,7 @@ import { formatDateTime } from '../lib/format'
  */
 export function KontaktAnfragenListe() {
   const [anfragen, setAnfragen] = useState<KontaktAnfrage[]>([])
+  const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
 
   async function load() {
     const { data } = await supabase.from('kontakt_anfragen').select('*').order('erstellt_am', { ascending: false })
@@ -73,7 +75,13 @@ export function KontaktAnfragenListe() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDelete(a.id)}
+                  onClick={() =>
+                    loeschRueckfrage({
+                      titel: `${a.name} (${a.email})`,
+                      was: 'Die Kontaktanfrage',
+                      ausfuehren: () => handleDelete(a.id),
+                    })
+                  }
                   className="mc-btn-danger !px-2 !py-1 !text-xs"
                 >
                   Löschen
@@ -88,6 +96,7 @@ export function KontaktAnfragenListe() {
           </li>
         )}
       </ul>
+      {loeschDialog}
     </div>
   )
 }

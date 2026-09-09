@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, Archive, ArchiveRestore, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate, formatDateTime, startOfTodayIso } from '../lib/format'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
+import { useLoeschDialog } from './LoeschDialog'
 import { TagEditor } from './TagEditor'
 import { SichtbarkeitEditor } from './SichtbarkeitEditor'
 import { istNotizUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
@@ -97,21 +98,15 @@ export function DokumentDetailModal({
   const [teilenMit, setTeilenMit] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
 
   // Löschen ist nur noch hier möglich (nicht mehr in der Listenansicht) und
   // läuft über einen ausdrücklichen Bestätigungsdialog. Bei einem Dokument,
   // das andere sehen, wird zusätzlich eine Checkbox verlangt: der Löschvorgang
   // trifft dann nicht nur den eigenen Bestand, und parent_id kaskadiert
   // (0034_dokumente_kommentare.sql) auch alle daran hängenden fremden Notizen.
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [loeschenVerstanden, setLoeschenVerstanden] = useState(false)
+  const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
   /** Namen, mit denen DIESES Top-Level-Dokument per 'einzelpersonen' geteilt ist. */
   const [ownShareNames, setOwnShareNames] = useState<string[]>([])
-  useEffect(() => {
-    setConfirmDelete(false)
-    setLoeschenVerstanden(false)
-  }, [document.id])
 
   async function loadChildren() {
     const { data } = await supabase
@@ -393,18 +388,32 @@ export function DokumentDetailModal({
     await loadChildren()
   }
 
+  /** Folgen einer Notiz-Löschung für andere - undefined = betrifft nur mich. */
+  function notizFolgen(c: DokumentRow): string[] | undefined {
+    if (c.sichtbarkeit === 'geteilt') {
+      return [
+        `Sie ist für alle Mitglieder deiner Partei auf Ebene ${EBENE_LABEL[c.ebene ?? ''] ?? c.ebene}${
+          c.gliederung ? ` (${c.gliederung})` : ''
+        } sichtbar und verschwindet für alle.`,
+        'Das lässt sich nicht rückgängig machen.',
+      ]
+    }
+    const namen = shareNamesByChild.get(c.id) ?? []
+    if (c.sichtbarkeit === 'einzelpersonen' && namen.length > 0) {
+      return [`Sie ist geteilt mit ${namen.join(', ')} und verschwindet auch dort.`, 'Das lässt sich nicht rückgängig machen.']
+    }
+    return undefined
+  }
+
   async function handleDeleteChild(c: DokumentRow) {
-    if (!window.confirm(`"${c.titel}" wirklich löschen?`)) return
     if (c.datei_url) await supabase.storage.from('dokumente').remove([c.datei_url])
     await supabase.from('dokumente').delete().eq('id', c.id)
     await loadChildren()
   }
 
   async function handleDeleteDocument() {
-    setDeleting(true)
     if (document.datei_url) await supabase.storage.from('dokumente').remove([document.datei_url])
     await supabase.from('dokumente').delete().eq('id', document.id)
-    setDeleting(false)
     onDeleted()
   }
 
@@ -472,6 +481,16 @@ export function DokumentDetailModal({
     linkedSession && Date.parse(linkedSession.datum) < Date.parse(startOfTodayIso()),
   )
 
+  // Wen trifft das Löschen außer mir? 'geteilt' erreicht die ganze Ebene,
+  // 'einzelpersonen' die namentlich Freigegebenen. Nur bei 'persoenlich'
+  // (möglich bei Notizen) betrifft es niemanden sonst.
+  const geteiltMitAnderen =
+    document.sichtbarkeit === 'geteilt' || (document.sichtbarkeit === 'einzelpersonen' && ownShareNames.length > 0)
+  // Fremde Notizen, die durch das ON-DELETE-CASCADE auf parent_id mitgehen
+  // (0034_dokumente_kommentare.sql). RLS zeigt nur die für mich sichtbaren -
+  // es können also mehr sein, deshalb "mindestens".
+  const fremdeNotizen = children.filter((c) => c.user_id !== userId).length
+
   const headerActions = (
     <>
       {document.user_id === userId && (
@@ -507,10 +526,29 @@ export function DokumentDetailModal({
       {document.user_id === userId && (
         <button
           type="button"
-          onClick={() => {
-            setLoeschenVerstanden(false)
-            setConfirmDelete(true)
-          }}
+          onClick={() =>
+            loeschRueckfrage({
+              titel: document.titel,
+              was: 'Das Dokument',
+              folgen: geteiltMitAnderen
+                ? [
+                    document.sichtbarkeit === 'geteilt'
+                      ? `Es ist für alle Mitglieder deiner Partei auf Ebene ${EBENE_LABEL[document.ebene ?? ''] ?? document.ebene}${
+                          document.gliederung ? ` (${document.gliederung})` : ''
+                        } freigegeben und verschwindet für alle.`
+                      : `Es ist geteilt mit ${ownShareNames.join(', ')} und verschwindet auch dort.`,
+                    ...(fremdeNotizen > 0
+                      ? [
+                          `Mitgelöscht werden alle daran hängenden Notizen, darunter mindestens ${fremdeNotizen} von anderen Personen.`,
+                        ]
+                      : []),
+                    'Das lässt sich nicht rückgängig machen.',
+                  ]
+                : undefined,
+              bestaetigungsText: 'Ja, ich möchte dieses Dokument für alle löschen.',
+              ausfuehren: handleDeleteDocument,
+            })
+          }
           aria-label="Löschen"
           title="Löschen"
           className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
@@ -519,86 +557,6 @@ export function DokumentDetailModal({
         </button>
       )}
     </>
-  )
-
-  // Wen trifft das Löschen außer mir? 'geteilt' erreicht die ganze Ebene,
-  // 'einzelpersonen' die namentlich Freigegebenen. Nur bei 'persoenlich'
-  // (möglich bei Notizen) betrifft es niemanden sonst.
-  const geteiltMitAnderen =
-    document.sichtbarkeit === 'geteilt' || (document.sichtbarkeit === 'einzelpersonen' && ownShareNames.length > 0)
-  // Fremde Notizen, die durch das ON-DELETE-CASCADE auf parent_id mitgehen
-  // (0034_dokumente_kommentare.sql). RLS zeigt nur die für mich sichtbaren -
-  // es können also mehr sein, deshalb unten "mindestens".
-  const fremdeNotizen = children.filter((c) => c.user_id !== userId).length
-
-  const loeschDialog = confirmDelete && (
-    <div
-      className="mc-animate-fade fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4"
-      onClick={() => setConfirmDelete(false)}
-    >
-      <div
-        className="mc-animate-pop w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-3 flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
-            <AlertTriangle size={18} />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-base font-bold text-slate-900">Dokument löschen?</h2>
-            <p className="mt-0.5 break-words text-sm text-slate-500">„{document.titel}"</p>
-          </div>
-        </div>
-
-        {geteiltMitAnderen ? (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <p className="font-semibold">Dieses Dokument ist nicht nur für dich sichtbar.</p>
-            <p className="mt-1">
-              {document.sichtbarkeit === 'geteilt'
-                ? `Es ist für alle Mitglieder deiner Partei auf Ebene ${EBENE_LABEL[document.ebene ?? ''] ?? document.ebene}${
-                    document.gliederung ? ` (${document.gliederung})` : ''
-                  } freigegeben.`
-                : `Es ist geteilt mit: ${ownShareNames.join(', ')}.`}{' '}
-              Beim Löschen verschwindet es für alle – das lässt sich nicht rückgängig machen.
-            </p>
-            {fremdeNotizen > 0 && (
-              <p className="mt-1">
-                Mitgelöscht werden außerdem alle daran hängenden Notizen, darunter mindestens{' '}
-                {fremdeNotizen} von anderen Personen.
-              </p>
-            )}
-            <label className="mt-3 flex items-start gap-2 font-medium">
-              <input
-                type="checkbox"
-                checked={loeschenVerstanden}
-                onChange={(e) => setLoeschenVerstanden(e.target.checked)}
-                className="mt-0.5"
-              />
-              Ja, ich möchte dieses Dokument für alle löschen.
-            </label>
-          </div>
-        ) : (
-          <p className="mb-4 text-sm text-slate-600">
-            Das Dokument wird endgültig gelöscht.
-            {children.length > 0 && ' Die daran hängenden Notizen werden mitgelöscht.'}
-          </p>
-        )}
-
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => setConfirmDelete(false)} className="mc-btn-ghost">
-            Abbrechen
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteDocument}
-            disabled={deleting || (geteiltMitAnderen && !loeschenVerstanden)}
-            className="mc-btn-danger"
-          >
-            {deleting ? 'Lösche...' : geteiltMitAnderen ? 'Für alle löschen' : 'Löschen'}
-          </button>
-        </div>
-      </div>
-    </div>
   )
 
   const leftColumn = (
@@ -795,7 +753,19 @@ export function DokumentDetailModal({
                     {formatDateTime(c.erstellt_am)}
                   </span>
                   {c.user_id === userId && (
-                    <button type="button" onClick={() => handleDeleteChild(c)} className="mc-btn-danger !px-2 !py-1 !text-xs">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        loeschRueckfrage({
+                          titel: c.titel,
+                          was: 'Die Notiz',
+                          folgen: notizFolgen(c),
+                          bestaetigungsText: 'Ja, ich möchte diese Notiz für alle löschen.',
+                          ausfuehren: () => handleDeleteChild(c),
+                        })
+                      }
+                      className="mc-btn-danger !px-2 !py-1 !text-xs"
+                    >
                       Löschen
                     </button>
                   )}

@@ -19,6 +19,7 @@ import { EBENE_LABEL } from '../lib/sourceColors'
 import { gleicheGliederung } from '../lib/gliederung'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
 import { DetailModalShell } from './DetailModalShell'
+import { useLoeschDialog } from './LoeschDialog'
 
 type TerminModus = 'keine' | 'datum' | 'termin' | 'sitzung'
 
@@ -49,7 +50,6 @@ export function TodoDetailModal({
   const [editSessionId, setEditSessionId] = useState('')
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const [ownEvents, setOwnEvents] = useState<EventRow[]>([])
   const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
@@ -84,8 +84,7 @@ export function TodoDetailModal({
   const [dokumentDropdownOpen, setDokumentDropdownOpen] = useState(false)
   const [linkDokumentError, setLinkDokumentError] = useState<string | null>(null)
 
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  useEffect(() => setConfirmDelete(false), [id])
+  const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
 
   async function loadTodo() {
     const { data, error } = await supabase.from('todos').select('*').eq('id', id).single()
@@ -322,16 +321,25 @@ export function TodoDetailModal({
 
   async function handleDelete() {
     if (!todo || !userId) return
-    setDeleteError(null)
     const { error } = istErsteller
       ? await supabase.from('todos').delete().eq('id', todo.id)
       : await supabase.from('todo_placements').delete().eq('todo_id', todo.id).eq('user_id', userId)
-    if (error) {
-      setDeleteError(error.message)
-      return
-    }
+    if (error) throw new Error(error.message)
     onChanged()
     onClose()
+  }
+
+  /** Mit wem die Karte außer mir auf einem Board liegt (todo_placements). */
+  const andereBoards = placements.filter((pl) => pl.user_id !== userId)
+  const andereNamen = andereBoards.map((pl) => placementNames.get(pl.user_id) ?? 'Unbekannt')
+
+  /** Kommentare und Dokumente an einer geteilten Karte sehen alle Platzierten. */
+  function geteilteKartenFolgen(was: string): string[] | undefined {
+    if (andereNamen.length === 0) return undefined
+    return [
+      `${was} an dieser Karte ist auch für ${andereNamen.join(', ')} sichtbar und verschwindet dort ebenfalls.`,
+      'Das lässt sich nicht rückgängig machen.',
+    ]
   }
 
   async function handleSaveEbene(value: string) {
@@ -660,7 +668,6 @@ export function TodoDetailModal({
             </div>
 
             {editError && <p className="text-red-600 text-sm">{editError}</p>}
-            {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
           </form>
         )}
 
@@ -744,31 +751,43 @@ export function TodoDetailModal({
       >
         {editSaving ? 'Speichern...' : 'Speichern'}
       </button>
-      {confirmDelete ? (
-        <div className="mc-animate-pop flex items-center gap-1.5">
-          <span className="hidden text-sm text-slate-500 sm:inline">Sicher?</span>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(false)}
-            className="mc-btn-ghost !px-2.5 !py-1.5 !text-sm"
-          >
-            Abbrechen
-          </button>
-          <button type="button" onClick={handleDelete} className="mc-btn-danger !px-2.5 !py-1.5 !text-sm">
-            {istErsteller ? 'Löschen' : 'Entfernen'}
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(true)}
-          aria-label={istErsteller ? 'Löschen' : 'Entfernen'}
-          title={istErsteller ? 'Löschen' : 'Entfernen'}
-          className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
-        >
-          <Trash2 size={17} />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() =>
+          loeschRueckfrage(
+            istErsteller
+              ? {
+                  titel: todo?.titel ?? '',
+                  was: 'Die Karte',
+                  // Nur der Ersteller löscht für alle - deshalb hier die
+                  // Folgen-Variante, sobald die Karte auf fremden Boards liegt.
+                  folgen:
+                    andereNamen.length > 0
+                      ? [
+                          `Die Karte liegt auch auf dem Board von ${andereNamen.join(', ')} und verschwindet dort ebenfalls.`,
+                          'Kommentare und Dokumente an der Karte gehen mit verloren.',
+                          'Das lässt sich nicht rückgängig machen.',
+                        ]
+                      : undefined,
+                  bestaetigungsText: 'Ja, ich möchte diese Karte für alle löschen.',
+                  ausfuehren: handleDelete,
+                }
+              : {
+                  // Wer nur mitgeteilt wurde, entfernt die Karte allein von
+                  // seinem eigenen Board - für andere ändert sich nichts.
+                  titel: todo?.titel ?? '',
+                  was: 'Die Karte',
+                  aktionLabel: 'Entfernen',
+                  ausfuehren: handleDelete,
+                },
+          )
+        }
+        aria-label={istErsteller ? 'Löschen' : 'Entfernen'}
+        title={istErsteller ? 'Löschen' : 'Entfernen'}
+        className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+      >
+        <Trash2 size={17} />
+      </button>
     </>
   )
 
@@ -792,7 +811,14 @@ export function TodoDetailModal({
               <span className="text-xs text-slate-400">{formatDateTime(d.erstellt_am)}</span>
               <button
                 type="button"
-                onClick={() => handleDeleteDocument(d.id)}
+                onClick={() =>
+                  loeschRueckfrage({
+                    titel: fileNameFromPath(d.datei_url ?? ''),
+                    was: 'Das Dokument',
+                    folgen: geteilteKartenFolgen('Das Dokument'),
+                    ausfuehren: () => handleDeleteDocument(d.id),
+                  })
+                }
                 className="mc-btn-danger !px-2 !py-1 !text-xs"
               >
                 Löschen
@@ -830,7 +856,14 @@ export function TodoDetailModal({
               </span>
               <button
                 type="button"
-                onClick={() => handleDeleteComment(c.id)}
+                onClick={() =>
+                  loeschRueckfrage({
+                    titel: c.inhalt.length > 70 ? `${c.inhalt.slice(0, 70)}…` : c.inhalt,
+                    was: 'Der Kommentar',
+                    folgen: geteilteKartenFolgen('Der Kommentar'),
+                    ausfuehren: () => handleDeleteComment(c.id),
+                  })
+                }
                 className="mc-btn-danger !px-2 !py-1 !text-xs"
               >
                 Löschen
@@ -868,6 +901,7 @@ export function TodoDetailModal({
         left={leftColumn}
         right={rightColumn}
       />
+      {loeschDialog}
       {previewDoc && (
         <DocumentPreviewModal
           path={previewDoc.path}

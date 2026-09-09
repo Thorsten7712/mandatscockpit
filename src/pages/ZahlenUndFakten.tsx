@@ -6,6 +6,7 @@ import type { Ebene, FaktKategorie, FaktRow, Profile } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
 import { TagEditor } from '../components/TagEditor'
+import { LoeschDialog } from '../components/LoeschDialog'
 
 /**
  * "Zahlen und Fakten": das Material, das man in Debatte, Interview und
@@ -88,6 +89,11 @@ export default function ZahlenUndFakten() {
   const [form, setForm] = useState(LEERES_FORMULAR)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  // Fakten sind immer Ebenen-weit sichtbar (0040_fakten_immer_geteilt.sql) -
+  // die Löschrückfrage bekommt deshalb ausnahmslos die Geteilt-Variante.
+  const [loeschKandidat, setLoeschKandidat] = useState<FaktRow | null>(null)
+  const [loeschenVerstanden, setLoeschenVerstanden] = useState(false)
 
   async function loadFakten() {
     const { data } = await supabase.from('fakten').select('*').order('geaendert_am', { ascending: false })
@@ -211,8 +217,8 @@ export default function ZahlenUndFakten() {
   }
 
   async function handleDelete(f: FaktRow) {
-    if (!window.confirm(`"${f.titel}" wirklich löschen?`)) return
     await supabase.from('fakten').delete().eq('id', f.id)
+    setLoeschKandidat(null)
     await loadFakten()
   }
 
@@ -267,7 +273,14 @@ export default function ZahlenUndFakten() {
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <button type="button" onClick={() => handleDelete(f)} className="mc-btn-danger !px-2 !py-1 !text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setLoeschenVerstanden(false)
+                setLoeschKandidat(f)
+              }}
+              className="mc-btn-danger !px-2 !py-1 !text-xs"
+            >
               Löschen
             </button>
           </span>
@@ -550,6 +563,23 @@ export default function ZahlenUndFakten() {
           </ul>
         )}
       </div>
+
+      {loeschKandidat && (
+        <LoeschDialog
+          titel={loeschKandidat.titel}
+          folgen={[
+            `Der Eintrag steht allen Mitgliedern deiner Partei auf Ebene ${EBENE_LABEL[loeschKandidat.ebene]}${
+              loeschKandidat.gliederung ? ` (${loeschKandidat.gliederung})` : ''
+            } zur Verfügung und verschwindet für alle.`,
+            'Das lässt sich nicht rückgängig machen.',
+          ]}
+          bestaetigungsText="Ja, ich möchte diesen Eintrag für alle löschen."
+          bestaetigt={loeschenVerstanden}
+          onBestaetigtChange={setLoeschenVerstanden}
+          onAbbrechen={() => setLoeschKandidat(null)}
+          onLoeschen={() => handleDelete(loeschKandidat)}
+        />
+      )}
     </div>
   )
 }

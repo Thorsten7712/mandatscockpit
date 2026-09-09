@@ -16,6 +16,7 @@ import { EBENE_LABEL, SOURCE_COLORS, sourceColorById } from '../lib/sourceColors
 import { gliederungFeld } from '../lib/gliederung'
 import { UserManagement } from '../components/UserManagement'
 import { KontaktAnfragenListe } from '../components/KontaktAnfragenListe'
+import { useLoeschDialog } from '../components/LoeschDialog'
 
 type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'fristen' | 'presseschau' | 'mcp' | 'benutzer' | 'kontakt'
 
@@ -120,7 +121,7 @@ export default function Settings() {
   const [art, setArt] = useState<CalendarSourceArt>('sitzung')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
 
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileFotoUrl, setProfileFotoUrl] = useState<string | null>(null)
@@ -434,12 +435,8 @@ export default function Settings() {
   }
 
   async function handleDelete(sourceId: string) {
-    setDeleteError(null)
     const { error } = await supabase.from('calendar_sources').delete().eq('id', sourceId)
-    if (error) {
-      setDeleteError(error.message)
-      return
-    }
+    if (error) throw new Error(error.message)
     await loadSources()
     setSubscribed((prev) => prev.filter((id) => id !== sourceId))
   }
@@ -530,8 +527,6 @@ export default function Settings() {
   }
 
   async function handleDeleteColumn(col: TodoColumn) {
-    const message = `Spalte „${col.titel}" löschen? Enthaltene Karten werden mitgelöscht.`
-    if (!window.confirm(message)) return
     await supabase.from('todo_columns').delete().eq('id', col.id)
     setTodoColumns((prev) => prev.filter((c) => c.id !== col.id))
   }
@@ -729,7 +724,6 @@ export default function Settings() {
       {activeSection === 'kalender' && (
       <section className="mc-animate-fade">
       <h2 className="mb-2 text-base font-semibold text-slate-900">Kalenderquellen abonnieren</h2>
-      {deleteError && <p className="text-red-600 text-sm mb-2 max-w-md">{deleteError}</p>}
       {staleGremien.length > 0 && (
         <p className="text-amber-600 text-sm mb-2 max-w-md">
           Diese angehakten Gremien haben aktuell keine Sitzungen mehr: {staleGremien.join(', ')}. Häkchen
@@ -861,7 +855,26 @@ export default function Settings() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDelete(s.id)}
+                        onClick={() =>
+                          loeschRueckfrage({
+                            titel: s.name,
+                            was: 'Die Kalenderquelle',
+                            // verwaltet_von = null heißt "gemeinsam verwaltet":
+                            // die Quelle steht allen zur Verfügung und andere
+                            // haben sie ggf. abonniert.
+                            folgen:
+                              s.verwaltet_von === null
+                                ? [
+                                    'Diese Quelle ist gemeinsam verwaltet und steht allen Mitgliedern zur Verfügung.',
+                                    'Abonnements anderer laufen ins Leere, importierte Sitzungen der Quelle verschwinden mit.',
+                                    'Das lässt sich nicht rückgängig machen.',
+                                  ]
+                                : undefined,
+                            hinweis: 'Die daraus importierten Sitzungen verschwinden mit.',
+                            bestaetigungsText: 'Ja, ich möchte diese gemeinsame Quelle für alle löschen.',
+                            ausfuehren: () => handleDelete(s.id),
+                          })
+                        }
                         className="mc-btn-danger !px-2 !py-1 !text-xs"
                       >
                         Löschen
@@ -1105,7 +1118,14 @@ export default function Settings() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleDeleteColumn(col)}
+                    onClick={() =>
+                      loeschRueckfrage({
+                        titel: col.titel,
+                        was: 'Die Spalte',
+                        hinweis: 'Enthaltene Karten werden mitgelöscht.',
+                        ausfuehren: () => handleDeleteColumn(col),
+                      })
+                    }
                     className="text-red-500"
                   >
                     Löschen
@@ -1267,6 +1287,7 @@ export default function Settings() {
       </div>
       </div>
       </div>
+      {loeschDialog}
     </div>
   )
 }

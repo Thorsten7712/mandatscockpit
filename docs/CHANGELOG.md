@@ -2012,3 +2012,55 @@ sonst vom Scroll-Container abgeschnitten worden.
 Verifiziert im Harness gegen die echten exportierten Daten: 81 von 88 sichtbar, kein Seniorenbeirat-
 Dokument mehr in der Liste, null „Löschen"-Knöpfe in den Listenzeilen, und der Dialog-Knopf ist ohne
 Haken deaktiviert und mit Haken frei.
+
+### Nachtrag 4: einheitliche Löschbestätigung überall (2026-09-09)
+
+Nutzerwunsch nach der Dokumenten-Variante: „Generell möchte ich bei allen Löschfunktionen noch eine
+Bestätigung abfragen, wenn geteilt mit Beschreibung der Konsequenzen, ansonsten einfach sowas wie
+'Bist du sicher?'."
+
+Vorher war das im Repo dreigeteilt: `window.confirm` an fünf Stellen, ein Inline-„Sicher?" in den
+Detail-Modals, und an einigen Stellen (Kommentare, angehängte Dokumente, Kontaktanfragen) gar keine
+Rückfrage. Damit war die Schwelle für die dritte Wiederholung nach der Projekt-Faustregel klar
+überschritten – also extrahiert statt ein viertes Mal nachgebaut:
+
+**`src/components/LoeschDialog.tsx`** mit zwei Ausprägungen, gesteuert allein über `folgen`:
+
+- leer/weggelassen → „Bist du sicher?", ein Satz („Das Dokument wird endgültig gelöscht."), optional
+  ein `hinweis` (z. B. „Enthaltene Karten werden mitgelöscht.").
+- gefüllt → „Wirklich für alle löschen?", rot abgesetzter Kasten mit den Folgen als Liste und eine
+  Checkbox, die den Knopf „Für alle löschen" erst freigibt. Ein irreversibler Eingriff in fremde
+  Bestände soll keinen Reflexklick überstehen.
+
+Dazu der Hook **`useLoeschDialog()`**: `fragen({...})` am Knopf, `dialog` einmal ins JSX. Ohne ihn
+hätte allein `TodoDetailModal` drei Sätze aus Kandidat/Bestätigt/Löschend/Fehler gebraucht (Karte,
+Kommentar, Dokument). Nebenbei behandelt er Fehler zentral: die `handleDelete`-Funktionen **werfen**
+jetzt, statt in einen eigenen `deleteError`-State zu schreiben – der Dialog bleibt offen und zeigt
+den Fehler, statt dass ein Fehlschlag wie ein Erfolg aussieht. Die eigenen `deleteError`-States in
+`TodoDetailModal`, `AntragDetailModal`, `TerminDetailPanel` und `Settings` entfallen dadurch.
+
+Angewandt auf alle Löschpfade, mit den jeweils zutreffenden Folgen:
+
+| Stelle | Geteilt-Variante, wenn … |
+|---|---|
+| Dokument (Hub) | Ebene-weit oder mit Einzelpersonen geteilt; nennt zusätzlich die per `ON DELETE CASCADE` mitgelöschten fremden Notizen |
+| Notiz am Dokument | Notiz Ebene-weit oder mit Einzelpersonen geteilt |
+| Zahlen & Fakten | **immer** – Fakten sind seit 0040 ausnahmslos Ebenen-Material |
+| ToDo-Karte | Karte liegt auf fremden Boards (`todo_placements`); Nicht-Ersteller entfernen sie nur vom eigenen Board → schlichte Rückfrage, Knopf „Entfernen" |
+| Kommentar/Dokument an Karte | Karte ist geteilt |
+| Antrag | Freigaben in `antrag_shares` vorhanden; Nicht-Ersteller wie bei ToDos |
+| Kommentar/Dokument am Antrag | Antrag ist freigegeben |
+| Sitzung (nachgetragen) | **immer** – für alle Abonnenten derselben Kalenderquelle sichtbar |
+| Eigener Termin | nie – gehört nur mir |
+| Notiz/Dokument am Termin | `summaries.sichtbarkeit = 'geteilt'` |
+| Kalenderquelle | `verwaltet_von is null` (gemeinsam verwaltet) |
+| ToDo-Spalte | nie, aber mit Hinweis auf die mitgelöschten Karten |
+| Benutzerkonto (Admin) | **immer** – trifft per Definition eine andere Person |
+| Kontaktanfrage | nie |
+
+Nicht umgestellt: das `window.confirm` bei „neues MCP-Token erzeugen" in `Settings.tsx`. Das ist
+keine Löschfunktion, und die Dialog-Texte („Für alle löschen") würden dort nicht passen.
+
+Verifiziert per `tsc -b`, `vite build` und einem Harness, der alle drei Ausprägungen des Dialogs
+rendert (schlicht, schlicht mit Hinweis, geteilt) – inklusive der Prüfung, dass der Knopf ohne
+gesetzte Checkbox deaktiviert bleibt.

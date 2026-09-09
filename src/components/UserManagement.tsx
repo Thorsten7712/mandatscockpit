@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useLoeschDialog } from './LoeschDialog'
 import type { Rolle } from '../lib/types'
 import { PARTEI_THEMES, themeById } from '../lib/themes'
 import { formatDateTime } from '../lib/format'
@@ -165,6 +166,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
   const [editForm, setEditForm] = useState<UserFormState>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
 
   async function load() {
     setLoading(true)
@@ -245,14 +247,27 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
   }
 
   async function handleDelete(u: AdminUser) {
-    const message = `Benutzer "${u.name}" (${u.email}) endgültig löschen? Alle Termine, Karten, Notizen und Dateien dieses Nutzers werden mitgelöscht.`
-    if (!window.confirm(message)) return
     setActionError(null)
     const { error } = await callAdminUsers({ action: 'delete', user_id: u.id })
-    if (error) {
-      setActionError(error)
-    } else {
-      await load()
+    if (error) throw new Error(error)
+    await load()
+  }
+
+  /** Ein Konto zu löschen trifft immer eine andere Person - deshalb ausnahmslos
+   *  die Folgen-Variante mit Bestätigung. */
+  function loeschAnfrageFuer(u: AdminUser) {
+    return {
+      titel: `${u.name} (${u.email})`,
+      was: 'Das Konto',
+      folgen: [
+        'Das Konto dieser Person wird endgültig entfernt - sie kann sich danach nicht mehr anmelden.',
+        'Alle Termine, Karten, Notizen, Anträge und hochgeladenen Dateien dieses Kontos werden mitgelöscht.',
+        'Von dieser Person geteilte Inhalte verschwinden auch bei allen anderen.',
+        'Das lässt sich nicht rückgängig machen.',
+      ],
+      bestaetigungsText: 'Ja, ich möchte dieses Konto mit allen Inhalten löschen.',
+      aktionLabel: 'Konto löschen',
+      ausfuehren: () => handleDelete(u),
     }
   }
 
@@ -385,7 +400,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDelete(u)}
+                  onClick={() => loeschRueckfrage(loeschAnfrageFuer(u))}
                   disabled={isSelf}
                   className="mc-btn-danger !px-2 !py-2"
                   title={isSelf ? 'Du kannst dich nicht selbst löschen' : 'Löschen'}
@@ -400,6 +415,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
           <li className="mc-card p-6 text-center text-sm text-slate-400">Keine Benutzer gefunden.</li>
         )}
       </ul>
+      {loeschDialog}
     </div>
   )
 }
