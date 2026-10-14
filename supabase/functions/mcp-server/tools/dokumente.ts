@@ -607,6 +607,76 @@ export async function updateDocumentArchiv(supabase: SupabaseClient, userId: str
   return toolTextResult(`"${dok.titel}" wurde aus dem Archiv zurückgeholt.`)
 }
 
+/**
+ * Löscht ein eigenes Dokument oder eine eigene Notiz samt Dateien.
+ *
+ * Entstand aus einer Lücke: Seit der Dokumentenbestand dem technischen
+ * Import-Konto gehört, ist in der Web-UI niemand mehr Eigentümer - dort gibt
+ * es also keinen Löschweg mehr. Ohne dieses Tool bliebe nur direkter
+ * Datenbankzugriff, und das wird gebraucht, solange ein fehlgeschlagener
+ * Import-Lauf Dubletten anlegen kann.
+ *
+ * Zwei Dinge, die der Aufruf ernst nimmt:
+ *  - `dokumente.parent_id` hat ON DELETE CASCADE (0034_dokumente_kommentare.sql).
+ *    Am Dokument hängende Notizen gehen also mit - auch fremde. Sind welche
+ *    dabei, bricht der Aufruf ab, bis `auch_fremde_notizen: true` gesetzt ist.
+ *  - Die Dateien im Storage verschwinden nicht von selbst, wenn die Zeile
+ *    gelöscht wird. Sie werden deshalb vorher ausdrücklich entfernt - sonst
+ *    sammeln sich verwaiste Dateien im Bucket an.
+ */
+export async function deleteDocument(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
+  if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
+  const auchFremde = args.auch_fremde_notizen === true
+
+  const { data: dok } = await supabase
+    .from('dokumente')
+    .select('id, user_id, titel, datei_url, parent_id')
+    .eq('id', dokumentId)
+    .maybeSingle()
+  if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+  if (dok.user_id !== userId) {
+    return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf es löschen.', true)
+  }
+
+  const { data: kinder } = await supabase
+    .from('dokumente')
+    .select('id, user_id, datei_url')
+    .eq('parent_id', dokumentId)
+  const notizen = (kinder ?? []) as { id: string; user_id: string; datei_url: string | null }[]
+  const fremde = notizen.filter((k) => k.user_id !== userId)
+
+  if (fremde.length > 0 && !auchFremde) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, name')
+      .in('id', Array.from(new Set(fremde.map((k) => k.user_id))))
+    const namen = (profile ?? []).map((p) => p.name as string).join(', ')
+    return toolTextResult(
+      `Abgebrochen: An "${dok.titel}" hängen ${fremde.length} Notiz(en) von ${namen || 'anderen Personen'}, die beim Löschen mit verschwinden würden. Zum trotzdem Löschen den Aufruf mit auch_fremde_notizen: true wiederholen.`,
+      true,
+    )
+  }
+
+  // Dateien zuerst - bleibt die Zeile stehen, lässt sich der Vorgang
+  // wiederholen; umgekehrt wären die Dateien unauffindbar verwaist.
+  const pfade = [dok.datei_url, ...notizen.map((k) => k.datei_url)].filter((p): p is string => Boolean(p))
+  if (pfade.length > 0) {
+    const { error: storageError } = await supabase.storage.from('dokumente').remove(pfade)
+    if (storageError) {
+      return toolTextResult(`Fehler beim Entfernen der Dateien: ${storageError.message} - Dokument wurde nicht gelöscht.`, true)
+    }
+  }
+
+  const { error } = await supabase.from('dokumente').delete().eq('id', dokumentId)
+  if (error) return toolTextResult(`Fehler beim Löschen: ${error.message}`, true)
+
+  const teile = [`"${dok.titel}" wurde gelöscht`]
+  if (notizen.length > 0) teile.push(`${notizen.length} angehängte Notiz(en) ebenfalls`)
+  if (pfade.length > 0) teile.push(`${pfade.length} Datei(en) aus dem Speicher entfernt`)
+  return toolTextResult(`${teile.join(', ')}.`)
+}
+
 export async function updateDocumentTags(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
   if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)

@@ -557,6 +557,23 @@ export const TOOLS = [
     },
   },
   {
+    name: 'delete_document',
+    description:
+      'Löscht ein eigenes Dokument oder eine eigene Notiz im Dokumenten-Hub endgültig, samt der zugehörigen Dateien im Speicher. Nur der/die Ersteller*in darf das. Am Dokument hängende Notizen werden mitgelöscht - sind Notizen anderer Personen dabei, bricht der Aufruf ab und muss mit auch_fremde_notizen=true wiederholt werden.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments bzw. der eigenen Notiz (z. B. aus list_documents).' },
+        auch_fremde_notizen: {
+          type: 'boolean',
+          description:
+            'Bestätigt ausdrücklich, dass auch Notizen anderer Personen mitgelöscht werden dürfen (Standard false). Ohne das bricht der Aufruf ab, sobald fremde Notizen am Dokument hängen.',
+        },
+      },
+      required: ['dokument_id'],
+    },
+  },
+  {
     name: 'update_document_inhalt',
     description:
       'Setzt den Text-/Markdown-Inhalt eines eigenen Dokuments im Dokumenten-Hub nachträglich - gedacht, um bereits hochgeladene Vorlagen später mit ihrer Markdown-Fassung zu versorgen. Nur der/die Ersteller*in darf das. Lange Inhalte in Stücken übertragen: einmal mit modus="ersetzen" beginnen, danach beliebig oft modus="anhaengen" - ein einzelner MCP-Aufruf wird ab etwa 13 KB Nutzlast unzuverlässig.',

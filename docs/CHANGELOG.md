@@ -2244,3 +2244,46 @@ keinen SQL-Eingriff. Das bestehende Import-Konto hat die Migration gleich mitges
 **Weiterhin offen:** Zwei Profile sind unvollständig und sehen deshalb den gesamten Import nicht –
 bei Benjamin Korte fehlt die Gliederung, bei Thorsten Schick zusätzlich die Ebene „Kommune". Die
 Sichtbarkeit hängt an allen drei Feldern gleichzeitig, und es gibt keinerlei Rückmeldung darüber.
+
+### Dokumentenbestand auf das technische Konto übertragen + delete_document (2026-10-14)
+
+Nutzerentscheidung: Alle Hub-Dokumente sollen vom technischen Import-Konto verwaltet werden.
+257 Top-Level-Dokumente wechselten per `update dokumente set user_id = …` den Besitzer; der
+Bestand liegt jetzt vollständig bei `ALLRIS-Import` (258 inkl. des einen Dokuments, das der Bot
+selbst angelegt hatte).
+
+**Notizen sind ausdrücklich nicht mitgezogen.** Die 268 Notizen von Thorsten Kois und die eine von
+Stefan Woelk bleiben bei ihren Verfassern – das sind persönliche Analysen, kein Importmaterial.
+Ebenso unberührt: Benjamin Kortes zwei selbst angelegten, persönlichen Dokumente. Der Filter war
+deshalb `parent_id is null and user_id = <Thorsten>`, nicht der ganze Bestand.
+
+Sichtbarkeit bleibt: alle 258 sind `geteilt` mit Ebene Kommune/Iserlohn, und das Bot-Konto hat
+Partei CDU – `dokumente_select_shared` prüft die Partei des *Uploaders* gegen die des Betrachters,
+und die stimmt weiterhin.
+
+**Schreibrechte: bewusst keine neue Policy.** Zur Wahl standen eine Fraktions-Policy (gleiche
+Partei/Ebene/Gliederung darf bearbeiten), eine Admin-Policy und gar nichts. Entschieden wurde
+"gar nichts": Der Hub ist für die Web-UI jetzt eine Nur-Lese-Ablage. TagEditor, Sitzungs-Auswahl,
+Archivieren und Löschen sind dort bei allen 258 Dokumenten verschwunden, weil `document.user_id
+=== userId` nirgends mehr zutrifft. Notizen anhängen funktioniert weiter – die hängen am eigenen
+Konto, und `dokumente_insert_own` prüft nur `user_id = auth.uid()`.
+
+**Daraus entstand eine Lücke, die sofort geschlossen werden musste:** Hub-Dokumente waren danach
+gar nicht mehr löschbar – in der UI nicht (niemand Eigentümer) und über MCP auch nicht, denn die
+Tool-Liste kannte nur Anlegen, Auflisten und fünf Update-Varianten. Das ist nicht theoretisch: am
+selben Tag mussten 28 Dubletten eines fehlgeschlagenen Import-Laufs per SQL weggeräumt werden, und
+solange dailyallris sein Manifest nicht über CI-Läufe hinweg behält, entstehen neue.
+
+Neues Tool **`delete_document(dokument_id, auch_fremde_notizen?)`** mit zwei Vorsichtsmaßnahmen,
+die aus dem Datenmodell folgen:
+
+- `dokumente.parent_id` hat `ON DELETE CASCADE`. Am Dokument hängende Notizen verschwinden also
+  mit – auch fremde. Sind welche dabei, bricht der Aufruf ab und nennt die betroffenen Personen;
+  erst `auch_fremde_notizen: true` löscht wirklich. Dasselbe Muster wie die Checkbox im
+  `LoeschDialog` der Web-UI.
+- Dateien im Storage verschwinden nicht, wenn die Zeile gelöscht wird. Sie werden deshalb **vor**
+  der Zeile entfernt: schlägt das fehl, bleibt die Zeile stehen und der Vorgang ist wiederholbar –
+  umgekehrt wären die Dateien unauffindbar verwaist. Im Bucket lagen zu diesem Zeitpunkt bereits
+  40 solcher Waisen aus früheren Löschungen.
+
+Damit 32 MCP-Tools.

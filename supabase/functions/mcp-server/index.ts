@@ -47,6 +47,7 @@ import { uploadPresseschau } from './tools/presseschau.ts'
 import { startFileUpload, appendFileChunk, finishFileUpload } from './tools/uploads.ts'
 import {
   createDocument,
+  deleteDocument,
   listDocuments,
   updateDocumentArchiv,
   updateDocumentInhalt,
@@ -247,6 +248,9 @@ Deno.serve(async (req) => {
           break
         case 'update_document_inhalt':
           result = await updateDocumentInhalt(supabase, user.id, args)
+          break
+        case 'delete_document':
+          result = await deleteDocument(supabase, user.id, args)
           break
         case 'link_todo_document':
           result = await linkTodoDocument(supabase, user.id, args)
