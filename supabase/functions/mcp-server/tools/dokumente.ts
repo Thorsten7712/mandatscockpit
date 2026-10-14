@@ -70,9 +70,9 @@ async function ladeSitzungen(
 
   const { data: links } = await supabase
     .from('sitzung_dokumente')
-    .select('dokument_id, session_id')
+    .select('dokument_id, session_id, top_nummer')
     .in('dokument_id', dokumentIds)
-  const paare = (links ?? []) as { dokument_id: string; session_id: string }[]
+  const paare = (links ?? []) as { dokument_id: string; session_id: string; top_nummer: string | null }[]
   const sessionIds = Array.from(new Set(paare.map((l) => l.session_id)))
   if (sessionIds.length === 0) return { titelJeDokument, datenJeDokument }
 
@@ -81,7 +81,8 @@ async function ladeSitzungen(
   for (const l of paare) {
     const si = byId.get(l.session_id)
     if (!si) continue
-    titelJeDokument.set(l.dokument_id, [...(titelJeDokument.get(l.dokument_id) ?? []), si.titel])
+    const bezeichnung = l.top_nummer ? `${si.titel} (TOP ${l.top_nummer})` : si.titel
+    titelJeDokument.set(l.dokument_id, [...(titelJeDokument.get(l.dokument_id) ?? []), bezeichnung])
     datenJeDokument.set(l.dokument_id, [...(datenJeDokument.get(l.dokument_id) ?? []), si.datum])
   }
   return { titelJeDokument, datenJeDokument }
@@ -585,6 +586,16 @@ export async function linkDocumentSession(supabase: SupabaseClient, userId: stri
   if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
   if (!sessionId) return toolTextResult('Fehler: session_id ist erforderlich.', true)
 
+  // Tagesordnungs-Angaben (0043): optional, die Verknüpfungszeile ist der
+  // Tagesordnungspunkt. Nur übergebene Felder werden geschrieben, damit ein
+  // Aufruf ohne sie bestehende Angaben nicht leert.
+  const topFelder: Record<string, unknown> = {}
+  if (typeof args.top_nummer === 'string') topFelder.top_nummer = args.top_nummer.trim() || null
+  if (typeof args.top_titel === 'string') topFelder.top_titel = args.top_titel.trim() || null
+  if (typeof args.reihenfolge === 'number' && Number.isFinite(args.reihenfolge)) {
+    topFelder.reihenfolge = Math.trunc(args.reihenfolge)
+  }
+
   const { data: dok } = await supabase.from('dokumente').select('id, user_id, titel').eq('id', dokumentId).maybeSingle()
   if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
   if (dok.user_id !== userId) {
@@ -593,18 +604,31 @@ export async function linkDocumentSession(supabase: SupabaseClient, userId: stri
   const { data: session } = await supabase.from('sessions').select('titel, datum').eq('id', sessionId).maybeSingle()
   if (!session) return toolTextResult(`Fehler: Sitzung ${sessionId} wurde nicht gefunden.`, true)
 
+  const topHinweis = topFelder.top_nummer ? ` als TOP ${topFelder.top_nummer}` : ''
   const { data: vorhanden } = await supabase
     .from('sitzung_dokumente')
     .select('id')
     .eq('dokument_id', dokumentId)
     .eq('session_id', sessionId)
     .maybeSingle()
-  if (vorhanden) return toolTextResult(`"${dok.titel}" ist mit "${session.titel}" bereits verknüpft - nichts zu tun.`)
 
-  const { error } = await supabase.from('sitzung_dokumente').insert({ dokument_id: dokumentId, session_id: sessionId })
+  if (vorhanden) {
+    // Idempotent, aber nicht untätig: Kommen Tagesordnungs-Angaben mit, werden
+    // sie aufgefrischt - eine Tagesordnung kann sich bis zur Sitzung ändern.
+    if (Object.keys(topFelder).length === 0) {
+      return toolTextResult(`"${dok.titel}" ist mit "${session.titel}" bereits verknüpft - nichts zu tun.`)
+    }
+    const { error: updateError } = await supabase.from('sitzung_dokumente').update(topFelder).eq('id', vorhanden.id)
+    if (updateError) return toolTextResult(`Fehler beim Aktualisieren des Tagesordnungspunkts: ${updateError.message}`, true)
+    return toolTextResult(`Verknüpfung von "${dok.titel}" mit "${session.titel}" war bereits vorhanden${topHinweis} - Tagesordnungs-Angaben aktualisiert.`)
+  }
+
+  const { error } = await supabase
+    .from('sitzung_dokumente')
+    .insert({ dokument_id: dokumentId, session_id: sessionId, ...topFelder })
   if (error) return toolTextResult(`Fehler beim Verknüpfen: ${error.message}`, true)
   return toolTextResult(
-    `"${dok.titel}" wurde mit Sitzung "${session.titel}" (${formatDate(String(session.datum).slice(0, 10))}) verknüpft.`,
+    `"${dok.titel}" wurde mit Sitzung "${session.titel}" (${formatDate(String(session.datum).slice(0, 10))}) verknüpft${topHinweis}.`,
   )
 }
 

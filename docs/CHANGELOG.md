@@ -2381,3 +2381,44 @@ Was dort steht, ist die ALLRIS-Tagesansicht (`si010?DD=..&MM=..&YY=..`) – für
 desselben Tages identisch. Eindeutig ist dagegen **Gremium + Datum samt Uhrzeit**: bei den 161
 Iserlohner Sitzungen ist `gremium` immer gesetzt und die Kombination kollisionsfrei (0 Dubletten),
 während Gremium + Tag allein 29 Mehrfachtreffer hat.
+
+### Tagesordnung als Lesenavigation, drei umschaltbare Layouts (2026-10-14)
+
+Nutzerwunsch: Die drei Varianten aus dem Mockup sollen in der Anwendung umschaltbar sein – und für
+Sitzungen wäre Variante B ideal, mit der Tagesordnung links, dem gewählten Dokument in der Mitte
+und den Notizen rechts.
+
+**`sitzung_dokumente` bekommt Tagesordnungs-Felder** (`0043_sitzung_dokumente_top.sql`):
+`top_nummer`, `top_titel`, `reihenfolge`. Die Verknüpfungszeile *ist* der Tagesordnungspunkt –
+dasselbe Dokument steht im Finanzausschuss unter TOP 7.2 und im Rat unter TOP 3.1, die Angabe
+gehört also an die Verknüpfung und nicht an `dokumente`.
+
+Zwei Entscheidungen dabei: `top_nummer` ist **Text**, weil Tagesordnungen mehrstufig nummerieren
+(„3.1", „10.2.1") und nicht-öffentliche Punkte Präfixe tragen („N 4.2"). Und `reihenfolge` gibt es
+**zusätzlich**, weil sich `top_nummer` nicht sortieren lässt: als Text käme „3.10" vor „3.2".
+Maßgeblich ist die Reihenfolge auf der Tagesordnung, und die kennt nur der Importeur. Alle drei
+Felder sind optional – von Hand gesetzte Verknüpfungen ohne Tagesordnungsbezug bleiben gültig.
+
+**`link_document_session`** nimmt die Felder entgegen und ist weiterhin idempotent, aber nicht mehr
+untätig: Kommen Tagesordnungs-Angaben mit und existiert die Verknüpfung schon, werden sie
+aufgefrischt – eine Tagesordnung kann sich bis zur Sitzung ändern. Ohne solche Angaben bleibt es
+bei „bereits verknüpft". In `list_documents` erscheint die Nummer als „Sitzung: Rat der Stadt
+Iserlohn (TOP 3.1)".
+
+**Drei Layouts im Modal**, Schalter im Kopf, Auswahl pro Gerät in `localStorage`:
+
+- **A** – Dokument und Notizen (wie bisher)
+- **B** – zusätzlich eine linke Spalte: die Tagesordnung, wenn aus einer Sitzung heraus geöffnet
+- **C** – Lesemodus: 68 Zeichen Zeilenbreite, Notizen per Knopf einklappbar
+
+**Wer die Auswahl besitzt, war die eigentliche Designfrage.** Das Modal hält lokale Spiegel der
+Prop (`docTags`, `archiviertAm`, `ownShareNames`), die nur beim Mounten aufgesetzt werden – ein
+Dokumentwechsel innerhalb des Modals hätte sie stehen lassen. Deshalb liegt die Auswahl beim
+Aufrufer (`TerminDetailPanel`), der das Modal per `key={document.id}` remountet. Das Modal meldet
+den Klick nur über `onAuswahl` nach außen.
+
+Verifiziert im Harness gegen die echte Rat-Sitzung vom 13.10. mit ihren 34 verknüpften Dokumenten:
+Tagesordnung links mit Nummern, Klick wechselt das Dokument (Kopfzeile folgt), Umschalten auf C
+blendet die Tagesordnung aus und zeigt den Knopf „Notizen ausblenden", der die rechte Spalte
+entfernt. Die dafür vergebenen TOP-Nummern waren Testdaten und wurden anschließend wieder
+zurückgesetzt – es gibt bislang keine echte Tagesordnung im Bestand.

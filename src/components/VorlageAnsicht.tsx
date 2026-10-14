@@ -20,7 +20,7 @@ import { vorlageAufbereiten } from '../lib/vorlageMarkdown'
  * Dokumente ohne Markdown-Struktur (Alt-Bestand, von Hand angelegte Notizen)
  * fallen auf einfache Textdarstellung zurück.
  */
-export function VorlageAnsicht({ inhalt }: { inhalt: string | null }) {
+export function VorlageAnsicht({ inhalt, zentriert = false }: { inhalt: string | null; zentriert?: boolean }) {
   const { koerper, beschlussvorschlag, abschnitte } = useMemo(() => vorlageAufbereiten(inhalt), [inhalt])
   const [aktiv, setAktiv] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -83,7 +83,7 @@ export function VorlageAnsicht({ inhalt }: { inhalt: string | null }) {
         </nav>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-4">
+      <div className={`min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-4 ${zentriert ? 'mx-auto w-full max-w-[68ch]' : ''}`}>
         {beschlussvorschlag && (
           <section
             id="beschlussvorschlag"

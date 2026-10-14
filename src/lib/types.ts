@@ -122,7 +122,25 @@ export interface SitzungDokument {
   id: string
   session_id: string
   dokument_id: string
+  /** Tagesordnungspunkt, unter dem das Dokument in DIESER Sitzung läuft
+   * (0043_sitzung_dokumente_top.sql). Dasselbe Dokument kann in einer anderen
+   * Sitzung unter einer anderen Nummer stehen. Text wegen mehrstufiger
+   * Nummerierung ("3.1", "N 4.2"). */
+  top_nummer: string | null
+  /** Wortlaut des TOP, falls er vom Dokumenttitel abweicht. */
+  top_titel: string | null
+  /** Position auf der Tagesordnung - top_nummer sortiert als Text falsch. */
+  reihenfolge: number | null
   erstellt_am: string
+}
+
+/** Ein Eintrag der Tagesordnung für die linke Spalte des Lesers. */
+export interface TagesordnungsEintrag {
+  dokument_id: string
+  top_nummer: string | null
+  top_titel: string | null
+  reihenfolge: number | null
+  titel: string
 }
 
 export interface CalendarSource {

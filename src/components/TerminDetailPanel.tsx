@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, SummaryRow, TodoRow } from '../lib/types'
+import type { AntragRow, CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, SummaryRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
 import { AntragDetailModal } from './AntragDetailModal'
 import { DokumentDetailModal } from './DokumentDetailModal'
@@ -70,6 +70,7 @@ export function TerminDetailPanel({
 
   const [linkedDokumente, setLinkedDokumente] = useState<DokumentRow[]>([])
   const [openDokument, setOpenDokument] = useState<DokumentRow | null>(null)
+  const [tagesordnung, setTagesordnung] = useState<TagesordnungsEintrag[]>([])
 
   async function loadTermin() {
     setEvent(null)
@@ -123,15 +124,37 @@ export function TerminDetailPanel({
     }
     // Über die n:m-Tabelle (0042_sitzung_dokumente.sql) - ein Dokument kann an
     // mehreren Sitzungen hängen, die frühere Spalte dokumente.session_id gibt
-    // es nicht mehr.
-    const { data: links } = await supabase.from('sitzung_dokumente').select('dokument_id').eq('session_id', id)
-    const ids = (links ?? []).map((l) => l.dokument_id as string)
+    // es nicht mehr. Die Verknüpfungszeile trägt zugleich den
+    // Tagesordnungspunkt (0043).
+    const { data: links } = await supabase
+      .from('sitzung_dokumente')
+      .select('dokument_id, top_nummer, top_titel, reihenfolge')
+      .eq('session_id', id)
+    const eintraege = (links ?? []) as Omit<TagesordnungsEintrag, 'titel'>[]
+    const ids = eintraege.map((l) => l.dokument_id)
     if (ids.length === 0) {
       setLinkedDokumente([])
+      setTagesordnung([])
       return
     }
     const { data } = await supabase.from('dokumente').select('*').in('id', ids).order('erstellt_am')
-    setLinkedDokumente(data ?? [])
+    const dokumente = data ?? []
+    setLinkedDokumente(dokumente)
+
+    // Nach der Tagesordnung sortieren, wo sie bekannt ist - top_nummer taugt
+    // als Text nicht ("3.10" käme vor "3.2"). Einträge ohne Reihenfolge landen
+    // hinten, alphabetisch nach Titel.
+    const titelById = new Map(dokumente.map((d) => [d.id, d.titel]))
+    setTagesordnung(
+      eintraege
+        .map((e) => ({ ...e, titel: titelById.get(e.dokument_id) ?? '' }))
+        .sort((a, b) => {
+          if (a.reihenfolge !== null && b.reihenfolge !== null) return a.reihenfolge - b.reihenfolge
+          if (a.reihenfolge !== null) return -1
+          if (b.reihenfolge !== null) return 1
+          return (a.top_titel || a.titel).localeCompare(b.top_titel || b.titel, 'de')
+        }),
+    )
   }
 
   useEffect(() => {
@@ -599,8 +622,17 @@ export function TerminDetailPanel({
         <AntragDetailModal id={openAntragId} onClose={() => setOpenAntragId(null)} onChanged={loadLinkedAntraege} />
       )}
       {openDokument && (
+        // key erzwingt beim Wechsel über die Tagesordnung einen Remount: die
+        // lokalen Spiegel im Modal (Tags, Archiv-Status, Freigaben) werden nur
+        // beim Mounten aus der Prop aufgesetzt.
         <DokumentDetailModal
+          key={openDokument.id}
           document={openDokument}
+          tagesordnung={kind === 'session' ? tagesordnung : undefined}
+          onAuswahl={(dokumentId) => {
+            const naechstes = linkedDokumente.find((d) => d.id === dokumentId)
+            if (naechstes) setOpenDokument(naechstes)
+          }}
           onClose={() => setOpenDokument(null)}
           onDeleted={() => {
             setOpenDokument(null)

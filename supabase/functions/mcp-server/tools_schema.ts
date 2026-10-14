@@ -597,12 +597,24 @@ export const TOOLS = [
   {
     name: 'link_document_session',
     description:
-      'Verknüpft ein eigenes Dokument im Dokumenten-Hub zusätzlich mit einer Sitzung. Ein Dokument kann an mehreren Sitzungen hängen - eine Vorlage durchläuft typischerweise erst den Fachausschuss und danach den Rat. Idempotent: ist die Verknüpfung schon vorhanden, ist das kein Fehler. Nur der/die Ersteller*in darf das.',
+      'Verknüpft ein eigenes Dokument im Dokumenten-Hub zusätzlich mit einer Sitzung. Ein Dokument kann an mehreren Sitzungen hängen - eine Vorlage durchläuft typischerweise erst den Fachausschuss und danach den Rat. Idempotent: ist die Verknüpfung schon vorhanden, ist das kein Fehler - übergebene Tagesordnungs-Angaben werden dann aufgefrischt, weil sich eine Tagesordnung bis zur Sitzung ändern kann. Nur der/die Ersteller*in darf das.',
     inputSchema: {
       type: 'object',
       properties: {
         dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments (z. B. aus list_documents).' },
         session_id: { type: 'string', description: 'UUID der Sitzung (z. B. aus list_sessions).' },
+        top_nummer: {
+          type: 'string',
+          description: 'Nummer des Tagesordnungspunkts, z. B. "3.1" oder "N 4.2" (optional). Text, weil Tagesordnungen mehrstufig nummerieren und nicht-öffentliche Punkte Präfixe tragen.',
+        },
+        top_titel: {
+          type: 'string',
+          description: 'Wortlaut des Tagesordnungspunkts, falls er vom Dokumenttitel abweicht (optional).',
+        },
+        reihenfolge: {
+          type: 'number',
+          description: 'Position auf der Tagesordnung (optional). Nötig zum Sortieren, weil top_nummer als Text falsch ordnet ("3.10" vor "3.2").',
+        },
       },
       required: ['dokument_id', 'session_id'],
     },

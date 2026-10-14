@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ArchiveRestore, FileText, Link2, Trash2, X } from 'lucide-react'
+import { Archive, ArchiveRestore, Columns2, Columns3, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TodoRow } from '../lib/types'
+import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate, formatDateTime, startOfTodayIso } from '../lib/format'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
@@ -27,15 +27,49 @@ const TAG_VORSCHLAEGE = ['Einschätzung', 'Analyse', 'Redebeitrag']
  * MCP-Server läuft die Web-UI mit der Session des Nutzers, RLS greift hier
  * also tatsächlich.
  */
+/** Die drei Layouts aus dem Mockup. 'b' zeigt links eine Navigationsspalte -
+ *  die Tagesordnung, wenn eine übergeben wurde, sonst die Abschnitte des
+ *  Dokuments. */
+export type LeseVariante = 'a' | 'b' | 'c'
+
+const VARIANTE_KEY = 'mc.dokument.variante'
+
+function ladeVariante(): LeseVariante {
+  try {
+    const wert = window.localStorage.getItem(VARIANTE_KEY)
+    return wert === 'a' || wert === 'b' || wert === 'c' ? wert : 'a'
+  } catch {
+    return 'a'
+  }
+}
+
+function speichereVariante(wert: LeseVariante) {
+  try {
+    window.localStorage.setItem(VARIANTE_KEY, wert)
+  } catch {
+    // Reine Anzeige-Vorliebe - ein gesperrter Storage ist kein Fehlerfall.
+  }
+}
+
 export function DokumentDetailModal({
   document,
   onClose,
   onDeleted,
+  tagesordnung,
+  onAuswahl,
 }: {
   document: DokumentRow
   onClose: () => void
   onDeleted: () => void
+  /** Tagesordnung der Sitzung, aus der heraus geöffnet wurde. Der Aufrufer
+   *  besitzt die Auswahl und remountet dieses Modal per key - sonst würden die
+   *  lokalen Spiegel (docTags, archiviertAm ...) beim Wechsel nicht neu
+   *  aufgesetzt. */
+  tagesordnung?: TagesordnungsEintrag[]
+  onAuswahl?: (dokumentId: string) => void
 }) {
+  const [variante, setVariante] = useState<LeseVariante>(ladeVariante)
+  const [notizenOffen, setNotizenOffen] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
   const [children, setChildren] = useState<DokumentRow[]>([])
@@ -522,8 +556,45 @@ export function DokumentDetailModal({
   // es können also mehr sein, deshalb "mindestens".
   const fremdeNotizen = children.filter((c) => c.user_id !== userId).length
 
+  const varianten: { wert: LeseVariante; icon: typeof Columns2; titel: string }[] = [
+    { wert: 'a', icon: Columns2, titel: 'Zwei Spalten: Dokument und Notizen' },
+    { wert: 'b', icon: Columns3, titel: tagesordnung ? 'Drei Spalten: Tagesordnung, Dokument, Notizen' : 'Drei Spalten: Abschnitte, Dokument, Notizen' },
+    { wert: 'c', icon: PanelLeft, titel: 'Lesemodus: Dokument breit, Notizen einklappbar' },
+  ]
+
+  function waehleVariante(wert: LeseVariante) {
+    setVariante(wert)
+    speichereVariante(wert)
+    if (wert !== 'c') setNotizenOffen(true)
+  }
+
   const kopfAktionen = (
     <>
+      <div className="mr-1 hidden items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 sm:flex">
+        {varianten.map(({ wert, icon: Icon, titel }) => (
+          <button
+            key={wert}
+            type="button"
+            onClick={() => waehleVariante(wert)}
+            aria-pressed={variante === wert}
+            title={titel}
+            className={`rounded-md p-1.5 transition-colors ${
+              variante === wert ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Icon size={15} />
+          </button>
+        ))}
+      </div>
+      {variante === 'c' && (
+        <button
+          type="button"
+          onClick={() => setNotizenOffen((v) => !v)}
+          className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs"
+        >
+          {notizenOffen ? 'Notizen ausblenden' : 'Notizen'}
+        </button>
+      )}
       {document.datei_url && (
         <button
           type="button"
@@ -736,6 +807,53 @@ export function DokumentDetailModal({
     </>
   )
 
+  const zeigeNotizen = variante !== 'c' || notizenOffen
+  const spaltenKlasse =
+    variante === 'b'
+      ? 'md:grid-cols-[220px_minmax(0,1.5fr)_minmax(0,1fr)]'
+      : variante === 'c'
+        ? zeigeNotizen
+          ? 'md:grid-cols-[minmax(0,1fr)_320px]'
+          : 'md:grid-cols-[minmax(0,1fr)]'
+        : 'md:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]'
+
+  // Linke Spalte in Variante B: die Tagesordnung der Sitzung, aus der heraus
+  // geöffnet wurde - sonst bleibt sie leer, weil die Abschnittsnavigation des
+  // Dokuments bereits in VorlageAnsicht als Chipleiste sitzt.
+  const tagesordnungSpalte = (
+    <nav aria-label="Tagesordnung" className="p-3">
+      <h3 className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+        {tagesordnung ? 'Tagesordnung' : 'Keine Sitzung'}
+      </h3>
+      {!tagesordnung && (
+        <p className="px-2 text-xs text-slate-400">
+          Diese Ansicht zeigt die Tagesordnung, wenn das Dokument aus einer Sitzung heraus geöffnet wird.
+        </p>
+      )}
+      <ul className="space-y-0.5">
+        {(tagesordnung ?? []).map((t) => {
+          const aktiv = t.dokument_id === document.id
+          return (
+            <li key={t.dokument_id}>
+              <button
+                type="button"
+                onClick={() => onAuswahl?.(t.dokument_id)}
+                className={`block w-full rounded-md border-l-2 px-2 py-1.5 text-left text-xs leading-snug transition-colors ${
+                  aktiv
+                    ? 'border-accent bg-white font-semibold text-primary'
+                    : 'border-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900'
+                }`}
+              >
+                {t.top_nummer && <span className="mr-1 font-mono text-[10px] text-slate-400">{t.top_nummer}</span>}
+                {t.top_titel || t.titel}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </nav>
+  )
+
   return (
     <>
       <div
@@ -936,11 +1054,18 @@ export function DokumentDetailModal({
             </div>
           )}
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+          <div className={`grid min-h-0 flex-1 grid-cols-1 ${spaltenKlasse}`}>
+            {variante === 'b' && (
+              <aside className="hidden min-h-0 overflow-y-auto border-r border-slate-200 bg-slate-50 md:block">
+                {tagesordnungSpalte}
+              </aside>
+            )}
             <div className="min-h-0 max-h-[46vh] border-b border-slate-200 md:max-h-none md:border-b-0 md:border-r">
-              <VorlageAnsicht inhalt={document.inhalt} />
+              <VorlageAnsicht inhalt={document.inhalt} zentriert={variante === 'c'} />
             </div>
-            <div className="min-h-0 overflow-y-auto bg-slate-50/60 p-5">{notizenSpalte}</div>
+            {zeigeNotizen && (
+              <div className="min-h-0 overflow-y-auto bg-slate-50/60 p-5">{notizenSpalte}</div>
+            )}
           </div>
         </div>
       </div>

@@ -28,7 +28,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
 - **ToDo-Board:** Kanban-Stil mit frei definierbaren Spalten (`todo_columns`) statt fester Status,
   Drag & Drop via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~42 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~43 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 
@@ -70,6 +70,10 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   ToDo-Karten verknüpfen (`todo_dokumente`, `0037_todo_dokumente.sql`). Beide Verknüpfungen sind im
   Detail-Modal auf beiden Seiten sichtbar/editierbar und über den MCP-Server steuerbar
   (`link_document_session`/`unlink_document_session`, `link_todo_document`/`unlink_todo_document`).
+  Die Verknüpfungszeile trägt zugleich den **Tagesordnungspunkt** (`top_nummer`, `top_titel`,
+  `reihenfolge`; `0043_sitzung_dokumente_top.sql`) – dasselbe Dokument kann in zwei Sitzungen unter
+  verschiedenen Nummern stehen. `reihenfolge` gibt es zusätzlich zu `top_nummer`, weil Text falsch
+  sortiert („3.10" vor „3.2").
   **Archiv:** Ein Dokument gilt als archiviert, wenn entweder die **letzte** verknüpfte Sitzung
   vorbei ist (nicht irgendeine – sonst verschwände eine Vorlage nach dem Fachausschuss, während der
   Rat noch entscheidet) oder
@@ -91,6 +95,12 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   `prosaGlaetten()` entfernt dort nur noch Mehrfach-Leerzeichen und führt **keine Absätze mehr
   zusammen** – seit dailyallris die Prosa bei der Extraktion normalisiert, verklebte diese
   Heuristik Feldwerte („## Verfasser") mit dem Folgeabsatz.
+  **Drei Leselayouts**, umschaltbar im Kopf des Modals und pro Gerät in
+  `localStorage` gemerkt: A = Dokument + Notizen, B = zusätzlich eine linke Spalte, C = Lesemodus
+  (68 Zeichen Zeilenbreite, Notizen einklappbar). In B steht links die **Tagesordnung** der Sitzung,
+  aus der heraus geöffnet wurde – ein Klick wechselt das Dokument. Die Auswahl besitzt der Aufrufer
+  (`TerminDetailPanel`) und remountet das Modal per `key`: die lokalen Spiegel im Modal (Tags,
+  Archiv-Status, Freigaben) werden nur beim Mounten aus der Prop aufgesetzt.
   Die **Listenansicht** zeigt nur `vorschau()` – zwei Zeilen reiner Text, bevorzugt der
   Beschlussvorschlag. Niemals `inhalt` ungekürzt rendern: das sind pro Vorlage rund 9.000 Zeichen.
 - **Zahlen & Fakten** (`/fakten`, eigener Reiter in der Kopfleiste): Argumentationshilfen,
