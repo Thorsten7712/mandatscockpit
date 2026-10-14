@@ -49,6 +49,7 @@ import {
   createDocument,
   listDocuments,
   updateDocumentArchiv,
+  updateDocumentInhalt,
   updateDocumentSession,
   updateDocumentSharing,
   updateDocumentTags,
@@ -243,6 +244,9 @@ Deno.serve(async (req) => {
           break
         case 'update_document_archiv':
           result = await updateDocumentArchiv(supabase, user.id, args)
+          break
+        case 'update_document_inhalt':
+          result = await updateDocumentInhalt(supabase, user.id, args)
           break
         case 'link_todo_document':
           result = await linkTodoDocument(supabase, user.id, args)

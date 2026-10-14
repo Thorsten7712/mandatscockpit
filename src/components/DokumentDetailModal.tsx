@@ -1,13 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ArchiveRestore, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, FileText, Link2, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate, formatDateTime, startOfTodayIso } from '../lib/format'
 import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
-import { DetailModalShell } from './DetailModalShell'
 import { useLoeschDialog } from './LoeschDialog'
+import { VorlageAnsicht } from './VorlageAnsicht'
 import { TagEditor } from './TagEditor'
 import { SichtbarkeitEditor } from './SichtbarkeitEditor'
 import { istNotizUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
@@ -105,6 +105,10 @@ export function DokumentDetailModal({
   // trifft dann nicht nur den eigenen Bestand, und parent_id kaskadiert
   // (0034_dokumente_kommentare.sql) auch alle daran hängenden fremden Notizen.
   const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
+  // Tags, Sitzung und ToDo-Verknüpfungen sind im Lesebetrieb nur Chips im
+  // Kopfband; die Eingabefelder dafür klappen bei Bedarf darunter auf. Sonst
+  // nimmt die Verwaltung des Dokuments den Platz weg, den das Lesen braucht.
+  const [verknuepfungenOffen, setVerknuepfungenOffen] = useState(false)
   /** Namen, mit denen DIESES Top-Level-Dokument per 'einzelpersonen' geteilt ist. */
   const [ownShareNames, setOwnShareNames] = useState<string[]>([])
 
@@ -491,8 +495,19 @@ export function DokumentDetailModal({
   // es können also mehr sein, deshalb "mindestens".
   const fremdeNotizen = children.filter((c) => c.user_id !== userId).length
 
-  const headerActions = (
+  const kopfAktionen = (
     <>
+      {document.datei_url && (
+        <button
+          type="button"
+          onClick={() => setPreviewDoc({ path: document.datei_url!, name: fileNameFromPath(document.datei_url!) })}
+          title={`Original-PDF öffnen: ${fileNameFromPath(document.datei_url)}`}
+          className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs !text-primary"
+        >
+          <FileText size={14} />
+          <span className="hidden sm:inline">Original-PDF</span>
+        </button>
+      )}
       {document.user_id === userId && (
         <button
           type="button"
@@ -510,7 +525,7 @@ export function DokumentDetailModal({
           className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs"
         >
           {archiviertAm ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-          {archiviertAm ? 'Im Archiv' : 'Archivieren'}
+          <span className="hidden sm:inline">{archiviertAm ? 'Im Archiv' : 'Archivieren'}</span>
         </button>
       )}
       <button
@@ -521,7 +536,7 @@ export function DokumentDetailModal({
         className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs"
       >
         <span className={`h-2 w-2 rounded-full ${istGelesen ? 'bg-slate-300' : 'bg-primary'}`} />
-        {istGelesen ? 'Gelesen' : 'Ungelesen'}
+        <span className="hidden sm:inline">{istGelesen ? 'Gelesen' : 'Ungelesen'}</span>
       </button>
       {document.user_id === userId && (
         <button
@@ -556,135 +571,14 @@ export function DokumentDetailModal({
           <Trash2 size={17} />
         </button>
       )}
+      <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost !p-2">
+        <X size={18} />
+      </button>
     </>
   )
 
-  const leftColumn = (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="mb-2 flex flex-wrap items-center gap-1.5">
-        {document.ebene && (
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[document.ebene].chip}`}>
-            {EBENE_LABEL[document.ebene]}
-            {document.gliederung ? ` · ${document.gliederung}` : ''}
-          </span>
-        )}
-        {document.user_id !== userId &&
-          docTags.map((t) => (
-            <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
-              {t}
-            </span>
-          ))}
-      </div>
-      {document.user_id === userId && (
-        <div className="mb-2">
-          <TagEditor tags={docTags} onChange={handleUpdateTopLevelTags} vorschlaege={TAG_VORSCHLAEGE} />
-        </div>
-      )}
-      {document.inhalt && <p className="mb-2 whitespace-pre-wrap text-sm text-slate-700">{document.inhalt}</p>}
-      {document.datei_url && (
-        <button
-          type="button"
-          onClick={() => setPreviewDoc({ path: document.datei_url!, name: fileNameFromPath(document.datei_url!) })}
-          className="mc-btn-ghost !text-xs"
-        >
-          📎 Original-Dokument: {fileNameFromPath(document.datei_url)}
-        </button>
-      )}
-      <div className="mt-4 border-t border-slate-200 pt-3">
-        <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Verknüpfte Sitzung</h3>
-        {document.user_id === userId ? (
-          <select
-            value={docSessionId ?? ''}
-            onChange={(e) => handleSetSession(e.target.value)}
-            disabled={savingSession}
-            className="mc-input !text-sm"
-          >
-            <option value="">Keine Sitzung</option>
-            {/* linkedSession kann außerhalb der eigenen Gremien-Auswahl liegen (z. B. per MCP-Tool
-                gesetzt) - ohne diesen Zusatz würde der <select> dann klanglos auf "Keine Sitzung"
-                zurückfallen, obwohl tatsächlich eine Verknüpfung besteht. */}
-            {linkedSession && !ownSessions.some((s) => s.id === linkedSession.id) && (
-              <option value={linkedSession.id}>
-                {linkedSession.titel} ({formatDate(linkedSession.datum)})
-              </option>
-            )}
-            {ownSessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.titel} ({formatDate(s.datum)})
-              </option>
-            ))}
-          </select>
-        ) : linkedSession ? (
-          <Link to={`/termin/session/${linkedSession.id}`} className="text-sm text-blue-700 hover:underline">
-            {linkedSession.titel} ({formatDate(linkedSession.datum)})
-          </Link>
-        ) : (
-          <p className="text-sm text-slate-500">Keine verknüpfte Sitzung.</p>
-        )}
-        {(durchSitzungArchiviert || archiviertAm) && (
-          <p className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
-            <Archive className="h-3.5 w-3.5 shrink-0" />
-            {durchSitzungArchiviert
-              ? 'Liegt im Archiv – die verknüpfte Sitzung ist vorbei.'
-              : `Liegt im Archiv – von Hand archiviert am ${formatDate(archiviertAm as string)}.`}
-          </p>
-        )}
-      </div>
-    </div>
-  )
-
-  const rightColumn = (
+  const notizenSpalte = (
     <>
-      <h2 className="font-semibold mb-2">Verknüpfte ToDos</h2>
-      <ul className="mb-2 space-y-2">
-        {linkedTodos.map((t) => (
-          <li
-            key={t.id}
-            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
-          >
-            <span className="truncate text-sm font-medium text-slate-800">{t.titel}</span>
-            <button
-              type="button"
-              onClick={() => handleUnlinkTodo(t.id)}
-              className="mc-btn-ghost !shrink-0 !px-2 !py-1 !text-xs"
-            >
-              Lösen
-            </button>
-          </li>
-        ))}
-        {linkedTodos.length === 0 && <li className="text-slate-400 text-sm">Keine verknüpften ToDos.</li>}
-      </ul>
-      <div className="relative mb-6">
-        <input
-          type="text"
-          placeholder="ToDo suchen und verknüpfen..."
-          value={todoSearch}
-          onChange={(e) => handleSearchTodos(e.target.value)}
-          onFocus={() => setTodoDropdownOpen(true)}
-          onBlur={() => setTimeout(() => setTodoDropdownOpen(false), 150)}
-          className="mc-input w-full"
-        />
-        {todoDropdownOpen && todoSearch.trim() && (
-          <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-            {todoSearchResults.map((t) => (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  onMouseDown={() => handleLinkTodo(t.id)}
-                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
-                >
-                  {t.titel}
-                </button>
-              </li>
-            ))}
-            {todoSearchResults.length === 0 && (
-              <li className="px-3 py-1.5 text-sm text-slate-400">Keine Treffer.</li>
-            )}
-          </ul>
-        )}
-      </div>
-      {linkTodoError && <p className="mb-4 text-sm text-red-600">{linkTodoError}</p>}
-
       <h2 className="mb-2 font-semibold">Meine Notizen &amp; Dokumente</h2>
       <ul className="mb-4 space-y-2">
         {children.map((c) => (
@@ -817,7 +711,198 @@ export function DokumentDetailModal({
 
   return (
     <>
-      <DetailModalShell title={document.titel} headerActions={headerActions} onClose={onClose} left={leftColumn} right={rightColumn} />
+      <div
+        className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]"
+        onClick={onClose}
+      >
+        <div
+          className="mc-animate-pop flex h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Metadatenband über die volle Breite: alles, was das Dokument
+              einordnet, steht einmal oben - darunter bleiben beide Spalten für
+              Lesen und Notieren frei. */}
+          <header className="shrink-0 border-b border-slate-200 px-5 py-3">
+            <div className="flex items-start gap-3">
+              <h1 className="min-w-0 flex-1 text-base font-bold leading-snug text-slate-900">{document.titel}</h1>
+              <div className="flex shrink-0 items-center gap-1.5">{kopfAktionen}</div>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {document.ebene && (
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[document.ebene].chip}`}
+                >
+                  {EBENE_LABEL[document.ebene]}
+                  {document.gliederung ? ` · ${document.gliederung}` : ''}
+                </span>
+              )}
+              {docTags.map((t) => (
+                <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
+                  {t}
+                </span>
+              ))}
+              {linkedSession && (
+                <Link
+                  to={`/termin/session/${linkedSession.id}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:border-primary/40 hover:text-slate-900"
+                >
+                  📅 {linkedSession.titel} ({formatDate(linkedSession.datum)})
+                </Link>
+              )}
+              {linkedTodos.map((t) => (
+                <span
+                  key={t.id}
+                  className="inline-flex max-w-[16rem] items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600"
+                >
+                  ✓ <span className="truncate">{t.titel}</span>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => setVerknuepfungenOffen((v) => !v)}
+                aria-expanded={verknuepfungenOffen}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                  verknuepfungenOffen
+                    ? 'border-primary bg-primary text-white'
+                    : 'border-dashed border-slate-300 text-slate-500 hover:border-primary/50 hover:text-slate-700'
+                }`}
+              >
+                <Link2 size={11} />
+                Verknüpfungen
+              </button>
+            </div>
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+              {document.user_id !== userId && <span>{authorNames.get(document.user_id) ?? 'Unbekannt'}</span>}
+              {document.user_id !== userId && <span className="text-slate-300">·</span>}
+              <span>{formatDateTime(document.erstellt_am)}</span>
+              {document.datei_url && (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="truncate">📎 {fileNameFromPath(document.datei_url)}</span>
+                </>
+              )}
+              {(durchSitzungArchiviert || archiviertAm) && (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Archive className="h-3 w-3" />
+                    {durchSitzungArchiviert
+                      ? 'Im Archiv – die verknüpfte Sitzung ist vorbei'
+                      : `Im Archiv – von Hand archiviert am ${formatDate(archiviertAm as string)}`}
+                  </span>
+                </>
+              )}
+            </div>
+          </header>
+
+          {verknuepfungenOffen && (
+            <div className="mc-animate-slide shrink-0 border-b border-slate-200 bg-slate-50 px-5 py-3">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Tags</h3>
+                  {document.user_id === userId ? (
+                    <TagEditor tags={docTags} onChange={handleUpdateTopLevelTags} vorschlaege={TAG_VORSCHLAEGE} />
+                  ) : (
+                    <p className="text-xs text-slate-500">Nur der/die Ersteller*in kann Tags ändern.</p>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sitzung</h3>
+                  {document.user_id === userId ? (
+                    <select
+                      value={docSessionId ?? ''}
+                      onChange={(e) => handleSetSession(e.target.value)}
+                      disabled={savingSession}
+                      className="mc-input w-full !text-sm"
+                    >
+                      <option value="">Keine Sitzung</option>
+                      {/* linkedSession kann außerhalb der eigenen Gremien-Auswahl liegen (z. B. per MCP-Tool
+                          gesetzt) - ohne diesen Zusatz würde der <select> dann klanglos auf "Keine Sitzung"
+                          zurückfallen, obwohl tatsächlich eine Verknüpfung besteht. */}
+                      {linkedSession && !ownSessions.some((s) => s.id === linkedSession.id) && (
+                        <option value={linkedSession.id}>
+                          {linkedSession.titel} ({formatDate(linkedSession.datum)})
+                        </option>
+                      )}
+                      {ownSessions.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.titel} ({formatDate(s.datum)})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      {linkedSession ? `${linkedSession.titel} (${formatDate(linkedSession.datum)})` : 'Keine verknüpfte Sitzung.'}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">ToDos</h3>
+                  <ul className="mb-1.5 space-y-1">
+                    {linkedTodos.map((t) => (
+                      <li
+                        key={t.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5"
+                      >
+                        <span className="truncate text-xs font-medium text-slate-800">{t.titel}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleUnlinkTodo(t.id)}
+                          className="mc-btn-ghost !shrink-0 !px-2 !py-0.5 !text-[11px]"
+                        >
+                          Lösen
+                        </button>
+                      </li>
+                    ))}
+                    {linkedTodos.length === 0 && <li className="text-xs text-slate-400">Keine verknüpften ToDos.</li>}
+                  </ul>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="ToDo suchen und verknüpfen..."
+                      value={todoSearch}
+                      onChange={(e) => handleSearchTodos(e.target.value)}
+                      onFocus={() => setTodoDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setTodoDropdownOpen(false), 150)}
+                      className="mc-input w-full !text-sm"
+                    />
+                    {todoDropdownOpen && todoSearch.trim() && (
+                      <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                        {todoSearchResults.map((t) => (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              onMouseDown={() => handleLinkTodo(t.id)}
+                              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                            >
+                              {t.titel}
+                            </button>
+                          </li>
+                        ))}
+                        {todoSearchResults.length === 0 && (
+                          <li className="px-3 py-1.5 text-sm text-slate-400">Keine Treffer.</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                  {linkTodoError && <p className="mt-1 text-xs text-red-600">{linkTodoError}</p>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+            <div className="min-h-0 max-h-[46vh] border-b border-slate-200 md:max-h-none md:border-b-0 md:border-r">
+              <VorlageAnsicht inhalt={document.inhalt} />
+            </div>
+            <div className="min-h-0 overflow-y-auto bg-slate-50/60 p-5">{notizenSpalte}</div>
+          </div>
+        </div>
+      </div>
       {loeschDialog}
       {previewDoc && (
         <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} bucket="dokumente" onClose={() => setPreviewDoc(null)} />

@@ -459,6 +459,55 @@ export async function updateDocumentTitel(supabase: SupabaseClient, userId: stri
   return toolTextResult(`Titel von "${alterTitel}" wurde zu "${titel}" geändert.`)
 }
 
+/**
+ * Setzt den Markdown-/Textinhalt eines eigenen Dokuments nachträglich - gedacht
+ * für den Nachlauf von dailyallris, das bereits hochgeladene Vorlagen später
+ * noch mit ihrer Markdown-Fassung versorgt.
+ *
+ * `modus: "anhaengen"` existiert wegen der Transportgrenze: ein einzelner
+ * MCP-Aufruf wird ab etwa 13 KB Nutzlast unzuverlässig (gleiche Erfahrung wie
+ * bei create_document mit datei_base64, siehe uploads.ts). Längere Vorlagen -
+ * im Bestand bis über 30.000 Zeichen - werden deshalb in Stücken übertragen:
+ * einmal "ersetzen", danach beliebig oft "anhaengen".
+ */
+export async function updateDocumentInhalt(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
+  if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
+  if (typeof args.inhalt !== 'string') {
+    return toolTextResult('Fehler: inhalt ist erforderlich (leerer String löscht den Inhalt).', true)
+  }
+  const modus = args.modus === 'anhaengen' ? 'anhaengen' : 'ersetzen'
+
+  const { data: dok } = await supabase
+    .from('dokumente')
+    .select('id, user_id, titel, inhalt')
+    .eq('id', dokumentId)
+    .maybeSingle()
+  if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+  if (dok.user_id !== userId) {
+    return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf dessen Inhalt ändern.', true)
+  }
+
+  // Beim Anhängen an ein leeres Dokument nicht "null" voranstellen.
+  const bisher = typeof dok.inhalt === 'string' ? dok.inhalt : ''
+  const neu = modus === 'anhaengen' ? bisher + args.inhalt : args.inhalt
+  const wert = neu.length > 0 ? neu : null
+
+  const { error } = await supabase.from('dokumente').update({ inhalt: wert }).eq('id', dokumentId)
+  if (error) return toolTextResult(`Fehler beim Aktualisieren des Inhalts: ${error.message}`, true)
+
+  if (modus === 'anhaengen') {
+    return toolTextResult(
+      `An "${dok.titel}" wurden ${args.inhalt.length} Zeichen angehängt (jetzt ${neu.length} Zeichen).`,
+    )
+  }
+  return toolTextResult(
+    wert === null
+      ? `Inhalt von "${dok.titel}" wurde geleert.`
+      : `Inhalt von "${dok.titel}" wurde ersetzt (${neu.length} Zeichen, vorher ${bisher.length}).`,
+  )
+}
+
 export async function updateDocumentSession(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
   if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)

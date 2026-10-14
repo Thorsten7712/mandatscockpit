@@ -2064,3 +2064,68 @@ keine Löschfunktion, und die Dialog-Texte („Für alle löschen") würden dort
 Verifiziert per `tsc -b`, `vite build` und einem Harness, der alle drei Ausprägungen des Dialogs
 rendert (schlicht, schlicht mit Hinweis, geteilt) – inklusive der Prüfung, dass der Knopf ohne
 gesetzte Checkbox deaktiviert bleibt.
+
+### Leseansicht für Markdown-Vorlagen + update_document_inhalt (2026-10-14)
+
+dailyallris wandelt die ALLRIS-Vorlagen jetzt in Markdown um und legt sie in `dokumente.inhalt`.
+Das Modal im Dokumenten-Hub wurde darauf umgebaut (Variante A aus dem vorab gebauten Mockup), und
+der MCP-Server bekam das fehlende Gegenstück zum Nachrüsten des Altbestands.
+
+**Warum nicht `DetailModalShell`:** Die bisherige Hülle hat links die Metadaten und rechts die
+Aktivität. Für ein Dokument, das man am Stück liest, ist das die falsche Aufteilung – die
+Metadaten belegen dauerhaft die halbe Breite. Neues Layout in `DokumentDetailModal.tsx`:
+Metadatenband über die volle Breite, darunter links die Leseansicht, rechts die Notizen.
+`DetailModalShell` bleibt für ToDo- und Antrags-Modal unverändert; extrahiert wird erst, wenn ein
+zweiter Aufrufer dieses Layout braucht.
+
+Tags, Sitzung und ToDo-Verknüpfungen stehen im Band nur als Chips; die Eingabefelder klappen über
+einen „Verknüpfungen"-Schalter darunter auf. Sonst nimmt die Verwaltung des Dokuments den Platz
+weg, den das Lesen braucht.
+
+**`src/lib/vorlageMarkdown.ts`** (reine Funktionen, ohne React, damit prüfbar) bereitet die
+Vorlagen auf:
+
+- Die Kopfdaten-Aufzählung (Drucksache, Datum, Federführung, ALLRIS-Link) entfällt – dieselben
+  Angaben stehen besser im Metadatenband.
+- Der **Beschlussvorschlag** wird herausgelöst und als eigener Kasten über den Text gesetzt. Er ist
+  der Satz, über den abgestimmt wird, und im Original steht er zwischen zwei Formularblöcken
+  begraben: 200 von 8.841 Zeichen in der Beispielvorlage.
+- `remark-gfm` neu als Abhängigkeit, sonst rendert die Beratungsfolge-Tabelle nicht.
+
+**Der Fund, der die meiste Arbeit gemacht hat.** Formularblöcke („Finanzielle Auswirkungen",
+„Prüfung von Beteiligungsrechten") und Blocksatz-Fließtext erzeugen beim PDF-Auszug beide
+Mehrfach-Leerzeichen, brauchen aber das genaue Gegenteil: beim Formular trägt die Spaltenausrichtung
+Bedeutung, beim Fließtext ist sie Müll. Die erste Fassung trennte bei 3 Leerzeichen – und rendert
+damit den halben Sachverhalt als graues Monospace-Formular. Im Browser sofort sichtbar.
+
+Nachgemessen an DS11/1113, je Abschnitt: Formularblöcke haben Leerzeichen-Läufe von 6 bis 49
+(Median 11–19), der Sachverhalt nie mehr als 5 (Median 3). Dazwischen liegt die Grenze mit
+sauberem Abstand, deshalb `FORMULAR_LUECKE = 6`.
+
+Zusätzlich glättet `prosaGlaetten()` die Blocksatz-Reste: Mehrfach-Leerzeichen innerhalb eines
+Satzes und Absätze, die mitten im Satz umbrechen (33 % der Zeilen, 18 von 32 Absätzen). Tabellen,
+Überschriften und Formularblöcke bleiben unangetastet; Listen behalten ihre Zeilenstruktur, werden
+aber innerhalb der Zeile geglättet. **Das ist eine Notmaßnahme der Anzeige** – dauerhaft gehört die
+Normalisierung in die Extraktion, weil nur dort auch die Volltextsuche davon profitiert. Sie wurde
+trotzdem eingebaut, weil der Bestand die Artefakte heute enthält und das Modal nicht davon abhängen
+darf, dass die Pipeline sauber liefert.
+
+**Bilder** werden in `VorlageAnsicht.tsx` bewusst nicht geladen, sondern als Link dargestellt: der
+Storage-Bucket ist privat und die Lese-Policy hängt an `dokumente.datei_url`, ein eingebettetes Bild
+wäre also ohnehin nur für den Hochladenden sichtbar. Fremde URLs zu laden würde zudem IP und
+Zeitpunkt jedes lesenden Mitglieds an einen fremden Server melden – bei Mandatsträgern keine
+theoretische Sorge. Der Vollausbau (Jointabelle `dokument_anhaenge` + erweiterte Storage-Policy)
+steht als Punkt 5 in der Roadmap.
+
+**Neues MCP-Tool `update_document_inhalt(dokument_id, inhalt, modus?)`** – setzt den Text eines
+eigenen Dokuments nachträglich, damit dailyallris die 228 bereits hochgeladenen Vorlagen mit ihrer
+Markdown-Fassung versorgen kann. Bis dahin gab es Tools für Titel, Tags, Sitzung, Freigabe und
+Archiv, aber keines für den Inhalt. `modus="anhaengen"` existiert wegen der Transportgrenze: ein
+einzelner MCP-Aufruf wird ab etwa 13 KB unzuverlässig (gleiche Erfahrung wie bei `create_document`
+mit `datei_base64`), die längste Vorlage im Bestand hat über 32.000 Zeichen. Damit 31 Tools.
+
+**Verifiziert:** `vorlageAufbereiten()` gegen das echte Dokument aus der Live-DB (Beschlussvorschlag
+gefunden, Kopfdaten entfernt, Tabelle erhalten, 6 Formularblöcke geschützt, 0 Mehrfach-Leerzeichen
+im Sachverhalt, Randfälle leer/null/ohne Abschnitte), `deno check`, `tsc -b`, `vite build` sowie ein
+Harness-Durchgang mit genau diesem Dokument – Sprungleiste, Verknüpfungs-Streifen, Tabelle,
+Formularblock und die schmale Ansicht (375 px, kein Querscrollen).

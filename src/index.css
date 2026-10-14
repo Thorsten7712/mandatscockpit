@@ -83,6 +83,79 @@
   /* Minimales Markdown-Styling für die Presseschau (PresseschauSection.tsx) -
    * kein @tailwindcss/typography, da nur eine Handvoll Elemente vorkommen
    * (Überschriften, Absätze, Listen, Fett/Kursiv, Trennlinie). */
+  /* Markdown-Darstellung der ALLRIS-Vorlagen im Dokumenten-Hub. Bewusst eigenes
+   * Register statt mc-presseschau-content: die Presseschau ist Serif und
+   * zweispaltig wie eine Zeitung, eine Sitzungsvorlage wird am Stück gelesen
+   * und enthält Tabellen und Formularblöcke. */
+  .mc-dokument-content {
+    @apply text-[15px] leading-relaxed text-slate-700;
+  }
+
+  .mc-dokument-content h2 {
+    @apply mb-2 mt-7 border-b border-slate-200 pb-1.5 text-xs font-bold uppercase tracking-wide text-slate-900;
+  }
+
+  .mc-dokument-content h2:first-child {
+    @apply mt-0;
+  }
+
+  .mc-dokument-content h3 {
+    @apply mb-1.5 mt-5 text-sm font-semibold text-slate-900;
+  }
+
+  .mc-dokument-content p {
+    @apply mb-3;
+  }
+
+  .mc-dokument-content ul {
+    @apply mb-3 list-disc pl-5;
+  }
+
+  .mc-dokument-content ol {
+    @apply mb-3 list-decimal pl-5;
+  }
+
+  .mc-dokument-content li {
+    @apply mb-1;
+  }
+
+  .mc-dokument-content strong {
+    @apply font-semibold text-slate-900;
+  }
+
+  .mc-dokument-content a {
+    @apply text-primary underline underline-offset-2;
+  }
+
+  .mc-dokument-content table {
+    @apply w-full border-collapse text-[13px];
+  }
+
+  .mc-dokument-content th,
+  .mc-dokument-content td {
+    @apply border border-slate-200 px-2.5 py-1.5 text-left align-top;
+  }
+
+  .mc-dokument-content th {
+    @apply bg-slate-50 font-semibold text-slate-900;
+  }
+
+  /* Beim PDF-Auszug zerfallene Formularblöcke ("Finanzielle Auswirkungen",
+   * "Prüfung von Beteiligungsrechten"): Spaltenausrichtung bleibt erhalten,
+   * optisch zurückgenommen, damit sie als Rohausgabe erkennbar sind statt nach
+   * kaputtem Fließtext auszusehen. */
+  .mc-dokument-content pre {
+    @apply mb-3 overflow-x-auto whitespace-pre-wrap rounded-lg border border-slate-100 border-l-[3px] border-l-slate-300 bg-slate-50 px-3 py-2 font-mono text-[11px] leading-snug text-slate-500;
+  }
+
+  .mc-dokument-content code {
+    @apply font-mono text-[13px];
+  }
+
+  .mc-tabellenrahmen {
+    @apply mb-3 overflow-x-auto;
+  }
+
   .mc-presseschau-content :where(h1, h2, h3) {
     @apply mb-2 mt-4 break-inside-avoid font-serif font-bold text-slate-900 first:mt-0;
   }

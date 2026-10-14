@@ -79,6 +79,13 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   Dokuments, `user_gremien`). **Löschen nur im Detail-Modal**, nicht aus der Liste heraus: bei einem
   geteilten Dokument verlangt der Dialog eine ausdrückliche Bestätigung per Checkbox, weil es für
   alle verschwindet und `parent_id` (ON DELETE CASCADE) auch fremde Notizen mitnimmt.
+  **Leseansicht (Variante A):** Seit der Markdown-Umstellung von dailyallris liegt der Text der
+  ALLRIS-Vorlagen in `dokumente.inhalt`. `DokumentDetailModal.tsx` nutzt deshalb **nicht** mehr
+  `DetailModalShell`, sondern ein eigenes Layout: Metadatenband über die volle Breite (Titel,
+  Ebene, Tags, Sitzungs- und ToDo-Chips, Aktionen), darunter links das gerenderte Dokument
+  (`VorlageAnsicht.tsx`) und rechts die Notizen. Tags/Sitzung/ToDos werden im Band nur angezeigt;
+  die Eingabefelder klappen über „Verknüpfungen" darunter auf. Markdown-Aufbereitung in
+  `src/lib/vorlageMarkdown.ts`, Prosa-Styles als `mc-dokument-content` in `index.css`.
 - **Zahlen & Fakten** (`/fakten`, eigener Reiter in der Kopfleiste): Argumentationshilfen,
   Sprachregelungen und belegte Kennzahlen als eigene Tabelle `fakten` (`0039_fakten.sql`) – bewusst
   **nicht** als Tag-Sicht auf `dokumente`, Begründung im Migrationskopf. Drei Kategorien-Reiter,
@@ -96,11 +103,13 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 30 Tools über
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 31 Tools über
   ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
   README.md Abschnitt 9 und `docs/CHANGELOG.md`). `list_documents` kennt das Dokumenten-Archiv
   (Parameter `archiv`, Standard „ohne" wie in der Web-UI), `update_document_archiv` legt ein
-  Dokument von Hand hinein bzw. holt es zurück. Die Archiv-Regel ist in `tools/dokumente.ts`
+  Dokument von Hand hinein bzw. holt es zurück. `update_document_inhalt` setzt den Markdown-Text
+  nachträglich (für dailyallris, das bereits hochgeladene Vorlagen nachrüstet) – mit
+  `modus="anhaengen"` auch stückweise, weil ein einzelner MCP-Aufruf ab ca. 13 KB unzuverlässig wird. Die Archiv-Regel ist in `tools/dokumente.ts`
   bewusst gespiegelt statt geteilt (kein gemeinsames Build-Tooling zwischen Deno und Frontend).
 - **GitHub-Actions-Workflows**: Deploy nach GitHub Pages (inkl. `404.html`-Kopie fürs SPA-Routing),
   Supabase-Keep-Alive, täglicher ICS-Import (`import-ics.yml`, 04:00 UTC), Edge-Function-Deploy
@@ -166,6 +175,12 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   clientseitig in `loadCandidates()`.
 - **Detail-Modals**: gemeinsame Hülle `src/components/DetailModalShell.tsx` (2-Spalten-Layout,
   `headerActions`-Slot) – für neue Entity-Detail-Modals wiederverwenden statt eigenes Chrome zu bauen.
+- **Formularblöcke vs. Blocksatz unterscheiden sich an der Lückenbreite**: Beim PDF-Auszug der
+  ALLRIS-Vorlagen erzeugen beide Mehrfach-Leerzeichen, brauchen aber das Gegenteil voneinander –
+  beim Formular trägt die Spaltenausrichtung Bedeutung, beim Fließtext ist sie Müll. Gemessen an
+  DS11/1113: Formularblöcke haben Leerzeichen-Läufe von 6 bis 49, Blocksatz-Fließtext nie mehr
+  als 5. `FORMULAR_LUECKE = 6` in `src/lib/vorlageMarkdown.ts` trennt daran. Eine frühere Schwelle
+  von 3 hat den halben Sachverhalt fälschlich als Formular gerendert.
 - **Löschen läuft überall über `src/components/LoeschDialog.tsx`** – kein `window.confirm` und kein
   eigenes Inline-„Sicher?" mehr. Der Hook `useLoeschDialog()` liefert `fragen({...})` für den Knopf
   und `dialog` fürs JSX; eine Komponente mit mehreren Löschzielen braucht dadurch nur eine Instanz.
@@ -208,7 +223,13 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
    0033_dokumente.sql), der geteilte/persönliche, selbst hochgeladene Dokumente verwaltet und davon
    unabhängig ist.
 4. **iCal-Export** des zusammengeführten persönlichen Kalenders.
-5. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
+5. **Bilder in Vorlagen**: Markdown kann Bilder referenzieren, aber der Storage-Bucket ist privat
+   und die Lese-Policy hängt an `dokumente.datei_url` – ein eingebettetes Bild wäre nur für den
+   Hochladenden sichtbar. Nötig wären eine Jointabelle `dokument_anhaenge` plus ein zweiter
+   `exists`-Zweig in `dokumente_storage_select_own_or_shared`. `VorlageAnsicht.tsx` rendert
+   Bild-Referenzen bis dahin als Link und lädt bewusst keine fremden URLs (die würden IP und
+   Zeitpunkt jedes lesenden Mitglieds an einen fremden Server melden).
+6. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
    `list_fakten`/`create_fakt` nach dem Muster von `tools/dokumente.ts` wäre additiv – dabei die
    Sichtbarkeitsprüfung wie dort explizit im Tool-Code nachbauen, der MCP-Server umgeht RLS.
 

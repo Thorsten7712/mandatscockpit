@@ -552,6 +552,27 @@ export const TOOLS = [
     },
   },
   {
+    name: 'update_document_inhalt',
+    description:
+      'Setzt den Text-/Markdown-Inhalt eines eigenen Dokuments im Dokumenten-Hub nachträglich - gedacht, um bereits hochgeladene Vorlagen später mit ihrer Markdown-Fassung zu versorgen. Nur der/die Ersteller*in darf das. Lange Inhalte in Stücken übertragen: einmal mit modus="ersetzen" beginnen, danach beliebig oft modus="anhaengen" - ein einzelner MCP-Aufruf wird ab etwa 13 KB Nutzlast unzuverlässig.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments (z. B. aus list_documents).' },
+        inhalt: {
+          type: 'string',
+          description: 'Der Text bzw. das Markdown. Bei modus="ersetzen" leert ein leerer String den Inhalt.',
+        },
+        modus: {
+          type: 'string',
+          enum: ['ersetzen', 'anhaengen'],
+          description: 'Standard "ersetzen". "anhaengen" hängt an den bestehenden Inhalt an, für stückweise Übertragung langer Vorlagen.',
+        },
+      },
+      required: ['dokument_id', 'inhalt'],
+    },
+  },
+  {
     name: 'update_document_session',
     description:
       'Verknüpft ein eigenes Dokument/eine eigene Notiz im Dokumenten-Hub nachträglich mit einer Sitzung, ändert eine bestehende Verknüpfung, oder entfernt sie - nur der/die Ersteller*in darf das.',
