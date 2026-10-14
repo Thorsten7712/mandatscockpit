@@ -2129,3 +2129,39 @@ gefunden, Kopfdaten entfernt, Tabelle erhalten, 6 Formularblöcke geschützt, 0 
 im Sachverhalt, Randfälle leer/null/ohne Abschnitte), `deno check`, `tsc -b`, `vite build` sowie ein
 Harness-Durchgang mit genau diesem Dokument – Sprungleiste, Verknüpfungs-Streifen, Tabelle,
 Formularblock und die schmale Ansicht (375 px, kein Querscrollen).
+
+### Nachbesserung: Listenvorschau statt Volltext (2026-10-14)
+
+Nutzermeldung mit Screenshot: Nach dem Hochladen der Markdown-Fassungen sprengte jede Zeile der
+Dokumentenliste die Seite - die Liste zeigte den kompletten Vorlagentext roh an.
+
+Root Cause: `Dokumente.tsx` rendert seit jeher `{d.inhalt && <p className="whitespace-pre-wrap">}`.
+Das war richtig, solange `inhalt` eine kurze handgeschriebene Notiz war; mit 9.000 Zeichen Markdown
+pro Vorlage ist es unbrauchbar. Beim Umbau des Modals übersehen - die Leseansicht war getestet, die
+Listenansicht nicht.
+
+Neu `vorschau()` in `src/lib/vorlageMarkdown.ts`, gestaffelt, weil nicht jede Vorlage gleich
+aufgebaut ist:
+
+1. **Beschlussvorschlag**, wenn vorhanden - bei einer Verwaltungsvorlage die Aussage, die beim
+   Überfliegen zählt.
+2. sonst der erste richtige Absatz aus dem **Sachverhalt** - Fraktionsanträge haben keinen
+   Beschlussvorschlag.
+3. sonst der erste Absatz überhaupt.
+
+Mit Mindestlänge 60 Zeichen, sonst gewinnen Formularreste. Genau das passierte beim ersten Versuch:
+DS11/1108 zeigte „Gesehen Bm:" als Vorschau, weil das nach der Beratungsfolge-Tabelle der erste
+Absatz ist und mit 11 Zeichen keine Formular-Heuristik auslöst. An allen acht Dokumenten mit Inhalt
+aus der Live-DB geprüft, danach liefern alle eine brauchbare Zeile.
+
+Die Vorschau bleibt reiner Text ohne Markdown-Auszeichnung und wird auf zwei Zeilen begrenzt
+(`line-clamp-2`); gerendertes Markdown gehört ins Detail-Modal. Listenzeilen sind damit wieder
+gleichmäßig 108-133 px statt seitenfüllend.
+
+**Nebenbefund, nicht behoben:** Die Tag-Filterleiste zählt inzwischen 44 verschiedene Tags, davon
+108 Vorkommen mit „Fraktion" im Namen - inklusive Dubletten, die sich nur in Schreibweise
+unterscheiden („AfD Fraktion" / „AfD-Fraktion", „Fraktion Die Linke" / „Fraktion DIE LINKE",
+„CDU-Fraktion" / „CDU-Fraktion und SPD-Fraktion"). Nach Normalisierung blieben 42. Die Filterleiste
+ist dadurch höher als der erste Listeneintrag. Das ist ein Datenproblem aus der Tag-Vergabe in
+dailyallris, kein Anzeigefehler - aber die Leiste sollte damit umgehen können (Begrenzung auf die
+häufigsten Tags plus Aufklappen).

@@ -10,6 +10,7 @@ import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { TagEditor } from '../components/TagEditor'
 import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
 import { archivGrund, ladeSessionInfos, type SessionInfo } from '../lib/dokumenteArchiv'
+import { vorschau } from '../lib/vorlageMarkdown'
 
 // Vorschläge, keine feste Liste - Nutzer können jederzeit eigene Tags
 // eintragen (siehe Eingabefeld im Formular unten).
@@ -574,7 +575,9 @@ export default function Dokumente() {
                     {formatDate(d.erstellt_am)}
                     {d.datei_url && ` · 📎 ${fileNameFromPath(d.datei_url)}`}
                   </p>
-                  {d.inhalt && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{d.inhalt}</p>}
+                  {vorschau(d.inhalt) && (
+                    <p className="mt-1 line-clamp-2 text-sm text-slate-600">{vorschau(d.inhalt)}</p>
+                  )}
                 </div>
               </div>
             </li>

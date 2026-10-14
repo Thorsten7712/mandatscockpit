@@ -171,3 +171,54 @@ export function vorlageAufbereiten(markdown: string | null): AufbereiteteVorlage
 export function istStrukturiert(markdown: string | null): boolean {
   return Boolean(markdown && /^##\s+/m.test(markdown))
 }
+
+/** Entfernt Markdown-Auszeichnung für eine einzeilige Vorschau. */
+function auszeichnungEntfernen(text: string): string {
+  return text
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`>#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Kurzfassung für die Listenansicht (Dokumente.tsx). Bevorzugt den
+ * Beschlussvorschlag - das ist bei einer Vorlage die Aussage, die beim
+ * Überfliegen zählt -, sonst den ersten echten Absatz.
+ *
+ * Nötig, seit dailyallris den vollen Vorlagentext in `inhalt` schreibt: die
+ * Liste hat das Feld vorher ungekürzt angezeigt, was bei 9.000 Zeichen pro
+ * Dokument die ganze Seite sprengt. Die Vorschau bleibt bewusst reiner Text,
+ * das gerenderte Markdown gehört ins Detail-Modal.
+ */
+export function vorschau(markdown: string | null, maxZeichen = 220): string | null {
+  if (!markdown || !markdown.trim()) return null
+  const { koerper, beschlussvorschlag } = vorlageAufbereiten(markdown)
+
+  // Gestaffelt, weil nicht jede Vorlage einen Beschlussvorschlag hat (Anträge
+  // der Fraktionen zum Beispiel nicht): dann ist der Sachverhalt die Substanz.
+  // Die Längenschwelle hält Formularreste wie "Gesehen Bm:" oder
+  // "Mitzeichnungen:" aus der Vorschau, die sonst als erster Absatz durchgehen.
+  const MINDESTLAENGE = 60
+  const erstenAbsatzNehmen = (text: string, mindestens: number) =>
+    text
+      .split(/\n{2,}/)
+      .map((b) => b.trim())
+      .find((b) => b.length >= mindestens && !b.startsWith('#') && !b.startsWith('```') && !b.includes('|'))
+
+  const quelle =
+    beschlussvorschlag ||
+    erstenAbsatzNehmen(abschnittHerausloesen(koerper, 'Sachverhalt').inhalt ?? '', MINDESTLAENGE) ||
+    erstenAbsatzNehmen(koerper, MINDESTLAENGE) ||
+    erstenAbsatzNehmen(koerper, 1) ||
+    ''
+
+  const text = auszeichnungEntfernen(quelle)
+  if (!text) return null
+  if (text.length <= maxZeichen) return text
+  // An der Wortgrenze kürzen, damit kein halbes Wort stehen bleibt.
+  const gekuerzt = text.slice(0, maxZeichen)
+  const letzteLuecke = gekuerzt.lastIndexOf(' ')
+  return `${(letzteLuecke > maxZeichen * 0.6 ? gekuerzt.slice(0, letzteLuecke) : gekuerzt).trimEnd()}…`
+}
