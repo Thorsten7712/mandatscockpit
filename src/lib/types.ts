@@ -53,8 +53,6 @@ export interface DokumentRow {
   user_id: string
   /** null = Top-Level-Dokument (z. B. Sitzungsvorlage), gesetzt = angehängte Notiz/Analyse (siehe DokumentDetailModal.tsx) */
   parent_id: string | null
-  /** Optionale Verknüpfung mit einer Sitzung (0033_dokumente.sql -> 0036_dokumente_session.sql) */
-  session_id: string | null
   titel: string
   sichtbarkeit: DokumentSichtbarkeit
   /** nur bei sichtbarkeit='geteilt' gesetzt (bei Kindern vom Elternteil übernommen) */
@@ -115,6 +113,16 @@ export interface FaktRow {
   gliederung: string | null
   erstellt_am: string
   geaendert_am: string
+}
+
+/** n:m-Verknüpfung zwischen Sitzungen und Dokumenten (0042_sitzung_dokumente.sql).
+ * Ersetzt die frühere Spalte dokumente.session_id: eine Vorlage durchläuft
+ * typischerweise mehrere Gremien (Fachausschuss, dann Rat). */
+export interface SitzungDokument {
+  id: string
+  session_id: string
+  dokument_id: string
+  erstellt_am: string
 }
 
 export interface CalendarSource {

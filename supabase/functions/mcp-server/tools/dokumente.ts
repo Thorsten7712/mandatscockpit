@@ -44,17 +44,47 @@ function startOfTodayIso(): string {
  *  gefundene Sitzung archiviert nicht - lieber ein Dokument zu viel in der
  *  Arbeitsliste als eines, das unauffindbar wird. */
 function archivGrund(
-  dokument: { session_id: string | null; archiviert_am: string | null },
-  sessionDatumById: Map<string, string>,
+  dokument: { id: string; archiviert_am: string | null },
+  datenJeDokument: Map<string, string[]>,
   stichtagIso: string,
 ): 'manuell' | 'sitzung' | null {
   if (dokument.archiviert_am) return 'manuell'
-  if (!dokument.session_id) return null
-  const datum = sessionDatumById.get(dokument.session_id)
-  if (!datum) return null
-  // Numerisch statt lexikografisch: PostgREST liefert timestamptz als
-  // "...+00:00", startOfTodayIso() erzeugt "...Z".
-  return Date.parse(datum) < Date.parse(stichtagIso) ? 'sitzung' : null
+  const daten = datenJeDokument.get(dokument.id) ?? []
+  if (daten.length === 0) return null
+  // Maßgeblich ist die LETZTE Sitzung: eine Vorlage läuft meist erst durch den
+  // Fachausschuss und danach durch den Rat. Würde schon die erste vergangene
+  // Sitzung archivieren, verschwände sie, während der Rat noch entscheidet.
+  // Numerisch statt lexikografisch (PostgREST liefert "...+00:00").
+  const letzte = Math.max(...daten.map((d) => Date.parse(d)))
+  return letzte < Date.parse(stichtagIso) ? 'sitzung' : null
+}
+
+/** Lädt zu Dokument-Ids alle verknüpften Sitzungen (0042_sitzung_dokumente.sql). */
+async function ladeSitzungen(
+  supabase: SupabaseClient,
+  dokumentIds: string[],
+): Promise<{ titelJeDokument: Map<string, string[]>; datenJeDokument: Map<string, string[]> }> {
+  const titelJeDokument = new Map<string, string[]>()
+  const datenJeDokument = new Map<string, string[]>()
+  if (dokumentIds.length === 0) return { titelJeDokument, datenJeDokument }
+
+  const { data: links } = await supabase
+    .from('sitzung_dokumente')
+    .select('dokument_id, session_id')
+    .in('dokument_id', dokumentIds)
+  const paare = (links ?? []) as { dokument_id: string; session_id: string }[]
+  const sessionIds = Array.from(new Set(paare.map((l) => l.session_id)))
+  if (sessionIds.length === 0) return { titelJeDokument, datenJeDokument }
+
+  const { data: sessionRows } = await supabase.from('sessions').select('id, titel, datum').in('id', sessionIds)
+  const byId = new Map((sessionRows ?? []).map((si) => [si.id as string, si as { titel: string; datum: string }]))
+  for (const l of paare) {
+    const si = byId.get(l.session_id)
+    if (!si) continue
+    titelJeDokument.set(l.dokument_id, [...(titelJeDokument.get(l.dokument_id) ?? []), si.titel])
+    datenJeDokument.set(l.dokument_id, [...(datenJeDokument.get(l.dokument_id) ?? []), si.datum])
+  }
+  return { titelJeDokument, datenJeDokument }
 }
 
 interface CallerProfile {
@@ -275,10 +305,22 @@ export async function createDocument(supabase: SupabaseClient, userId: string, a
 
   const { data: dokument, error } = await supabase
     .from('dokumente')
-    .insert({ user_id: userId, parent_id: parentId, session_id: sessionId, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url: dateiUrl })
+    .insert({ user_id: userId, parent_id: parentId, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url: dateiUrl })
     .select('id')
     .single()
   if (error || !dokument) return toolTextResult(`Fehler beim Anlegen des Dokuments: ${error?.message}`, true)
+
+  // session_id ist seit 0042_sitzung_dokumente.sql keine Spalte mehr, sondern
+  // eine Verknüpfungszeile - der Parameter bleibt erhalten, damit bestehende
+  // Aufrufer weiter funktionieren.
+  if (sessionId) {
+    const { error: linkError } = await supabase
+      .from('sitzung_dokumente')
+      .upsert({ dokument_id: dokument.id, session_id: sessionId }, { onConflict: 'session_id,dokument_id', ignoreDuplicates: true })
+    if (linkError) {
+      return toolTextResult(`Dokument wurde angelegt, aber die Sitzungs-Verknüpfung schlug fehl: ${linkError.message}`, true)
+    }
+  }
 
   if (teilenMitUserIds.length > 0) {
     const { error: shareError } = await supabase
@@ -301,7 +343,6 @@ export async function createDocument(supabase: SupabaseClient, userId: string, a
 interface DokumentListRow {
   id: string
   parent_id: string | null
-  session_id: string | null
   titel: string
   sichtbarkeit: string
   ebene: string | null
@@ -340,7 +381,7 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   if (!caller) return toolTextResult('Fehler: eigenes Profil konnte nicht geladen werden.', true)
 
   const cols =
-    'id, parent_id, session_id, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url, archiviert_am, erstellt_am, user_id'
+    'id, parent_id, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url, archiviert_am, erstellt_am, user_id'
   let baseQuery = supabase.from('dokumente').select(cols)
   baseQuery = parentIdFilter ? baseQuery.eq('parent_id', parentIdFilter) : baseQuery.is('parent_id', null)
   if (titelFilter) baseQuery = baseQuery.ilike('titel', ilikeMuster(titelFilter))
@@ -388,24 +429,21 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   if (sichtbarkeitFilter !== 'alle') rows = rows.filter((d) => d.sichtbarkeit === sichtbarkeitFilter)
   if (ebeneFilter) rows = rows.filter((d) => d.ebene === ebeneFilter)
   if (tag) rows = rows.filter((d) => d.tags.some((t) => t.toLowerCase().includes(tag)))
-  if (sessionIdFilter) rows = rows.filter((d) => d.session_id === sessionIdFilter)
+  // Sitzungen VOR dem Archiv- und Sitzungsfilter laden: deren Datum entscheidet
+  // mit darüber, welche Zeilen übrig bleiben (das Limit greift erst danach).
+  const { titelJeDokument, datenJeDokument } = await ladeSitzungen(supabase, rows.map((d) => d.id))
 
-  // Sitzungen VOR dem Archiv-Filter laden: deren Datum entscheidet mit
-  // darüber, welche Zeilen überhaupt übrig bleiben (das Limit greift erst
-  // danach). Titel derselben Abfrage werden unten für die Ausgabe genutzt.
-  const sessionIds = Array.from(new Set(rows.map((d) => d.session_id).filter((v): v is string => Boolean(v))))
-  const sessionTitelById = new Map<string, string>()
-  const sessionDatumById = new Map<string, string>()
-  if (sessionIds.length > 0) {
-    const { data: sessionRows } = await supabase.from('sessions').select('id, titel, datum').in('id', sessionIds)
-    for (const sitzung of sessionRows ?? []) {
-      sessionTitelById.set(sitzung.id as string, sitzung.titel as string)
-      sessionDatumById.set(sitzung.id as string, sitzung.datum as string)
-    }
+  if (sessionIdFilter) {
+    const { data: gefiltert } = await supabase
+      .from('sitzung_dokumente')
+      .select('dokument_id')
+      .eq('session_id', sessionIdFilter)
+    const erlaubt = new Set((gefiltert ?? []).map((l) => l.dokument_id as string))
+    rows = rows.filter((d) => erlaubt.has(d.id))
   }
 
   const stichtag = startOfTodayIso()
-  const archivGrundById = new Map(rows.map((d) => [d.id, archivGrund(d, sessionDatumById, stichtag)]))
+  const archivGrundById = new Map(rows.map((d) => [d.id, archivGrund(d, datenJeDokument, stichtag)]))
   if (archivFilter === 'ohne') rows = rows.filter((d) => !archivGrundById.get(d.id))
   else if (archivFilter === 'nur') rows = rows.filter((d) => archivGrundById.get(d.id))
 
@@ -457,7 +495,8 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
     if (d.user_id !== userId) teile.push(`von ${authorNameById.get(d.user_id) ?? 'unbekannt'}`)
     if (d.tags.length > 0) teile.push(`Tags: ${d.tags.join(', ')}`)
     if (d.datei_url) teile.push(`Datei: ${fileNameFromPath(d.datei_url)}`)
-    if (d.session_id) teile.push(`Sitzung: ${sessionTitelById.get(d.session_id) ?? d.session_id}`)
+    const sitzungsTitel = titelJeDokument.get(d.id) ?? []
+    if (sitzungsTitel.length > 0) teile.push(`Sitzung: ${sitzungsTitel.join(', ')}`)
     const grund = archivGrundById.get(d.id)
     if (grund) teile.push(grund === 'sitzung' ? 'ARCHIV (Sitzung vorbei)' : 'ARCHIV (von Hand)')
     const todoTitel = (todoIdsByDokument.get(d.id) ?? []).map((tid) => todoTitelById.get(tid) ?? tid)
@@ -534,40 +573,62 @@ export async function updateDocumentInhalt(supabase: SupabaseClient, userId: str
   )
 }
 
-export async function updateDocumentSession(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+/**
+ * Verknüpft ein eigenes Dokument zusätzlich mit einer Sitzung.
+ *
+ * Idempotent: Ist die Verknüpfung schon da, ist das kein Fehler, sondern eine
+ * Meldung - dailyallris ruft das bei jedem Lauf erneut auf.
+ */
+export async function linkDocumentSession(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
+  const sessionId = typeof args.session_id === 'string' ? args.session_id.trim() : ''
   if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
-  if (typeof args.session_id !== 'string') {
-    return toolTextResult('Fehler: session_id ist erforderlich (leerer String = Verknüpfung entfernen).', true)
-  }
-  const sessionId = args.session_id.trim() || null
+  if (!sessionId) return toolTextResult('Fehler: session_id ist erforderlich.', true)
 
   const { data: dok } = await supabase.from('dokumente').select('id, user_id, titel').eq('id', dokumentId).maybeSingle()
   if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
-  if (dok.user_id !== userId) return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf dessen Sitzungs-Verknüpfung ändern.', true)
-
-  let sessionTitel: string | null = null
-  if (sessionId) {
-    const { data: session } = await supabase.from('sessions').select('titel').eq('id', sessionId).maybeSingle()
-    if (!session) return toolTextResult(`Fehler: Sitzung ${sessionId} wurde nicht gefunden.`, true)
-    sessionTitel = session.titel
+  if (dok.user_id !== userId) {
+    return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf dessen Sitzungs-Verknüpfungen ändern.', true)
   }
+  const { data: session } = await supabase.from('sessions').select('titel, datum').eq('id', sessionId).maybeSingle()
+  if (!session) return toolTextResult(`Fehler: Sitzung ${sessionId} wurde nicht gefunden.`, true)
 
-  const { error } = await supabase.from('dokumente').update({ session_id: sessionId }).eq('id', dokumentId)
-  if (error) return toolTextResult(`Fehler beim Aktualisieren der Sitzungs-Verknüpfung: ${error.message}`, true)
+  const { data: vorhanden } = await supabase
+    .from('sitzung_dokumente')
+    .select('id')
+    .eq('dokument_id', dokumentId)
+    .eq('session_id', sessionId)
+    .maybeSingle()
+  if (vorhanden) return toolTextResult(`"${dok.titel}" ist mit "${session.titel}" bereits verknüpft - nichts zu tun.`)
 
+  const { error } = await supabase.from('sitzung_dokumente').insert({ dokument_id: dokumentId, session_id: sessionId })
+  if (error) return toolTextResult(`Fehler beim Verknüpfen: ${error.message}`, true)
   return toolTextResult(
-    sessionTitel
-      ? `"${dok.titel}" wurde mit Sitzung "${sessionTitel}" verknüpft.`
-      : `Sitzungs-Verknüpfung von "${dok.titel}" wurde entfernt.`,
+    `"${dok.titel}" wurde mit Sitzung "${session.titel}" (${formatDate(String(session.datum).slice(0, 10))}) verknüpft.`,
   )
 }
 
-/** Setzt/entfernt NUR die manuelle Archivierung (dokumente.archiviert_am).
- *  Die zweite Archiv-Regel - verknüpfte Sitzung ist vorbei - lässt sich nicht
- *  abschalten, weil sie in keiner Spalte steht (siehe archivGrund() oben und
- *  0038_dokumente_archiv.sql). Deshalb weist die Rückmeldung beim Zurückholen
- *  ausdrücklich darauf hin, wenn das Dokument trotzdem im Archiv bleibt. */
+export async function unlinkDocumentSession(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
+  const sessionId = typeof args.session_id === 'string' ? args.session_id.trim() : ''
+  if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
+  if (!sessionId) return toolTextResult('Fehler: session_id ist erforderlich.', true)
+
+  const { data: dok } = await supabase.from('dokumente').select('id, user_id, titel').eq('id', dokumentId).maybeSingle()
+  if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+  if (dok.user_id !== userId) {
+    return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf dessen Sitzungs-Verknüpfungen ändern.', true)
+  }
+
+  const { error } = await supabase
+    .from('sitzung_dokumente')
+    .delete()
+    .eq('dokument_id', dokumentId)
+    .eq('session_id', sessionId)
+  if (error) return toolTextResult(`Fehler beim Lösen der Verknüpfung: ${error.message}`, true)
+  return toolTextResult(`Verknüpfung von "${dok.titel}" mit dieser Sitzung wurde gelöst.`)
+}
+
 export async function updateDocumentArchiv(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const dokumentId = typeof args.dokument_id === 'string' ? args.dokument_id.trim() : ''
   if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
@@ -578,7 +639,7 @@ export async function updateDocumentArchiv(supabase: SupabaseClient, userId: str
 
   const { data: dok } = await supabase
     .from('dokumente')
-    .select('id, user_id, titel, session_id, archiviert_am')
+    .select('id, user_id, titel, archiviert_am')
     .eq('id', dokumentId)
     .maybeSingle()
   if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
@@ -594,15 +655,12 @@ export async function updateDocumentArchiv(supabase: SupabaseClient, userId: str
 
   if (archivieren) return toolTextResult(`"${dok.titel}" wurde ins Archiv gelegt.`)
 
-  const sessionDatumById = new Map<string, string>()
-  if (dok.session_id) {
-    const { data: session } = await supabase.from('sessions').select('id, datum, titel').eq('id', dok.session_id).maybeSingle()
-    if (session) sessionDatumById.set(session.id as string, session.datum as string)
-    if (archivGrund({ session_id: dok.session_id, archiviert_am: null }, sessionDatumById, startOfTodayIso())) {
-      return toolTextResult(
-        `Manuelle Archivierung von "${dok.titel}" wurde aufgehoben - das Dokument bleibt aber im Archiv, weil die verknüpfte Sitzung "${session?.titel ?? dok.session_id}" vorbei ist. Zum vollständigen Zurückholen die Sitzungs-Verknüpfung mit update_document_session lösen.`,
-      )
-    }
+  const { titelJeDokument, datenJeDokument } = await ladeSitzungen(supabase, [dokumentId])
+  if (archivGrund({ id: dokumentId, archiviert_am: null }, datenJeDokument, startOfTodayIso())) {
+    const namen = (titelJeDokument.get(dokumentId) ?? []).join(', ')
+    return toolTextResult(
+      `Manuelle Archivierung von "${dok.titel}" wurde aufgehoben - das Dokument bleibt aber im Archiv, weil die letzte verknüpfte Sitzung (${namen}) vorbei ist. Zum vollständigen Zurückholen die Verknüpfung mit unlink_document_session lösen.`,
+    )
   }
   return toolTextResult(`"${dok.titel}" wurde aus dem Archiv zurückgeholt.`)
 }

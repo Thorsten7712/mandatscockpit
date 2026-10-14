@@ -51,7 +51,8 @@ import {
   listDocuments,
   updateDocumentArchiv,
   updateDocumentInhalt,
-  updateDocumentSession,
+  linkDocumentSession,
+  unlinkDocumentSession,
   updateDocumentSharing,
   updateDocumentTags,
   updateDocumentTitel,
@@ -240,8 +241,11 @@ Deno.serve(async (req) => {
         case 'update_document_titel':
           result = await updateDocumentTitel(supabase, user.id, args)
           break
-        case 'update_document_session':
-          result = await updateDocumentSession(supabase, user.id, args)
+        case 'link_document_session':
+          result = await linkDocumentSession(supabase, user.id, args)
+          break
+        case 'unlink_document_session':
+          result = await unlinkDocumentSession(supabase, user.id, args)
           break
         case 'update_document_archiv':
           result = await updateDocumentArchiv(supabase, user.id, args)

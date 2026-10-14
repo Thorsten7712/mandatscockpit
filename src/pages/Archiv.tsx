@@ -10,7 +10,7 @@ import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { DocumentPreviewModal, fileNameFromPath } from '../components/DocumentPreviewModal'
 import { formatDate, formatDateTime, formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
 import { EBENE_COLOR, EBENE_LABEL, sourceColorById, tagColor } from '../lib/sourceColors'
-import { archivGrund, ladeSessionInfos, type SessionInfo } from '../lib/dokumenteArchiv'
+import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { ANTRAG_STATUS_ABGESCHLOSSEN, antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 
 type Tab = 'sitzungen' | 'aufgaben' | 'dokumente' | 'antraege'
@@ -56,7 +56,7 @@ export default function Archiv() {
   // selben Reiter wie die hochgeladenen summaries-Dateien, siehe
   // src/lib/dokumenteArchiv.ts für die Archiv-Regel.
   const [hubDokumente, setHubDokumente] = useState<DokumentRow[]>([])
-  const [hubSessionById, setHubSessionById] = useState<Map<string, SessionInfo>>(new Map())
+  const [hubSitzungen, setHubSitzungen] = useState<SitzungenJeDokument>(new Map())
   const [openHubDoc, setOpenHubDoc] = useState<DokumentRow | null>(null)
 
   const [entschiedeneAntraege, setEntschiedeneAntraege] = useState<AntragRow[]>([])
@@ -239,8 +239,8 @@ export default function Archiv() {
       .is('parent_id', null)
       .order('erstellt_am', { ascending: false })
     const rows = data ?? []
-    const { sessions } = await ladeSessionInfos(supabase, rows)
-    setHubSessionById(sessions)
+    const { sitzungen } = await ladeSitzungenJeDokument(supabase, rows.map((r) => r.id))
+    setHubSitzungen(sitzungen)
     setHubDokumente(rows)
   }
 
@@ -269,7 +269,7 @@ export default function Archiv() {
   // für die reinen Dateien, Detail-Modal für die Hub-Dokumente (dort hängen
   // Notizen, Tags und ToDo-Verknüpfungen dran).
   const archivierteHubDokumente = hubDokumente
-    .map((d) => ({ dokument: d, grund: archivGrund(d, hubSessionById) }))
+    .map((d) => ({ dokument: d, grund: archivGrund(d, hubSitzungen) }))
     .filter((e): e is { dokument: DokumentRow; grund: NonNullable<ReturnType<typeof archivGrund>> } => e.grund !== null)
 
   type ArchivDokument =
@@ -586,7 +586,9 @@ export default function Archiv() {
                           <span className="inline-flex shrink-0 items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-medium">
                             <Archive className="h-3 w-3" />
                             {eintrag.grund === 'sitzung'
-                              ? hubSessionById.get(eintrag.row.session_id ?? '')?.titel ?? 'Vergangene Sitzung'
+                              ? (hubSitzungen.get(eintrag.row.id) ?? [])
+                                  .map((si) => si.titel)
+                                  .join(', ') || 'Vergangene Sitzung'
                               : 'Von Hand archiviert'}
                           </span>
                           {eintrag.row.datei_url && (

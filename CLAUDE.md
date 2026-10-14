@@ -28,7 +28,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
 - **ToDo-Board:** Kanban-Stil mit frei definierbaren Spalten (`todo_columns`) statt fester Status,
   Drag & Drop via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~41 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~42 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 
@@ -64,13 +64,15 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   Punkt-Indikator (kein Umschlag-Icon). Eigener Storage-Bucket
   `dokumente`, RLS-Sichtbarkeit über `current_user_gliederung_matches()`/`dokument_ist_geteilt_mit()`
   (`supabase/migrations/0033_dokumente.sql`, `0034_dokumente_kommentare.sql`). Top-Level-Dokumente
-  lassen sich zusätzlich mit einer Sitzung (`dokumente.session_id`, 1:n, `0036_dokumente_session.sql`)
-  und mit beliebig vielen ToDo-Karten verknüpfen (n:m-Jointabelle `todo_dokumente`,
-  `0037_todo_dokumente.sql` – anders als die 1:n-`session_id`-Spalten, da eine Karte mehrere Dokumente
-  und ein Dokument mehrere Karten betreffen kann). Beide Verknüpfungen sind im Detail-Modal auf beiden
-  Seiten sichtbar/editierbar (ToDo-Karte ↔ Dokument, Sitzung ↔ Dokument) und über den MCP-Server
-  steuerbar (`update_document_session`, `link_todo_document`/`unlink_todo_document`).
-  **Archiv:** Ein Dokument gilt als archiviert, wenn entweder die verknüpfte Sitzung vorbei ist oder
+  lassen sich zusätzlich mit **mehreren Sitzungen** (n:m-Jointabelle `sitzung_dokumente`,
+  `0042_sitzung_dokumente.sql` – die frühere Spalte `dokumente.session_id` ist entfallen, weil eine
+  Vorlage typischerweise erst den Fachausschuss und dann den Rat durchläuft) und mit beliebig vielen
+  ToDo-Karten verknüpfen (`todo_dokumente`, `0037_todo_dokumente.sql`). Beide Verknüpfungen sind im
+  Detail-Modal auf beiden Seiten sichtbar/editierbar und über den MCP-Server steuerbar
+  (`link_document_session`/`unlink_document_session`, `link_todo_document`/`unlink_todo_document`).
+  **Archiv:** Ein Dokument gilt als archiviert, wenn entweder die **letzte** verknüpfte Sitzung
+  vorbei ist (nicht irgendeine – sonst verschwände eine Vorlage nach dem Fachausschuss, während der
+  Rat noch entscheidet) oder
   `dokumente.archiviert_am` gesetzt wurde (`0038_dokumente_archiv.sql`, Regel in
   `src/lib/dokumenteArchiv.ts`). Archiviertes ist in der Liste ausgeblendet (Chip „Archiv (n)" blendet
   es ein), wird von der Suche aber **immer** mitdurchsucht. Es erscheint zusätzlich im „Dokumente"-
@@ -108,7 +110,7 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 32 Tools über
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 33 Tools über
   ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
   README.md Abschnitt 9 und `docs/CHANGELOG.md`). `list_documents` kennt das Dokumenten-Archiv
   (Parameter `archiv`, Standard „ohne" wie in der Web-UI) und einen Titel-Filter (`titel`, greift

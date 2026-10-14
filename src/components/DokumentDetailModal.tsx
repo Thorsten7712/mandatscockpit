@@ -48,7 +48,9 @@ export function DokumentDetailModal({
 
   // Verknüpfte Sitzung (1:n, dokumente.session_id - 0036_dokumente_session.sql)
   // und verknüpfte ToDos (n:m über todo_dokumente - 0037_todo_dokumente.sql).
-  const [linkedSession, setLinkedSession] = useState<SessionRow | null>(null)
+  // Mehrere Sitzungen je Dokument (0042_sitzung_dokumente.sql): eine Vorlage
+  // läuft meist erst durch den Fachausschuss und dann durch den Rat.
+  const [linkedSessions, setLinkedSessions] = useState<SessionRow[]>([])
   const [ownSessions, setOwnSessions] = useState<SessionRow[]>([])
   const [savingSession, setSavingSession] = useState(false)
   const [linkedTodos, setLinkedTodos] = useState<TodoRow[]>([])
@@ -63,8 +65,6 @@ export function DokumentDetailModal({
   // Komponente beim Wechsel auf ein anderes Dokument immer erst unmountet
   // (openDoc geht durch null), nie direkt mit neuer document-Prop remountet.
   const [docTags, setDocTags] = useState<string[]>(document.tags)
-  // Gleiches Muster wie docTags: lokaler Spiegel statt Mutation der Prop.
-  const [docSessionId, setDocSessionId] = useState<string | null>(document.session_id)
   // Manuelles Archivieren (0038_dokumente_archiv.sql), ebenfalls als lokaler
   // Spiegel. Die zweite, automatische Archiv-Regel (verknüpfte Sitzung ist
   // vorbei) steht nicht in der Spalte, sondern wird aus linkedSession
@@ -121,11 +121,18 @@ export function DokumentDetailModal({
     setChildren(data ?? [])
   }
 
-  async function loadLinkedSession() {
-    setLinkedSession(null)
-    if (!docSessionId) return
-    const { data } = await supabase.from('sessions').select('*').eq('id', docSessionId).single()
-    if (data) setLinkedSession(data)
+  async function loadLinkedSessions() {
+    const { data: links } = await supabase
+      .from('sitzung_dokumente')
+      .select('session_id')
+      .eq('dokument_id', document.id)
+    const ids = (links ?? []).map((l) => l.session_id as string)
+    if (ids.length === 0) {
+      setLinkedSessions([])
+      return
+    }
+    const { data } = await supabase.from('sessions').select('*').in('id', ids).order('datum')
+    setLinkedSessions(data ?? [])
   }
 
   // RLS auf todo_dokumente/todos filtert bereits auf das für den Nutzer
@@ -150,13 +157,26 @@ export function DokumentDetailModal({
     if (!error) setArchiviertAm(neuerWert)
   }
 
-  async function handleSetSession(sessionId: string) {
+  async function handleLinkSession(sessionId: string) {
+    if (!sessionId) return
     setSavingSession(true)
-    const { error } = await supabase.from('dokumente').update({ session_id: sessionId || null }).eq('id', document.id)
+    // Idempotent: dieselbe Verknüpfung zweimal anzulegen ist kein Fehler.
+    const { error } = await supabase
+      .from('sitzung_dokumente')
+      .upsert({ dokument_id: document.id, session_id: sessionId }, { onConflict: 'session_id,dokument_id', ignoreDuplicates: true })
     setSavingSession(false)
-    if (!error) {
-      setDocSessionId(sessionId || null)
-    }
+    if (!error) await loadLinkedSessions()
+  }
+
+  async function handleUnlinkSession(sessionId: string) {
+    setSavingSession(true)
+    const { error } = await supabase
+      .from('sitzung_dokumente')
+      .delete()
+      .eq('dokument_id', document.id)
+      .eq('session_id', sessionId)
+    setSavingSession(false)
+    if (!error) await loadLinkedSessions()
   }
 
   async function handleSearchTodos(query: string) {
@@ -196,8 +216,8 @@ export function DokumentDetailModal({
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    loadLinkedSession()
-  }, [docSessionId])
+    loadLinkedSessions()
+  }, [document.id])
 
   useEffect(() => {
     loadChildren()
@@ -484,9 +504,13 @@ export function DokumentDetailModal({
   // Nur die automatische Regel, ohne archiviert_am - für den Hinweistext am
   // Archivieren-Knopf (dieselbe Bedingung wie archivGrund() === 'sitzung' in
   // src/lib/dokumenteArchiv.ts, hier auf der bereits geladenen Sitzung).
-  const durchSitzungArchiviert = Boolean(
-    linkedSession && Date.parse(linkedSession.datum) < Date.parse(startOfTodayIso()),
-  )
+  // Erst archiviert, wenn die LETZTE verknüpfte Sitzung vorbei ist - solange
+  // der Rat noch entscheidet, gehört die Vorlage in die Arbeitsliste
+  // (gleiche Regel wie archivGrund() in src/lib/dokumenteArchiv.ts).
+  const letzteSitzung = linkedSessions.length > 0
+    ? Math.max(...linkedSessions.map((si) => Date.parse(si.datum)))
+    : null
+  const durchSitzungArchiviert = letzteSitzung !== null && letzteSitzung < Date.parse(startOfTodayIso())
 
   // Wen trifft das Löschen außer mir? 'geteilt' erreicht die ganze Ebene,
   // 'einzelpersonen' die namentlich Freigegebenen. Nur bei 'persoenlich'
@@ -745,14 +769,15 @@ export function DokumentDetailModal({
                   {t}
                 </span>
               ))}
-              {linkedSession && (
+              {linkedSessions.map((si) => (
                 <Link
-                  to={`/termin/session/${linkedSession.id}`}
+                  key={si.id}
+                  to={`/termin/session/${si.id}`}
                   className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:border-primary/40 hover:text-slate-900"
                 >
-                  📅 {linkedSession.titel} ({formatDate(linkedSession.datum)})
+                  📅 {si.titel} ({formatDate(si.datum)})
                 </Link>
-              )}
+              ))}
               {linkedTodos.map((t) => (
                 <span
                   key={t.id}
@@ -813,33 +838,46 @@ export function DokumentDetailModal({
                 </div>
 
                 <div>
-                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sitzung</h3>
-                  {document.user_id === userId ? (
+                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sitzungen</h3>
+                  <ul className="mb-1.5 space-y-1">
+                    {linkedSessions.map((si) => (
+                      <li
+                        key={si.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5"
+                      >
+                        <span className="truncate text-xs font-medium text-slate-800">
+                          {si.titel} ({formatDate(si.datum)})
+                        </span>
+                        {document.user_id === userId && (
+                          <button
+                            type="button"
+                            onClick={() => handleUnlinkSession(si.id)}
+                            disabled={savingSession}
+                            className="mc-btn-ghost !shrink-0 !px-2 !py-0.5 !text-[11px]"
+                          >
+                            Lösen
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                    {linkedSessions.length === 0 && <li className="text-xs text-slate-400">Keine verknüpfte Sitzung.</li>}
+                  </ul>
+                  {document.user_id === userId && (
                     <select
-                      value={docSessionId ?? ''}
-                      onChange={(e) => handleSetSession(e.target.value)}
+                      value=""
+                      onChange={(e) => handleLinkSession(e.target.value)}
                       disabled={savingSession}
                       className="mc-input w-full !text-sm"
                     >
-                      <option value="">Keine Sitzung</option>
-                      {/* linkedSession kann außerhalb der eigenen Gremien-Auswahl liegen (z. B. per MCP-Tool
-                          gesetzt) - ohne diesen Zusatz würde der <select> dann klanglos auf "Keine Sitzung"
-                          zurückfallen, obwohl tatsächlich eine Verknüpfung besteht. */}
-                      {linkedSession && !ownSessions.some((s) => s.id === linkedSession.id) && (
-                        <option value={linkedSession.id}>
-                          {linkedSession.titel} ({formatDate(linkedSession.datum)})
-                        </option>
-                      )}
-                      {ownSessions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.titel} ({formatDate(s.datum)})
-                        </option>
-                      ))}
+                      <option value="">Sitzung hinzufügen...</option>
+                      {ownSessions
+                        .filter((si) => !linkedSessions.some((l) => l.id === si.id))
+                        .map((si) => (
+                          <option key={si.id} value={si.id}>
+                            {si.titel} ({formatDate(si.datum)})
+                          </option>
+                        ))}
                     </select>
-                  ) : (
-                    <p className="text-xs text-slate-500">
-                      {linkedSession ? `${linkedSession.titel} (${formatDate(linkedSession.datum)})` : 'Keine verknüpfte Sitzung.'}
-                    </p>
                   )}
                 </div>
 

@@ -3,8 +3,8 @@
 // Dokumente-Reiter) und DokumentDetailModal.tsx (Archivieren/Zurückholen).
 //
 // Ein Dokument ist archiviert, wenn ES ENTWEDER
-//   1. mit einer Sitzung verknüpft ist, die vorbei ist - es stand dort auf der
-//      Agenda und ist damit abgearbeitet (automatisch, nichts zu pflegen), ODER
+//   1. mit mindestens einer Sitzung verknüpft ist und die LETZTE davon vorbei
+//      ist - es stand dort auf der Agenda und ist damit abgearbeitet, ODER
 //   2. von Hand archiviert wurde (dokumente.archiviert_am, 0038_dokumente_archiv.sql).
 //
 // Regel 1 wird bewusst hier abgeleitet statt in der DB materialisiert: sie
@@ -16,68 +16,91 @@ import { startOfTodayIso } from './format'
 
 export type ArchivGrund = 'manuell' | 'sitzung'
 
-/** datum + gremium der verknüpften Sitzungen, in Dokumente.tsx/Archiv.tsx
- *  einmal für alle vorkommenden session_ids nachgeladen. */
+/** Eine mit einem Dokument verknüpfte Sitzung (n:m über sitzung_dokumente,
+ *  0042_sitzung_dokumente.sql). */
 export interface SessionInfo {
+  id: string
   datum: string
   gremium: string | null
   titel: string
 }
 
+/** Je Dokument-Id alle verknüpften Sitzungen, nach Datum aufsteigend. */
+export type SitzungenJeDokument = Map<string, SessionInfo[]>
+
 export function archivGrund(
-  dokument: Pick<DokumentRow, 'session_id' | 'archiviert_am'>,
-  sessionById: Map<string, SessionInfo>,
+  dokument: Pick<DokumentRow, 'id' | 'archiviert_am'>,
+  sitzungen: SitzungenJeDokument,
   stichtagIso: string = startOfTodayIso(),
 ): ArchivGrund | null {
   if (dokument.archiviert_am) return 'manuell'
-  if (!dokument.session_id) return null
-  const session = sessionById.get(dokument.session_id)
-  // Sitzung nicht sichtbar/nicht gefunden -> nicht archivieren. Lieber ein
-  // Dokument zu viel in der Arbeitsliste als eines, das unauffindbar wird.
-  if (!session) return null
-  // Numerisch statt lexikografisch vergleichen: PostgREST liefert timestamptz
-  // als "...+00:00", startOfTodayIso() erzeugt "...Z" - als Strings wären
-  // beide Schreibweisen desselben Zeitpunkts nicht gleich.
-  return Date.parse(session.datum) < Date.parse(stichtagIso) ? 'sitzung' : null
+  const verknuepft = sitzungen.get(dokument.id) ?? []
+  // Keine (sichtbare) Sitzung -> nicht archivieren. Lieber ein Dokument zu
+  // viel in der Arbeitsliste als eines, das unauffindbar wird.
+  if (verknuepft.length === 0) return null
+  // Maßgeblich ist die LETZTE Sitzung, nicht irgendeine: Eine Vorlage läuft
+  // meist erst durch den Fachausschuss und danach durch den Rat. Würde schon
+  // die erste vergangene Sitzung archivieren, verschwände sie aus der Liste,
+  // während der Rat noch über sie entscheidet.
+  //
+  // Numerisch statt lexikografisch: PostgREST liefert timestamptz als
+  // "...+00:00", startOfTodayIso() erzeugt "...Z".
+  const letzte = Math.max(...verknuepft.map((s) => Date.parse(s.datum)))
+  return letzte < Date.parse(stichtagIso) ? 'sitzung' : null
 }
 
 export function istArchiviert(
-  dokument: Pick<DokumentRow, 'session_id' | 'archiviert_am'>,
-  sessionById: Map<string, SessionInfo>,
+  dokument: Pick<DokumentRow, 'id' | 'archiviert_am'>,
+  sitzungen: SitzungenJeDokument,
   stichtagIso: string = startOfTodayIso(),
 ): boolean {
-  return archivGrund(dokument, sessionById, stichtagIso) !== null
+  return archivGrund(dokument, sitzungen, stichtagIso) !== null
 }
 
 /**
- * Lädt datum/gremium/titel aller Sitzungen, auf die die übergebenen Dokumente
- * zeigen. Bewusst nur die tatsächlich referenzierten Ids statt der ganzen
- * sessions-Tabelle (gleiches Muster wie loadDocuments() in Archiv.tsx).
- *
- * Meldet einen Fehler ausdrücklich zurück, statt ihn zu verschlucken: ohne
- * Sitzungsdaten hält archivGrund() JEDES Dokument für nicht archiviert, das
- * Archiv wirkt dann schlicht kaputt. Der Aufrufer soll das anzeigen können,
- * statt still die falsche Liste zu rendern.
- *
- * `unvollstaendig` deckt den zweiten, leiseren Fall ab: die Abfrage lief, hat
- * aber nicht alle angefragten Sitzungen geliefert (z. B. weil eine Sitzung
- * inzwischen gelöscht wurde oder per RLS nicht sichtbar ist).
+ * Meldet Fehler ausdrücklich zurück, statt sie zu verschlucken: ohne
+ * Sitzungsdaten hält archivGrund() JEDES Dokument für nicht archiviert - das
+ * sieht aus wie ein kaputter Archiv-Filter statt wie ein Ladefehler.
  */
-export interface SessionInfoErgebnis {
-  sessions: Map<string, SessionInfo>
+export interface SitzungsErgebnis {
+  sitzungen: SitzungenJeDokument
   fehler: string | null
-  unvollstaendig: boolean
 }
 
-export async function ladeSessionInfos(
+/**
+ * Lädt zu den übergebenen Dokumenten alle verknüpften Sitzungen über
+ * sitzung_dokumente. Bewusst nur die tatsächlich betroffenen Dokument-Ids
+ * statt der ganzen Tabelle.
+ */
+export async function ladeSitzungenJeDokument(
   supabase: SupabaseClient,
-  dokumente: Pick<DokumentRow, 'session_id'>[],
-): Promise<SessionInfoErgebnis> {
-  const ids = Array.from(new Set(dokumente.map((d) => d.session_id).filter((id): id is string => Boolean(id))))
-  if (ids.length === 0) return { sessions: new Map(), fehler: null, unvollstaendig: false }
-  const { data, error } = await supabase.from('sessions').select('id, datum, gremium, titel').in('id', ids)
-  if (error) return { sessions: new Map(), fehler: error.message, unvollstaendig: true }
-  const rows = (data ?? []) as { id: string; datum: string; gremium: string | null; titel: string }[]
-  const sessions = new Map(rows.map((s) => [s.id, { datum: s.datum, gremium: s.gremium, titel: s.titel }]))
-  return { sessions, fehler: null, unvollstaendig: sessions.size < ids.length }
+  dokumentIds: string[],
+): Promise<SitzungsErgebnis> {
+  if (dokumentIds.length === 0) return { sitzungen: new Map(), fehler: null }
+
+  const { data: links, error: linkFehler } = await supabase
+    .from('sitzung_dokumente')
+    .select('dokument_id, session_id')
+    .in('dokument_id', dokumentIds)
+  if (linkFehler) return { sitzungen: new Map(), fehler: linkFehler.message }
+
+  const paare = (links ?? []) as { dokument_id: string; session_id: string }[]
+  const sessionIds = Array.from(new Set(paare.map((l) => l.session_id)))
+  if (sessionIds.length === 0) return { sitzungen: new Map(), fehler: null }
+
+  const { data, error } = await supabase.from('sessions').select('id, datum, gremium, titel').in('id', sessionIds)
+  if (error) return { sitzungen: new Map(), fehler: error.message }
+  const sessionById = new Map(((data ?? []) as SessionInfo[]).map((s) => [s.id, s]))
+
+  const ergebnis: SitzungenJeDokument = new Map()
+  for (const l of paare) {
+    const session = sessionById.get(l.session_id)
+    // Nicht sichtbare oder gelöschte Sitzung überspringen.
+    if (!session) continue
+    const liste = ergebnis.get(l.dokument_id) ?? []
+    liste.push(session)
+    ergebnis.set(l.dokument_id, liste)
+  }
+  for (const liste of ergebnis.values()) liste.sort((a, b) => a.datum.localeCompare(b.datum))
+  return { sitzungen: ergebnis, fehler: null }
 }

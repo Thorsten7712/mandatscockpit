@@ -9,7 +9,7 @@ import { fileExtension, fileNameFromPath, IMAGE_EXTENSIONS } from '../components
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { TagEditor } from '../components/TagEditor'
 import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
-import { archivGrund, ladeSessionInfos, type SessionInfo } from '../lib/dokumenteArchiv'
+import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { vorschau } from '../lib/vorlageMarkdown'
 
 // Vorschläge, keine feste Liste - Nutzer können jederzeit eigene Tags
@@ -119,8 +119,9 @@ export default function Dokumente() {
   const [archivEinbeziehen, setArchivEinbeziehen] = useState(false)
 
   // Verknüpfte Sitzungen (Archiv-Regel + "Meine Gremien"-Filter) und die
-  // eigenen Gremien aus user_gremien (0005_user_gremien.sql).
-  const [sessionById, setSessionById] = useState<Map<string, SessionInfo>>(new Map())
+  // eigenen Gremien aus user_gremien (0005_user_gremien.sql). Ein Dokument
+  // kann an mehreren Sitzungen hängen (0042_sitzung_dokumente.sql).
+  const [sitzungen, setSitzungen] = useState<SitzungenJeDokument>(new Map())
   // Ohne Sitzungsdaten wäre kein Dokument archiviert - das darf nicht
   // stillschweigend wie eine leere Archiv-Ablage aussehen.
   const [sessionFehler, setSessionFehler] = useState<string | null>(null)
@@ -154,8 +155,11 @@ export default function Dokumente() {
     // React dazwischen einmal mit leerer Sitzungs-Map - und dann gilt kein
     // Dokument als archiviert, die Liste zeigt also für einen Moment auch das
     // Archiv. Auf langsamer Verbindung ist dieses Fenster gut sichtbar.
-    const { sessions, fehler } = await ladeSessionInfos(supabase, rows)
-    setSessionById(sessions)
+    const { sitzungen: geladen, fehler } = await ladeSitzungenJeDokument(
+      supabase,
+      rows.map((r) => r.id),
+    )
+    setSitzungen(geladen)
     setSessionFehler(fehler)
     setDocuments(rows)
     setLoading(false)
@@ -286,7 +290,7 @@ export default function Dokumente() {
   // Archiv-Zustand einmal je Render für alle Dokumente (siehe
   // src/lib/dokumenteArchiv.ts) - wird sowohl zum Ausblenden als auch für das
   // Archiv-Fähnchen an der Karte gebraucht.
-  const archivGrundById = new Map(documents.map((d) => [d.id, archivGrund(d, sessionById)]))
+  const archivGrundById = new Map(documents.map((d) => [d.id, archivGrund(d, sitzungen)]))
   const archivGesamt = Array.from(archivGrundById.values()).filter(Boolean).length
 
   // Wer sucht, sucht im Gesamtbestand: eine aktive Suche zieht das Archiv
@@ -298,9 +302,10 @@ export default function Dokumente() {
     if (!zeigeArchiv && archivGrundById.get(d.id)) return false
     if (nurMeineGremien) {
       // Ohne verknüpfte Sitzung lässt sich kein Gremium bestimmen - solche
-      // Dokumente fallen unter diesem Filter bewusst heraus.
-      const gremium = d.session_id ? sessionById.get(d.session_id)?.gremium : null
-      if (!gremium || !meineGremien.includes(gremium)) return false
+      // Dokumente fallen unter diesem Filter bewusst heraus. Bei mehreren
+      // Sitzungen genügt eine aus den eigenen Gremien.
+      const gremien = (sitzungen.get(d.id) ?? []).map((si) => si.gremium)
+      if (!gremien.some((g) => g && meineGremien.includes(g))) return false
     }
     if (ebeneFilter !== 'alle' && d.ebene !== ebeneFilter) return false
     if (tagFilter && !d.tags.includes(tagFilter)) return false

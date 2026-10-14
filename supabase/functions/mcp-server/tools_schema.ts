@@ -46,7 +46,7 @@ export const TOOLS = [
   {
     name: 'list_sessions',
     description:
-      'Listet Sitzungstermine (importiert aus den Kalenderquellen oder manuell nachgetragen) auf - wahlweise zukünftige, vergangene oder alle. Für Rückblicke ("worüber wurde im letzten Verkehrsausschuss gesprochen") zeitraum="vergangenheit" verwenden. Liefert je Sitzung auch die id, die für create_session_note gebraucht wird.',
+      'Listet Sitzungstermine (importiert aus den Kalenderquellen oder manuell nachgetragen) auf - wahlweise zukünftige, vergangene oder alle. Für Rückblicke ("worüber wurde im letzten Verkehrsausschuss gesprochen") zeitraum="vergangenheit" verwenden. Liefert je Sitzung auch die id, die für create_session_note gebraucht wird. Je Sitzung werden id, Gremium, Datum mit Uhrzeit und - falls vorhanden - quelle_url ausgegeben. Hinweis: bei ALLRIS-Feeds ist quelle_url meist nur die Tagesansicht und damit für mehrere Sitzungen desselben Tages identisch; eindeutig ist erst Gremium + Datum samt Uhrzeit.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -528,7 +528,7 @@ export const TOOLS = [
         },
         session_id: {
           type: 'string',
-          description: 'Filtert auf Dokumente, die mit dieser Sitzung verknüpft sind (optional).',
+          description: 'Filtert auf Dokumente, die mit dieser Sitzung verknüpft sind (optional). Ein Dokument kann an mehreren Sitzungen hängen und wird dann über jede davon gefunden.',
         },
         archiv: {
           type: 'string',
@@ -595,17 +595,27 @@ export const TOOLS = [
     },
   },
   {
-    name: 'update_document_session',
+    name: 'link_document_session',
     description:
-      'Verknüpft ein eigenes Dokument/eine eigene Notiz im Dokumenten-Hub nachträglich mit einer Sitzung, ändert eine bestehende Verknüpfung, oder entfernt sie - nur der/die Ersteller*in darf das.',
+      'Verknüpft ein eigenes Dokument im Dokumenten-Hub zusätzlich mit einer Sitzung. Ein Dokument kann an mehreren Sitzungen hängen - eine Vorlage durchläuft typischerweise erst den Fachausschuss und danach den Rat. Idempotent: ist die Verknüpfung schon vorhanden, ist das kein Fehler. Nur der/die Ersteller*in darf das.',
     inputSchema: {
       type: 'object',
       properties: {
-        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments/der eigenen Notiz (z. B. aus list_documents).' },
-        session_id: {
-          type: 'string',
-          description: 'UUID der Sitzung (z. B. aus list_sessions). Leerer String entfernt eine bestehende Verknüpfung.',
-        },
+        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments (z. B. aus list_documents).' },
+        session_id: { type: 'string', description: 'UUID der Sitzung (z. B. aus list_sessions).' },
+      },
+      required: ['dokument_id', 'session_id'],
+    },
+  },
+  {
+    name: 'unlink_document_session',
+    description:
+      'Löst die Verknüpfung zwischen einem eigenen Dokument und einer Sitzung. Andere Sitzungs-Verknüpfungen desselben Dokuments bleiben bestehen. Nur der/die Ersteller*in darf das.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dokument_id: { type: 'string', description: 'UUID des eigenen Dokuments (z. B. aus list_documents).' },
+        session_id: { type: 'string', description: 'UUID der Sitzung, deren Verknüpfung gelöst werden soll.' },
       },
       required: ['dokument_id', 'session_id'],
     },

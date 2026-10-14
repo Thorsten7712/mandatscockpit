@@ -2335,3 +2335,49 @@ entfernt.
 
 Lehre fürs nächste Mal: Eine Heuristik, die fehlende Daten errät, muss zurückgebaut werden, sobald
 die Daten stimmen – sonst wird aus der Krücke ein Fehler.
+
+### Dokumente an mehreren Sitzungen (2026-10-14)
+
+Eine Verwaltungsvorlage durchläuft typischerweise mehrere Gremien – erst den Fachausschuss, dann
+den Rat. Die Spalte `dokumente.session_id` (0036) kannte nur eine Sitzung, und
+`update_document_session` hat sie überschrieben: faktisch gewann immer die zuletzt gesetzte. Für
+den geplanten Tagesordnungs-Import aus ALLRIS war das unbrauchbar.
+
+**`sitzung_dokumente`** (`0042_sitzung_dokumente.sql`) nach dem Muster von `todo_dokumente`: reine
+Verknüpfungstabelle ohne eigene `user_id`, SELECT hängt an der Sichtbarkeit des Dokuments,
+INSERT/DELETE strikt beim Eigentümer.
+
+Die alte Spalte ist **entfallen**, nicht nur verwaist – „genau eine Quelle der Wahrheit" verträgt
+keine zweite Ablage, die jemand versehentlich weiterliest. Die Migration kopiert erst alle 127
+Werte, prüft dann in einem `DO`-Block, dass Spaltenwerte und Zeilen übereinstimmen, und droppt die
+Spalte erst danach. Migrationen laufen in einer Transaktion: bei einer Abweichung bricht alles ab
+und nichts wird angewendet. Nachgezählt: 127 vorher, 127 nachher.
+
+**Archiv-Regel: die LETZTE Sitzung zählt.** Würde schon die erste vergangene Sitzung archivieren,
+verschwände eine Vorlage nach dem Fachausschuss aus der Arbeitsliste, obwohl der Rat noch über sie
+entscheidet. Umgesetzt in `src/lib/dokumenteArchiv.ts` und gespiegelt in
+`supabase/functions/mcp-server/tools/dokumente.ts`. Geprüft über sieben Fälle, darunter „vergangen
++ künftig" (nicht archiviert, in beiden Reihenfolgen), „beide vergangen" (archiviert) und
+„manuell schlägt künftige Sitzung".
+
+**MCP:** `update_document_session` ist durch `link_document_session` und `unlink_document_session`
+ersetzt – die Semantik „ersetzt die eine Sitzung" passt nicht mehr. `link_document_session` ist
+idempotent und meldet „bereits verknüpft" statt zu scheitern, weil dailyallris es bei jedem Lauf
+erneut aufruft. `create_document` behält den Parameter `session_id` und legt daraus eine
+Verknüpfungszeile an, damit bestehende Aufrufer weiterlaufen. In `list_documents` listet
+„Sitzung: …" jetzt alle verknüpften Sitzungen; das übrige Zeilenformat bleibt unverändert, weil
+dailyallris es mit einem festen Muster parst. Der `session_id`-Filter läuft über die neue Tabelle.
+Damit 33 Tools.
+
+**`list_sessions` brauchte keine Änderung am Gremienfilter.** Anders als angenommen filtert das
+Tool nur mit `nur_meine_gremien: true`; der Standard liefert alle sichtbaren Sitzungen, und
+„Stadtrat Iserlohn" ist eine gemeinsam verwaltete Quelle (`verwaltet_von is null`) – das
+Import-Konto sieht sie also ohnehin. Ergänzt wurde `quelle_url` in der Ausgabe.
+
+**Zu quelle_url – der Befund für dailyallris:** Die Spalte taugt **nicht** als Sitzungs-Kennung.
+Von 759 Sitzungen haben 707 eine `quelle_url`, aber nur 72 enthalten `SILFDNR`; bei der Iserlohner
+Quelle sind es 42 von 161, und sämtliche aktuellen und künftigen Sitzungen gehören nicht dazu.
+Was dort steht, ist die ALLRIS-Tagesansicht (`si010?DD=..&MM=..&YY=..`) – für alle Sitzungen
+desselben Tages identisch. Eindeutig ist dagegen **Gremium + Datum samt Uhrzeit**: bei den 161
+Iserlohner Sitzungen ist `gremium` immer gesetzt und die Kombination kollisionsfrei (0 Dubletten),
+während Gremium + Tag allein 29 Mehrfachtreffer hat.

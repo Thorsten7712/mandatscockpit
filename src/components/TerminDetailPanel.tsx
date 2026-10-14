@@ -121,7 +121,16 @@ export function TerminDetailPanel({
       setLinkedDokumente([])
       return
     }
-    const { data } = await supabase.from('dokumente').select('*').eq('session_id', id).order('erstellt_am')
+    // Über die n:m-Tabelle (0042_sitzung_dokumente.sql) - ein Dokument kann an
+    // mehreren Sitzungen hängen, die frühere Spalte dokumente.session_id gibt
+    // es nicht mehr.
+    const { data: links } = await supabase.from('sitzung_dokumente').select('dokument_id').eq('session_id', id)
+    const ids = (links ?? []).map((l) => l.dokument_id as string)
+    if (ids.length === 0) {
+      setLinkedDokumente([])
+      return
+    }
+    const { data } = await supabase.from('dokumente').select('*').in('id', ids).order('erstellt_am')
     setLinkedDokumente(data ?? [])
   }
 
