@@ -86,6 +86,9 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   (`VorlageAnsicht.tsx`) und rechts die Notizen. Tags/Sitzung/ToDos werden im Band nur angezeigt;
   die Eingabefelder klappen über „Verknüpfungen" darunter auf. Markdown-Aufbereitung in
   `src/lib/vorlageMarkdown.ts`, Prosa-Styles als `mc-dokument-content` in `index.css`.
+  `prosaGlaetten()` entfernt dort nur noch Mehrfach-Leerzeichen und führt **keine Absätze mehr
+  zusammen** – seit dailyallris die Prosa bei der Extraktion normalisiert, verklebte diese
+  Heuristik Feldwerte („## Verfasser") mit dem Folgeabsatz.
   Die **Listenansicht** zeigt nur `vorschau()` – zwei Zeilen reiner Text, bevorzugt der
   Beschlussvorschlag. Niemals `inhalt` ungekürzt rendern: das sind pro Vorlage rund 9.000 Zeichen.
 - **Zahlen & Fakten** (`/fakten`, eigener Reiter in der Kopfleiste): Argumentationshilfen,

@@ -2308,3 +2308,30 @@ ebenso bei von Hand eingetipptem Text mit doppelten Leerzeichen.
 Außerdem aufgeräumt: 40 verwaiste Dateien im `dokumente`-Bucket (aus gelöschten Dokumenten und den
 28 Import-Dubletten) über die Storage-API entfernt. Der Bucket enthält jetzt 254 Dateien, keine
 davon verwaist.
+
+### Absatz-Zusammenführung wieder entfernt (2026-10-14, nach dem Backfill)
+
+dailyallris normalisiert die Prosa jetzt schon bei der Extraktion, und der Backfill hat alle 244
+Dokumente mit Inhalt auf die bereinigte Fassung gebracht. Nachgemessen: **0 von 244 Dokumenten**
+haben noch Mehrfach-Leerzeichen im Fließtext, während die 205 Dokumente mit Formularblöcken und
+die 238 mit Tabellen unverändert geblieben sind – die 6-Leerzeichen-Schwelle hat in der
+Python-Portierung also richtig getrennt.
+
+Damit wurde `prosaGlaetten()` im Frontend an einer Stelle **schädlich**. Die Funktion hängte einen
+Absatz an den vorigen, wenn der nicht auf einem Satzzeichen endete – gedacht für die harten
+Umbrüche aus dem PDF-Auszug. Auf sauberen Daten rät das falsch: Feldwerte enden naturgemäß ohne
+Punkt. Konkret wurde aus
+
+    ## Verfasser
+    AfD-Fraktion, AfD Fraktionsgeschäftsstelle
+    Die v. g. Fraktion nimmt folgende Umbesetzungen gem. § 50 Abs. 3 Satz 7 GO NRW vor:
+
+ein einziger verklebter Absatz. Am Bestand gemessen hätte das **98 von 244 Dokumenten** betroffen.
+
+Das Zusammenführen ist entfernt; das Entfernen von Mehrfach-Leerzeichen bleibt als Absicherung
+gegen von Hand eingetippten Text. Regressionstests gegen den Live-Bestand: Beschlussvorschlag wird
+weiterhin gefunden, Abschnitte, Tabellen und Formularblöcke bleiben erhalten, Kopfdaten werden
+entfernt.
+
+Lehre fürs nächste Mal: Eine Heuristik, die fehlende Daten errät, muss zurückgebaut werden, sobald
+die Daten stimmen – sonst wird aus der Krücke ein Fehler.

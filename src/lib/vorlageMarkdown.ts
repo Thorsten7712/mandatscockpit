@@ -49,16 +49,21 @@ function istStrukturblock(block: string): boolean {
 }
 
 /**
- * Glättet die Blocksatz-Reste aus dem PDF-Auszug: Mehrfach-Leerzeichen
- * innerhalb eines Satzes und Absätze, die mitten im Satz umbrechen.
+ * Entfernt Mehrfach-Leerzeichen aus Fließtext und Listenzeilen. Überschriften,
+ * Tabellen und Formularblöcke bleiben unangetastet.
  *
- * Gemessen an DS11/1113 betrifft das 33 % der Zeilen und 18 von 32 Absätzen -
- * ungeglättet liest sich der Sachverhalt wie zerhackt. Überschriften,
- * Tabellen, Listen und Formularblöcke bleiben ausdrücklich unangetastet.
+ * **Absätze werden ausdrücklich NICHT mehr zusammengeführt.** Eine frühere
+ * Fassung hing einen Absatz an den vorigen an, wenn der nicht auf einem
+ * Satzzeichen endete - gedacht für die harten Umbrüche aus dem PDF-Auszug.
+ * Seit dailyallris die Prosa schon bei der Extraktion normalisiert, rät diese
+ * Heuristik mehr falsch als richtig: Feldwerte wie "AfD-Fraktion, AfD
+ * Fraktionsgeschäftsstelle" unter "## Verfasser" enden naturgemäß ohne Punkt
+ * und wurden mit dem folgenden Absatz verklebt. Gemessen am Bestand hätte das
+ * 98 von 244 Dokumenten betroffen.
  *
- * Das ist eine Notmaßnahme der Anzeige. Dauerhaft gehört die Normalisierung in
- * die Extraktion (dailyallris): nur dort nützt sie auch der Volltextsuche, die
- * sonst weiter Wortfragmente statt Wörter findet.
+ * Das Zusammenziehen von Zeilen *innerhalb* eines Blocks bleibt, ist für die
+ * Darstellung aber ohnehin folgenlos - Markdown behandelt einfache
+ * Zeilenumbrüche innerhalb eines Absatzes bereits als Leerzeichen.
  */
 export function prosaGlaetten(markdown: string): string {
   const bloecke = markdown.split(/\n{2,}/)
@@ -81,22 +86,7 @@ export function prosaGlaetten(markdown: string): string {
       )
       continue
     }
-    const sauber = block.replace(/\s*\n\s*/g, ' ').replace(/ {2,}/g, ' ').trim()
-    const vorher = raus.length > 0 ? raus[raus.length - 1] : null
-    // An den vorigen Absatz anhängen, wenn der mitten im Satz endet - genau so
-    // sieht ein harter Seitenumbruch aus dem PDF aus.
-    const haengtInDerLuft =
-      vorher !== null &&
-      !vorher.startsWith('#') &&
-      !vorher.includes('|') &&
-      !istFormularblock(vorher) &&
-      !istStrukturblock(vorher) &&
-      !/[.:!?»"')\]]$/.test(vorher.trim())
-    if (haengtInDerLuft) {
-      raus[raus.length - 1] = `${vorher!.trim()} ${sauber}`
-    } else {
-      raus.push(sauber)
-    }
+    raus.push(block.replace(/\s*\n\s*/g, ' ').replace(/ {2,}/g, ' ').trim())
   }
   return raus.join('\n\n')
 }
