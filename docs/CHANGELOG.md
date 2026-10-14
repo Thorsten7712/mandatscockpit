@@ -2287,3 +2287,24 @@ die aus dem Datenmodell folgen:
   40 solcher Waisen aus früheren Löschungen.
 
 Damit 32 MCP-Tools.
+
+### Suche gegen die Blocksatz-Reste abgehärtet (2026-10-14)
+
+Die Volltextsuche im Dokumenten-Hub war ein schlichtes `haystack.includes(q)`. Mit den
+Blocksatz-Resten aus dem PDF-Auszug scheiterte damit jede Phrasensuche, die über eine Lücke lief:
+184 der 244 Dokumente mit Inhalt enthalten Mehrfach-Leerzeichen mitten im Satz, zusammen 33.628
+doppelte Leerzeichen. Eine Suche nach „Jugendhilfe an Schule" fand nichts, sobald zwischen zwei
+Wörtern drei Leerzeichen standen – und das war der Normalfall.
+
+`suchtext()` in `Dokumente.tsx` normalisiert jetzt beide Seiten des Vergleichs: Kleinschreibung und
+alle Weißraum-Folgen auf ein Leerzeichen. Geprüft an echtem Text: „vorgehalten wurde",
+„Verwaltung sowie der Träger" und „Iserlohn vorgehalten" fanden vorher nichts und treffen jetzt.
+
+Das ersetzt die Normalisierung in der Extraktion **nicht** – die bleibt die eigentliche Lösung,
+weil nur sie die gespeicherten Daten sauber macht (und damit auch eine spätere serverseitige
+Suche). Es macht die Suche aber unabhängig davon, ob die Pipeline sauber liefert, und hilft
+ebenso bei von Hand eingetipptem Text mit doppelten Leerzeichen.
+
+Außerdem aufgeräumt: 40 verwaiste Dateien im `dokumente`-Bucket (aus gelöschten Dokumenten und den
+28 Import-Dubletten) über die Storage-API entfernt. Der Bucket enthält jetzt 254 Dateien, keine
+davon verwaist.

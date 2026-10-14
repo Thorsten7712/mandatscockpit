@@ -50,6 +50,23 @@ function speichereSeitengroesse(wert: number) {
   }
 }
 
+/**
+ * Vereinheitlicht Text für den Suchvergleich: Kleinschreibung und alle
+ * Weißraum-Folgen auf ein einzelnes Leerzeichen.
+ *
+ * Nötig wegen der Blocksatz-Reste aus dem PDF-Auszug der ALLRIS-Vorlagen: 184
+ * der 244 Dokumente mit Inhalt enthalten Mehrfach-Leerzeichen mitten im Satz,
+ * dazu harte Zeilenumbrüche. Ohne diese Normalisierung findet die Suche nach
+ * "Jugendhilfe an Schule" nichts, sobald zwischen zwei Wörtern drei
+ * Leerzeichen stehen - und das ist der Normalfall, nicht die Ausnahme.
+ *
+ * Die saubere Lösung liegt in der Extraktion (dailyallris); das hier macht die
+ * Suche unabhängig davon, ob die Pipeline sauber liefert.
+ */
+function suchtext(wert: string): string {
+  return wert.toLowerCase().replace(/\s+/g, ' ')
+}
+
 /** Bund braucht keine Gliederung - es gibt nur einen Bundestag (analog src/lib/gliederung.ts). */
 function gliederungFuer(profile: Profile | null, ebene: Ebene): string | null {
   if (!profile) return null
@@ -288,9 +305,9 @@ export default function Dokumente() {
     if (ebeneFilter !== 'alle' && d.ebene !== ebeneFilter) return false
     if (tagFilter && !d.tags.includes(tagFilter)) return false
     if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase()
+      const q = suchtext(searchQuery.trim())
       const authorName = d.user_id !== userId ? authorNames.get(d.user_id) ?? '' : ''
-      const haystack = [d.titel, d.inhalt ?? '', ...d.tags, authorName].join(' ').toLowerCase()
+      const haystack = suchtext([d.titel, d.inhalt ?? '', ...d.tags, authorName].join(' '))
       if (!haystack.includes(q)) return false
     }
     return true
