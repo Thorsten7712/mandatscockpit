@@ -211,7 +211,11 @@ export function TodoDetailModal({
     }
     const { data } = await supabase.from('profiles').select('*').neq('id', userId)
     const filtered = (data ?? []).filter(
-      (p) => p.partei === myProfile.partei && (p.ebenen ?? []).includes(ebene) && gleicheGliederung(myProfile, p, ebene),
+      (p) =>
+        !p.technisch &&
+        p.partei === myProfile.partei &&
+        (p.ebenen ?? []).includes(ebene) &&
+        gleicheGliederung(myProfile, p, ebene),
     )
     setCandidates(filtered)
   }

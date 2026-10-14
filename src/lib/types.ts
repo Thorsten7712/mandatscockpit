@@ -30,6 +30,10 @@ export interface Profile {
   muss_passwort_aendern: boolean
   /** Presseschau-Abschnitt auf dem Dashboard ein-/ausgeblendet (siehe PresseschauSection.tsx) */
   presseschau_aktiv: boolean
+  /** Kein Mensch, sondern ein Automatik-Konto (z. B. der ALLRIS-Import von
+   * dailyallris). Wird aus den Teilen-Kandidatenlisten ausgeblendet, behält
+   * sonst aber alle Rechte eines Mitglieds - siehe 0041_profiles_technisch.sql. */
+  technisch: boolean
 }
 
 export interface PresseschauRow {

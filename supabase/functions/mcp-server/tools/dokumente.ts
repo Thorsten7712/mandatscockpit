@@ -132,10 +132,15 @@ async function resolveTeilenMitNamen(
   for (const name of namen) {
     const { data: matches } = await supabase
       .from('profiles')
-      .select('id, name, partei, ebenen')
+      .select('id, name, partei, ebenen, technisch')
       .ilike('name', `%${name}%`)
       .neq('id', userId)
-    const treffer = (matches ?? []).find((p) => p.partei === caller.partei && (p.ebenen as string[]).some((e) => caller.ebenen.includes(e)))
+    // Technische Konten (ALLRIS-Import) sind keine Adressaten einer Freigabe -
+    // sie lesen nichts und verwirren nur die Trefferliste, siehe
+    // 0041_profiles_technisch.sql.
+    const treffer = (matches ?? []).find(
+      (p) => !p.technisch && p.partei === caller.partei && (p.ebenen as string[]).some((e) => caller.ebenen.includes(e)),
+    )
     if (treffer) ids.push(treffer.id as string)
     else unaufgeloest.push(name)
   }

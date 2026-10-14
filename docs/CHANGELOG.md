@@ -2196,3 +2196,51 @@ Titel den Suchbegriff enthält; eine Formatänderung würde den Upload stillegen
 leerer Hub.
 
 Ohne `titel` verhält sich das Tool unverändert.
+
+### Formularblöcke scrollen statt umzubrechen (2026-10-14)
+
+In der Leseansicht brach ein Formularblock (`Finanzielle Auswirkungen`) lange Zeilen um:
+"Beschlussumsetzung bis: … Beschlusskontrolle Ja X Nein" ist im Markdown eine Zeile, erschien aber
+auf zwei, und die Spalten standen nicht mehr nebeneinander. Ursache: `.mc-dokument-content pre`
+hatte zwar `overflow-x-auto`, aber zugleich `whitespace-pre-wrap` - der Scrollbalken kam so nie
+zum Zug. Jetzt `whitespace-pre`, breite Formularzeilen scrollen horizontal.
+
+Weil die Ansicht in Sitzungen auf dem iPad läuft und iPadOS Scrollbalken ausblendet, zeigt ein
+Schatten am Rand, dass dort noch Inhalt verborgen ist - sonst fiele ein abgeschnittener Betrag
+rechts nicht auf. Reines CSS (Scroll-Shadow mit `background-attachment: local`): die zwei
+mitscrollenden Verläufe decken den Schatten an dem Rand ab, an dem nichts mehr kommt. Blöcke ohne
+Überlauf zeigen keinen Schatten. Geprüft an DS11/1113 in Tablet-Breite (768 px).
+
+### Technische Konten: profiles.technisch (2026-10-14)
+
+Der ALLRIS-Import von dailyallris läuft seit heute über ein eigenes Konto statt über das
+persönliche MCP-Token eines Mitglieds. Grund: Das Token lag in `dailyallris/.env` und hätte bei
+einem Leck Zugriff auf das komplette Konto gegeben – ToDos, Notizen, Anträge, Presseschau,
+Termine. Ein eigenes Konto begrenzt den Schaden auf den Dokumenten-Hub.
+
+Nebenwirkung: Das Konto erfüllt dieselben Bedingungen wie ein Mensch – gleiche Partei, gleiche
+Ebene, gleiche Gliederung, denn ohne das könnte `create_document` gar nichts anlegen und niemand
+würde die Dokumente sehen. Damit tauchte es in jeder Teilen-Kandidatenliste auf, als könne man ihm
+eine ToDo-Karte zuweisen.
+
+Neue Spalte `profiles.technisch` (`0041_profiles_technisch.sql`). **Bewusst eine eigene Spalte
+statt einer zusätzlichen `rolle`:** `rolle` steuert Rechte (admin/fraktionsbuero/mitglied) und wird
+an mehreren Stellen geprüft – „ist das ein Mensch?" ist davon unabhängig, ein technisches Konto
+bleibt rechtlich ein normales Mitglied.
+
+Ausgeblendet wird an vier Stellen, überall dort, wo auch der exakte Partei-/Ebenen-/
+Gliederungs-Abgleich stattfindet: `loadCandidates()` in `TodoDetailModal` und `AntragDetailModal`,
+die Kandidaten-`useEffect` in `DokumentDetailModal` und `resolveTeilenMitNamen()` im MCP-Server
+(sonst ließe sich das Konto über `teilen_mit_namen` weiterhin adressieren).
+
+**Das ist Aufräumen der Oberfläche, keine Zugriffsgrenze** – wer die `user_id` kennt, könnte eine
+Freigabe weiterhin direkt anlegen. Als Sicherheitsmaßnahme taugt es nicht und ist auch nicht so
+gemeint; der Sicherheitsgewinn liegt im getrennten Token, nicht im Ausblenden.
+
+Setzbar in der Benutzerverwaltung über eine Checkbox (`admin-users` nimmt `technisch` bei `create`
+und `update` entgegen, die Liste zeigt ein Badge) – damit braucht das nächste technische Konto
+keinen SQL-Eingriff. Das bestehende Import-Konto hat die Migration gleich mitgesetzt.
+
+**Weiterhin offen:** Zwei Profile sind unvollständig und sehen deshalb den gesamten Import nicht –
+bei Benjamin Korte fehlt die Gliederung, bei Thorsten Schick zusätzlich die Ebene „Kommune". Die
+Sichtbarkeit hängt an allen drei Feldern gleichzeitig, und es gibt keinerlei Rückmeldung darüber.

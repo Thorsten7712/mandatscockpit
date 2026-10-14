@@ -18,6 +18,8 @@ interface AdminUser {
   rolle: Rolle
   fraktion: string | null
   partei: string | null
+  /** Automatik-Konto (z. B. ALLRIS-Import) - taucht nicht in Teilen-Listen auf. */
+  technisch: boolean
   created_at: string
   last_sign_in_at: string | null
 }
@@ -63,9 +65,10 @@ interface UserFormState {
   rolle: Rolle
   fraktion: string
   partei: string
+  technisch: boolean
 }
 
-const EMPTY_FORM: UserFormState = { name: '', email: '', password: '', rolle: 'mitglied', fraktion: '', partei: '' }
+const EMPTY_FORM: UserFormState = { name: '', email: '', password: '', rolle: 'mitglied', fraktion: '', partei: '', technisch: false }
 
 function UserForm({
   form,
@@ -143,6 +146,20 @@ function UserForm({
           ))}
         </select>
       </div>
+      <label className="flex items-start gap-2 text-sm text-slate-600">
+        <input
+          type="checkbox"
+          checked={form.technisch}
+          onChange={(e) => setForm({ ...form, technisch: e.target.checked })}
+          className="mt-0.5"
+        />
+        <span>
+          Technisches Konto (z. B. automatischer Import)
+          <span className="block text-xs text-slate-400">
+            Taucht nicht in den Teilen-Listen auf. Rechte bleiben die eines normalen Mitglieds.
+          </span>
+        </span>
+      </label>
       <div className="flex gap-2">
         <button type="submit" disabled={saving} className="mc-btn-primary">
           {saving ? 'Speichern...' : submitLabel}
@@ -196,6 +213,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
       rolle: createForm.rolle,
       fraktion: createForm.fraktion || null,
       partei: createForm.partei || null,
+      technisch: createForm.technisch,
     })
     if (error) {
       setActionError(error)
@@ -217,6 +235,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
       rolle: u.rolle,
       fraktion: u.fraktion ?? '',
       partei: u.partei ?? '',
+      technisch: u.technisch ?? false,
     })
   }
 
@@ -233,6 +252,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
       rolle: editForm.rolle,
       fraktion: editForm.fraktion,
       partei: editForm.partei,
+      technisch: editForm.technisch,
       // E-Mail/Passwort nur mitschicken, wenn wirklich geändert
       ...(editForm.email && editForm.email !== original?.email ? { email: editForm.email } : {}),
       ...(editForm.password ? { password: editForm.password } : {}),
@@ -374,6 +394,14 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
                   {u.partei && (
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
                       {themeById(u.partei).label}
+                    </span>
+                  )}
+                  {u.technisch && (
+                    <span
+                      title="Automatik-Konto - erscheint nicht in den Teilen-Listen"
+                      className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                    >
+                      Technisch
                     </span>
                   )}
                   {isSelf && (

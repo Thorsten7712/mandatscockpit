@@ -14,12 +14,12 @@
 // API (POST, JSON-Body mit action):
 //   { action: 'list' }
 //     -> { users: [{ id, email, name, rolle, fraktion, partei, created_at, last_sign_in_at }] }
-//   { action: 'create', email, password, name, rolle? }
+//   { action: 'create', email, password, name, rolle?, technisch? }
 //     -> { user: {...} }  (Profil legt der handle_new_user-Trigger an,
 //        rolle wird danach gesetzt; email_confirm: true, damit keine
 //        Bestätigungsmail nötig ist - der Admin teilt das Startpasswort mit;
 //        muss_passwort_aendern ist per Spalten-Default bereits true)
-//   { action: 'update', user_id, name?, rolle?, fraktion?, partei?, email?, password? }
+//   { action: 'update', user_id, name?, rolle?, fraktion?, partei?, technisch?, email?, password? }
 //     -> { ok: true }  (wird password gesetzt, erzwingt das wie bei der
 //        Neuanlage einen Passwortwechsel beim nächsten Login -
 //        muss_passwort_aendern wird auf true zurückgesetzt)
@@ -51,6 +51,8 @@ interface RequestBody {
   password?: string
   name?: string
   rolle?: string
+  /** true = Automatik-Konto, wird aus Teilen-Kandidatenlisten ausgeblendet (0041). */
+  technisch?: boolean
   fraktion?: string | null
   partei?: string | null
 }
@@ -104,7 +106,7 @@ Deno.serve(async (req) => {
       if (error) return jsonResponse({ error: error.message }, 500)
       const { data: profiles } = await admin
         .from('profiles')
-        .select('id, name, rolle, fraktion, partei')
+        .select('id, name, rolle, fraktion, partei, technisch')
       const profileById = new Map((profiles ?? []).map((p) => [p.id, p]))
       const users = authUsers.users
         .map((u) => {
@@ -145,7 +147,7 @@ Deno.serve(async (req) => {
       // Standard-Board-Spalten angelegt - Rolle/Fraktion/Partei nachziehen.
       const { error: profileError } = await admin
         .from('profiles')
-        .update({ rolle, fraktion: body.fraktion ?? null, partei: body.partei ?? null })
+        .update({ rolle, fraktion: body.fraktion ?? null, partei: body.partei ?? null, technisch: body.technisch === true })
         .eq('id', created.user.id)
       if (profileError) {
         return jsonResponse({ error: `Nutzer angelegt, aber Profil-Update fehlgeschlagen: ${profileError.message}` }, 500)
@@ -175,6 +177,7 @@ Deno.serve(async (req) => {
       if (body.rolle !== undefined) profileUpdate.rolle = body.rolle
       if (body.fraktion !== undefined) profileUpdate.fraktion = body.fraktion || null
       if (body.partei !== undefined) profileUpdate.partei = body.partei || null
+      if (body.technisch !== undefined) profileUpdate.technisch = body.technisch === true
       if (Object.keys(profileUpdate).length > 0) {
         const { error } = await admin.from('profiles').update(profileUpdate).eq('id', body.user_id)
         if (error) return jsonResponse({ error: error.message }, 500)

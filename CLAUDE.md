@@ -28,7 +28,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
 - **ToDo-Board:** Kanban-Stil mit frei definierbaren Spalten (`todo_columns`) statt fester Status,
   Drag & Drop via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~39 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~41 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 
@@ -175,7 +175,10 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   umbenennt (bewusster Trade-off, da Spalten frei umbenennbar sind).
 - **Teilen/Kandidatensuche** (ToDos, Anträge): grobe Vorfilterung per RLS
   (`profiles_select_same_partei_ebene`), exakter Abgleich (Partei + Ebene + Gliederung) läuft
-  clientseitig in `loadCandidates()`.
+  clientseitig in `loadCandidates()`. Konten mit `profiles.technisch = true` (Automatik-Konten wie
+  der ALLRIS-Import von dailyallris) fallen dort heraus – an allen drei Stellen im Frontend und in
+  `resolveTeilenMitNamen()` im MCP-Server. Das ist Aufräumen der Oberfläche, keine Zugriffsgrenze.
+  Setzbar in der Benutzerverwaltung (Checkbox), siehe `0041_profiles_technisch.sql`.
 - **Detail-Modals**: gemeinsame Hülle `src/components/DetailModalShell.tsx` (2-Spalten-Layout,
   `headerActions`-Slot) – für neue Entity-Detail-Modals wiederverwenden statt eigenes Chrome zu bauen.
 - **Formularblöcke vs. Blocksatz unterscheiden sich an der Lückenbreite**: Beim PDF-Auszug der

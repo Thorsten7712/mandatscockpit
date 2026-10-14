@@ -143,9 +143,24 @@
   /* Beim PDF-Auszug zerfallene Formularblöcke ("Finanzielle Auswirkungen",
    * "Prüfung von Beteiligungsrechten"): Spaltenausrichtung bleibt erhalten,
    * optisch zurückgenommen, damit sie als Rohausgabe erkennbar sind statt nach
-   * kaputtem Fließtext auszusehen. */
+   * kaputtem Fließtext auszusehen. whitespace-pre statt pre-wrap: ein
+   * Umbruch risse die Spalten einer Formularzeile auseinander, breite Zeilen
+   * scrollen stattdessen horizontal.
+   *
+   * Scroll-Schatten: iPadOS blendet Scrollbalken aus, ein abgeschnittener
+   * Betrag am rechten Rand fiele in der Sitzung nicht auf. Die beiden
+   * "local"-Verläufe scrollen mit dem Inhalt und decken den Schatten an dem
+   * Rand ab, an dem nichts mehr verborgen ist; die "scroll"-Schatten bleiben
+   * am Rand stehen. Reines CSS, funktioniert in Safari. */
   .mc-dokument-content pre {
-    @apply mb-3 overflow-x-auto whitespace-pre-wrap rounded-lg border border-slate-100 border-l-[3px] border-l-slate-300 bg-slate-50 px-3 py-2 font-mono text-[11px] leading-snug text-slate-500;
+    @apply mb-3 overflow-x-auto whitespace-pre rounded-lg border border-slate-100 border-l-[3px] border-l-slate-300 px-3 py-2 font-mono text-[11px] leading-snug text-slate-500;
+    background:
+      linear-gradient(to right, theme('colors.slate.50') 30%, rgb(248 250 252 / 0)) left center / 2.5rem 100% no-repeat,
+      linear-gradient(to left, theme('colors.slate.50') 30%, rgb(248 250 252 / 0)) right center / 2.5rem 100% no-repeat,
+      radial-gradient(farthest-side at 0 50%, rgb(15 23 42 / 0.18), rgb(15 23 42 / 0)) left center / 0.9rem 100% no-repeat,
+      radial-gradient(farthest-side at 100% 50%, rgb(15 23 42 / 0.18), rgb(15 23 42 / 0)) right center / 0.9rem 100% no-repeat,
+      theme('colors.slate.50');
+    background-attachment: local, local, scroll, scroll;
   }
 
   .mc-dokument-content code {

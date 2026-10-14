@@ -312,7 +312,10 @@ export function DokumentDetailModal({
       .then(({ data }) => {
         setCandidates(
           (data ?? []).filter(
-            (p: Profile) => p.partei === myProfile.partei && (p.ebenen ?? []).some((e) => (myProfile.ebenen ?? []).includes(e)),
+            (p: Profile) =>
+              !p.technisch &&
+              p.partei === myProfile.partei &&
+              (p.ebenen ?? []).some((e) => (myProfile.ebenen ?? []).includes(e)),
           ),
         )
       })
