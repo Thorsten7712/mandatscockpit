@@ -9,6 +9,7 @@ interface SessionListRow {
   ort: string | null
   status: string
   quelle_url: string | null
+  ics_uid: string | null
 }
 
 export async function listSessions(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
@@ -32,7 +33,7 @@ export async function listSessions(supabase: SupabaseClient, userId: string, arg
   const terminSourceIds = (visibleSources ?? []).filter((s) => s.art === 'termin').map((s) => s.id as string)
 
   const baseQuery = () => {
-    let q = supabase.from('sessions').select('id, titel, gremium, datum, ort, status, quelle_url')
+    let q = supabase.from('sessions').select('id, titel, gremium, datum, ort, status, quelle_url, ics_uid')
     if (zeitraum === 'zukunft') q = q.gte('datum', jetzt)
     else if (zeitraum === 'vergangenheit') q = q.lt('datum', jetzt)
     q =
@@ -90,12 +91,15 @@ export async function listSessions(supabase: SupabaseClient, userId: string, arg
   const lines = rows.map((s) => {
     const status = s.status === 'abgesagt' ? ' [ABGESAGT]' : ''
     const ort = s.ort ? `, ${s.ort}` : ''
-    // quelle_url mit ausgeben, damit externe Importeure eine Sitzung zuordnen
-    // können. Achtung: bei den ALLRIS-Feeds ist das meist nur die Tagesansicht
-    // (si010?DD=..&MM=..&YY=..), also für mehrere Sitzungen desselben Tages
-    // identisch - eindeutig ist erst Gremium + Datum samt Uhrzeit.
+    // quelle_url und ics_uid mit ausgeben, damit externe Importeure eine
+    // Sitzung zuordnen können. quelle_url ist bei den ALLRIS-Feeds meist nur
+    // die Tagesansicht (si010?DD=..&MM=..&YY=..), also für mehrere Sitzungen
+    // desselben Tages identisch. Eindeutig ist ics_uid: ALLRIS liefert dort
+    // "ALLRIS-Sitzung-<SILFDNR>", und dieselbe SILFDNR steht im Kopf der
+    // Tagesordnung - darüber lässt sich eine Tagesordnung exakt zuordnen.
     const quelle = s.quelle_url ? ` — quelle_url: ${s.quelle_url}` : ''
-    return `- ${s.titel} (${s.gremium ?? 'ohne Gremium'}) am ${formatDateTime(s.datum)}${ort} — id: ${s.id}${status}${quelle}`
+    const uid = s.ics_uid ? ` — ics_uid: ${s.ics_uid}` : ''
+    return `- ${s.titel} (${s.gremium ?? 'ohne Gremium'}) am ${formatDateTime(s.datum)}${ort} — id: ${s.id}${status}${uid}${quelle}`
   })
   return toolTextResult(lines.join('\n'))
 }

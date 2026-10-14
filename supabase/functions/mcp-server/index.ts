@@ -41,6 +41,7 @@ import { TOOLS } from './tools_schema.ts'
 import { createTodo, listTodos, completeTodo, updateTodo } from './tools/todos.ts'
 import { createEvent, listEvents } from './tools/events.ts'
 import { listSessions } from './tools/sessions.ts'
+import { listSessionAgenda, setSessionAgenda } from './tools/tagesordnung.ts'
 import { createAntrag, listAntraege, updateAntragStatus, listAntragFristen } from './tools/antraege.ts'
 import { listNotes, createSessionNote, createEventNote, createTodoNote, createAntragNote } from './tools/notes.ts'
 import { uploadPresseschau } from './tools/presseschau.ts'
@@ -246,6 +247,12 @@ Deno.serve(async (req) => {
           break
         case 'unlink_document_session':
           result = await unlinkDocumentSession(supabase, user.id, args)
+          break
+        case 'set_session_agenda':
+          result = await setSessionAgenda(supabase, user.id, args)
+          break
+        case 'list_session_agenda':
+          result = await listSessionAgenda(supabase, user.id, args)
           break
         case 'update_document_archiv':
           result = await updateDocumentArchiv(supabase, user.id, args)

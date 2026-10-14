@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Archive, ArchiveRestore, Columns2, Columns3, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
@@ -32,20 +32,26 @@ const TAG_VORSCHLAEGE = ['Einschätzung', 'Analyse', 'Redebeitrag']
  *  Dokuments. */
 export type LeseVariante = 'a' | 'b' | 'c'
 
-const VARIANTE_KEY = 'mc.dokument.variante'
+// Zwei Schlüssel, weil die beiden Aufrufwege verschiedene Vorlieben haben:
+// Aus dem Dokumenten-Hub heraus gibt es keine Tagesordnung, die linke Spalte
+// wäre leer - Standard sind dort zwei Spalten. Aus einer Sitzung heraus ist
+// die Tagesordnung der eigentliche Einstieg, dort sind drei Spalten der
+// Standard. Wer umschaltet, bekommt seine Wahl je Kontext gemerkt.
+const VARIANTE_KEY_HUB = 'mc.dokument.variante'
+const VARIANTE_KEY_SITZUNG = 'mc.sitzung.variante'
 
-function ladeVariante(): LeseVariante {
+function ladeVariante(schluessel: string, standard: LeseVariante): LeseVariante {
   try {
-    const wert = window.localStorage.getItem(VARIANTE_KEY)
-    return wert === 'a' || wert === 'b' || wert === 'c' ? wert : 'a'
+    const wert = window.localStorage.getItem(schluessel)
+    return wert === 'a' || wert === 'b' || wert === 'c' ? wert : standard
   } catch {
-    return 'a'
+    return standard
   }
 }
 
-function speichereVariante(wert: LeseVariante) {
+function speichereVariante(schluessel: string, wert: LeseVariante) {
   try {
-    window.localStorage.setItem(VARIANTE_KEY, wert)
+    window.localStorage.setItem(schluessel, wert)
   } catch {
     // Reine Anzeige-Vorliebe - ein gesperrter Storage ist kein Fehlerfall.
   }
@@ -68,7 +74,16 @@ export function DokumentDetailModal({
   tagesordnung?: TagesordnungsEintrag[]
   onAuswahl?: (dokumentId: string) => void
 }) {
-  const [variante, setVariante] = useState<LeseVariante>(ladeVariante)
+  // Mit Tagesordnung = aus einer Sitzung heraus geöffnet. Eine leere Liste
+  // zählt nicht: dann gäbe es links nichts zu zeigen.
+  const imSitzungskontext = (tagesordnung?.length ?? 0) > 0
+  // Der Aufrufer remountet dieses Modal beim Wechsel über die Tagesordnung
+  // (key-Prop), die linke Spalte springt dadurch an den Anfang zurück. Bei
+  // ~84 Punkten wäre der gerade gewählte sonst nicht mehr im Bild.
+  const aktiverPunkt = useRef<HTMLLIElement | null>(null)
+  const [variante, setVariante] = useState<LeseVariante>(() =>
+    imSitzungskontext ? ladeVariante(VARIANTE_KEY_SITZUNG, 'b') : ladeVariante(VARIANTE_KEY_HUB, 'a'),
+  )
   const [notizenOffen, setNotizenOffen] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
@@ -558,13 +573,17 @@ export function DokumentDetailModal({
 
   const varianten: { wert: LeseVariante; icon: typeof Columns2; titel: string }[] = [
     { wert: 'a', icon: Columns2, titel: 'Zwei Spalten: Dokument und Notizen' },
-    { wert: 'b', icon: Columns3, titel: tagesordnung ? 'Drei Spalten: Tagesordnung, Dokument, Notizen' : 'Drei Spalten: Abschnitte, Dokument, Notizen' },
+    { wert: 'b', icon: Columns3, titel: 'Drei Spalten: Tagesordnung, Dokument, Notizen' },
     { wert: 'c', icon: PanelLeft, titel: 'Lesemodus: Dokument breit, Notizen einklappbar' },
   ]
 
+  useEffect(() => {
+    aktiverPunkt.current?.scrollIntoView({ block: 'center' })
+  }, [])
+
   function waehleVariante(wert: LeseVariante) {
     setVariante(wert)
-    speichereVariante(wert)
+    speichereVariante(imSitzungskontext ? VARIANTE_KEY_SITZUNG : VARIANTE_KEY_HUB, wert)
     if (wert !== 'c') setNotizenOffen(true)
   }
 
@@ -810,7 +829,7 @@ export function DokumentDetailModal({
   const zeigeNotizen = variante !== 'c' || notizenOffen
   const spaltenKlasse =
     variante === 'b'
-      ? 'md:grid-cols-[220px_minmax(0,1.5fr)_minmax(0,1fr)]'
+      ? 'md:grid-cols-[250px_minmax(0,1.5fr)_minmax(0,1fr)]'
       : variante === 'c'
         ? zeigeNotizen
           ? 'md:grid-cols-[minmax(0,1fr)_320px]'
@@ -823,30 +842,56 @@ export function DokumentDetailModal({
   const tagesordnungSpalte = (
     <nav aria-label="Tagesordnung" className="p-3">
       <h3 className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-        {tagesordnung ? 'Tagesordnung' : 'Keine Sitzung'}
+        {imSitzungskontext ? 'Tagesordnung' : 'Keine Tagesordnung'}
       </h3>
-      {!tagesordnung && (
+      {!imSitzungskontext && (
         <p className="px-2 text-xs text-slate-400">
-          Diese Ansicht zeigt die Tagesordnung, wenn das Dokument aus einer Sitzung heraus geöffnet wird.
+          Diese Spalte zeigt die Tagesordnung, wenn das Dokument aus einer Sitzung heraus geöffnet wird.
         </p>
       )}
       <ul className="space-y-0.5">
         {(tagesordnung ?? []).map((t) => {
-          const aktiv = t.dokument_id === document.id
-          return (
-            <li key={t.dokument_id}>
-              <button
-                type="button"
-                onClick={() => onAuswahl?.(t.dokument_id)}
-                className={`block w-full rounded-md border-l-2 px-2 py-1.5 text-left text-xs leading-snug transition-colors ${
-                  aktiv
-                    ? 'border-accent bg-white font-semibold text-primary'
-                    : 'border-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900'
-                }`}
-              >
+          const aktiv = t.dokument_id !== null && t.dokument_id === document.id
+          // Lange TOP-Titel auf drei Zeilen kürzen: eine Ratstagesordnung
+          // hat ~84 Punkte, ungekürzt wäre die Spalte nicht mehr überschaubar.
+          // Der volle Wortlaut steht im title-Attribut.
+          const beschriftung = t.top_titel || t.titel || '(ohne Titel)'
+          const text = (
+            <>
+              <span className="line-clamp-3">
                 {t.top_nummer && <span className="mr-1 font-mono text-[10px] text-slate-400">{t.top_nummer}</span>}
-                {t.top_titel || t.titel}
-              </button>
+                {beschriftung}
+              </span>
+              {t.ergebnis && (
+                <span className="mt-0.5 block text-[10px] font-normal text-slate-400">{t.ergebnis}</span>
+              )}
+            </>
+          )
+          return (
+            <li key={`${t.top_nummer ?? ''}|${t.dokument_id ?? ''}`} ref={aktiv ? aktiverPunkt : undefined}>
+              {t.dokument_id ? (
+                <button
+                  type="button"
+                  title={beschriftung}
+                  onClick={() => onAuswahl?.(t.dokument_id as string)}
+                  className={`block w-full rounded-md border-l-2 px-2 py-1.5 text-left text-xs leading-snug transition-colors ${
+                    aktiv
+                      ? 'border-accent bg-white font-semibold text-primary'
+                      : 'border-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900'
+                  }`}
+                >
+                  {text}
+                </button>
+              ) : (
+                // Punkt ohne Drucksache - gehört in die Tagesordnung, damit die
+                // Nummerierung nicht springt, hat aber nichts zu öffnen.
+                <div
+                  title={`${beschriftung} - ohne Drucksache`}
+                  className="block w-full border-l-2 border-transparent px-2 py-1.5 text-left text-xs italic leading-snug text-slate-400"
+                >
+                  {text}
+                </div>
+              )}
             </li>
           )
         })}

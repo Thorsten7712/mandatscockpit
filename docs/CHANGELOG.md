@@ -2422,3 +2422,96 @@ Tagesordnung links mit Nummern, Klick wechselt das Dokument (Kopfzeile folgt), U
 blendet die Tagesordnung aus und zeigt den Knopf „Notizen ausblenden", der die rechte Spalte
 entfernt. Die dafür vergebenen TOP-Nummern waren Testdaten und wurden anschließend wieder
 zurückgesetzt – es gibt bislang keine echte Tagesordnung im Bestand.
+
+### Die Tagesordnung vollständig: Punkte ohne Drucksache, Ergebnis, Import-Tool (2026-10-14)
+
+Nutzerwunsch: Das Dokument „Tagesordnung" soll in die linke Spalte aufgelöst werden, die Punkte
+sollen auf die Drucksachen im Hub verweisen, und das Tagesordnungsdokument selbst wird danach
+nicht mehr gebraucht. Dreispaltige Ansicht, umschaltbar. Fehlende DS-Dokumente sollen nachgeladen
+werden.
+
+**Was die Analyse der echten Tagesordnung ergab** (Rat der Stadt Iserlohn, 09.12.2025): 84 Punkte,
+davon **63 mit und 21 ohne Drucksache**. Die Punkte ohne Vorlage sind keine Randerscheinung –
+„Eröffnung der Sitzung", „Einwohnerfragen", „Mitteilungen des Vorsitzenden" strukturieren den
+Ablauf. Mit `dokument_id NOT NULL` (0042) ließen sich nur 63 speichern; die linke Spalte hätte eine
+Tagesordnung mit Löchern gezeigt, in der die Nummerierung springt. Dazu führt die Tagesordnung eine
+Spalte „Zuständigkeit" mit dem Beratungsergebnis (`ungeändert beschlossen`, `geändert beschlossen`,
+`abgelehnt`, `behandelt`, `zur Kenntnis genommen`) – genau das, was man bei einer vergangenen
+Sitzung sehen will, und es fehlte im Modell. Beides nach Rückfrage entschieden.
+
+**`0044_tagesordnungspunkte.sql`:**
+
+- `dokument_id` wird **nullable** – die Zeile ist damit endgültig der Tagesordnungspunkt, der ein
+  Dokument tragen *kann*. Der Tabellenname bleibt `sitzung_dokumente`: er beschreibt weiterhin die
+  Mehrheit der Zeilen, ein Rename hätte Frontend, MCP-Server und vier Policies angefasst, ohne
+  etwas zu verbessern.
+- `ergebnis text` – Freitext, kein Enum: die Wertemenge gehört ALLRIS, und ein unbekannter Wert
+  darf keinen Import abbrechen. Am TOP und nicht am Dokument, weil dieselbe Vorlage im
+  Fachausschuss empfohlen und im Rat beschlossen wird.
+- **Partieller Unique-Index auf (`session_id`, `top_nummer`)**. Ohne ihn hätte ein zweiter
+  Import-Lauf alle 21 Punkte ohne Drucksache verdoppelt: `unique (session_id, dokument_id)` greift
+  bei NULL nicht, weil NULL in Postgres zu jedem anderen NULL ungleich ist. Partiell, damit von
+  Hand gesetzte Verknüpfungen ohne TOP-Nummer unberührt bleiben.
+- **Alle vier Policies neu.** Die SELECT-Policy prüfte ausschließlich das Dokument – bei
+  `dokument_id = null` ist ihr `exists()` false, der Punkt wäre für *niemanden* sichtbar gewesen.
+  Jetzt hängt seine Sichtbarkeit an der Sitzung. Bei INSERT/DELETE gibt es für solche Punkte kein
+  Dokument, an dem die Berechtigung hängen könnte; dort entscheidet die Sitzung, und zwar nur bei
+  selbst nachgetragenen (`sessions.erstellt_von`). Importierte Sitzungen gehören niemandem – ihre
+  Tagesordnung kommt über den MCP-Server, der an RLS vorbei arbeitet.
+
+**`set_session_agenda`** (neu, `tools/tagesordnung.ts`) schreibt die Tagesordnung als Ganzes statt
+84-mal `link_document_session`: Die Reihenfolge ist nur als Ganzes bekannt, entfallene Punkte
+müssen verschwinden, und der Importeur kennt die **Drucksachennummer**, nicht die UUID. Das
+Auflösen gehört deshalb in den Server – samt der Rückmeldung, welche Nummern im Hub fehlen; genau
+die lädt dailyallris dann nach und ruft erneut auf. Beim Auflösen genügt ein Präfix-Vergleich
+nicht: „DS11/0470" wäre sonst auch ein Treffer für „DS11/0470-1", die Ergänzungsvorlage. Nach der
+Nummer muss ein Trenner folgen.
+
+Geschrieben wird **löschen-dann-einfügen** statt Upsert: Wandert ein Dokument zwischen zwei Läufen
+von TOP 3.1 auf 3.2, scheiterte das Einfügen an `unique (session_id, dokument_id)`, solange die
+alte Zeile noch steht. `modus="anhaengen"` gibt es, weil eine Ratstagesordnung mit 84 Punkten als
+JSON rund **17 KB** ergibt und ein einzelner MCP-Aufruf ab ca. 13 KB unzuverlässig wird – dieselbe
+Grenze wie bei `update_document_inhalt`. Dazu `list_session_agenda` zum Zurücklesen.
+
+**Im Modal** zeigt die linke Spalte jetzt die Tagesordnung samt der Punkte ohne Drucksache (kursiv
+und grau, nicht anklickbar – es gibt nichts zu öffnen) und das Ergebnis unter dem Wortlaut. Titel
+werden auf drei Zeilen gekürzt (voller Wortlaut im `title`-Attribut), sonst ist eine Spalte mit 84
+Punkten nicht mehr überschaubar. Zwei Dinge fielen beim Prüfen im Browser auf: Der aktive Punkt
+muss nach dem Wechsel wieder in den sichtbaren Bereich scrollen, weil der Remount (`key`) die
+Spalte an den Anfang zurücksetzt – bei 84 Punkten verliert man sonst die Stelle. Und das Layout
+braucht **zwei** `localStorage`-Schlüssel: aus dem Hub heraus gibt es keine Tagesordnung, die linke
+Spalte wäre leer (Standard: zwei Spalten); aus einer Sitzung heraus ist die Tagesordnung der
+Einstieg (Standard: drei Spalten).
+
+**Der Sitzungs-Panel listet die Tagesordnung statt der Dokumente** – mit Nummer, Ergebnis und den
+Punkten ohne Drucksache als gestrichelte, nicht anklickbare Zeile. Die Überschrift wechselt erst
+auf „Tagesordnung", wenn mindestens ein Punkt eine TOP-Nummer trägt; von Hand gesetzte
+Verknüpfungen bleiben „Verknüpfte Dokumente".
+
+Verifiziert im Browser-Harness gegen die echte Tagesordnung vom 09.12.2025 (alle 84 Punkte, 21 ohne
+Drucksache): dreispaltiger Einstieg aus der Sitzung, Klick auf „Ö 11" wechselt das Dokument und
+zentriert den Punkt wieder, Punkte ohne Drucksache sind kursiv und tot, im Hub-Kontext steht links
+„Keine Tagesordnung" und der Einstieg ist zweispaltig.
+
+### Der Sitzungsschlüssel war die ganze Zeit da: `sessions.ics_uid` (2026-10-14)
+
+Beim Bau des Tagesordnungs-Imports stellte sich die Frage, wie dailyallris eine Tagesordnung ihrer
+Sitzung zuordnet. Für `quelle_url` war das im Vortag bereits verneint worden (ALLRIS-Tagesansicht,
+für alle Sitzungen eines Tages identisch), und der Ersatzvorschlag war Gremium + Datum samt
+Uhrzeit. Ein Blick in den ICS-Feed zeigt den eigentlichen Schlüssel: `UID:ALLRIS-Sitzung-2003019`.
+Der Importer legt ihn seit jeher in `sessions.ics_uid` ab (`onConflict: 'source_id,ics_uid'`), und
+es ist dieselbe **SILFDNR**, die im Kopf jeder Tagesordnung steht
+(`to010?SILFDNR=2001745`). `list_sessions` gibt ihn jetzt mit aus, und
+`set_session_agenda`/`list_session_agenda` nehmen ihn alternativ zur UUID entgegen (auch als nackte
+Nummer).
+
+**Zur Kalenderquelle** (Nutzerhinweis, die öffentliche ALLRIS-URL sei
+`https://www.iserlohn.sitzung-online.de/public/ics/SiKalAbo.ics`): Beide Feeds abgerufen und
+verglichen – der öffentliche hat **47 Termine, der bisher genutzte persönliche 69, und der
+öffentliche ist eine echte Teilmenge** (0 Termine nur dort). Es fehlen genau die nicht-öffentlichen
+Gremien: CDU-Fraktion, Aufsichtsrat der Stadtwerke, Kleine Kommission Finanzen, Verwaltungsrat
+Märkischer Stadtbetrieb. Beide haben zudem dasselbe gleitende Fenster (09/2026–10/2027) und
+enthalten **keinen einzigen** Termin aus Nov/Dez 2025. Ein Wechsel auf die öffentliche URL würde
+also 22 Termine kosten und die fehlenden Sitzungen nicht zurückbringen – das gleitende Fenster
+gehört ALLRIS, nicht dem Abonnement. Die Quelle bleibt daher unverändert; Vergangenes kann nur über
+den ALLRIS-Sitzungskalender selbst nachgetragen werden (dailyallris), nicht über ICS.

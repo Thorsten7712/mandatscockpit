@@ -595,6 +595,10 @@ export async function linkDocumentSession(supabase: SupabaseClient, userId: stri
   if (typeof args.reihenfolge === 'number' && Number.isFinite(args.reihenfolge)) {
     topFelder.reihenfolge = Math.trunc(args.reihenfolge)
   }
+  // Beratungsergebnis (0044) - gehört an den Tagesordnungspunkt, nicht an das
+  // Dokument: dieselbe Vorlage wird im Fachausschuss empfohlen und im Rat
+  // beschlossen, mit unterschiedlichem Ergebnis.
+  if (typeof args.ergebnis === 'string') topFelder.ergebnis = args.ergebnis.trim() || null
 
   const { data: dok } = await supabase.from('dokumente').select('id, user_id, titel').eq('id', dokumentId).maybeSingle()
   if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)

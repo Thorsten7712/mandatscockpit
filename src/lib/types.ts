@@ -121,7 +121,10 @@ export interface FaktRow {
 export interface SitzungDokument {
   id: string
   session_id: string
-  dokument_id: string
+  /** null = Tagesordnungspunkt ohne Drucksache ("Eröffnung der Sitzung",
+   * "Einwohnerfragestunde"). Rund ein Viertel der Punkte einer Ratssitzung
+   * hat keine Vorlage (0044_tagesordnungspunkte.sql). */
+  dokument_id: string | null
   /** Tagesordnungspunkt, unter dem das Dokument in DIESER Sitzung läuft
    * (0043_sitzung_dokumente_top.sql). Dasselbe Dokument kann in einer anderen
    * Sitzung unter einer anderen Nummer stehen. Text wegen mehrstufiger
@@ -131,15 +134,22 @@ export interface SitzungDokument {
   top_titel: string | null
   /** Position auf der Tagesordnung - top_nummer sortiert als Text falsch. */
   reihenfolge: number | null
+  /** Beratungsergebnis aus der Spalte "Zuständigkeit" der ALLRIS-Tagesordnung
+   * ("ungeändert beschlossen", "abgelehnt", ...). Freitext, die Wertemenge
+   * gehört ALLRIS (0044_tagesordnungspunkte.sql). */
+  ergebnis: string | null
   erstellt_am: string
 }
 
 /** Ein Eintrag der Tagesordnung für die linke Spalte des Lesers. */
 export interface TagesordnungsEintrag {
-  dokument_id: string
+  /** null = Punkt ohne Drucksache; im Leser nicht anklickbar. */
+  dokument_id: string | null
   top_nummer: string | null
   top_titel: string | null
   reihenfolge: number | null
+  ergebnis: string | null
+  /** Titel des verknüpften Dokuments, leer bei Punkten ohne Drucksache. */
   titel: string
 }
 

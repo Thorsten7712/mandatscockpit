@@ -543,7 +543,7 @@ export const TOOLS = [
   {
     name: 'update_document_archiv',
     description:
-      'Legt ein eigenes Dokument im Dokumenten-Hub von Hand ins Archiv oder holt es zurück - nur der/die Ersteller*in darf das. Betrifft ausschließlich die manuelle Archivierung: ein Dokument, dessen verknüpfte Sitzung vorbei ist, gilt weiterhin als archiviert und lässt sich nur durch Lösen der Sitzungs-Verknüpfung (update_document_session) zurückholen.',
+      'Legt ein eigenes Dokument im Dokumenten-Hub von Hand ins Archiv oder holt es zurück - nur der/die Ersteller*in darf das. Betrifft ausschließlich die manuelle Archivierung: ein Dokument, dessen verknüpfte Sitzung vorbei ist, gilt weiterhin als archiviert und lässt sich nur durch Lösen der Sitzungs-Verknüpfung (unlink_document_session) zurückholen.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -615,8 +615,79 @@ export const TOOLS = [
           type: 'number',
           description: 'Position auf der Tagesordnung (optional). Nötig zum Sortieren, weil top_nummer als Text falsch ordnet ("3.10" vor "3.2").',
         },
+        ergebnis: {
+          type: 'string',
+          description: 'Beratungsergebnis dieses Tagesordnungspunkts, z. B. "ungeändert beschlossen" (optional). Für ganze Tagesordnungen besser set_session_agenda nutzen.',
+        },
       },
       required: ['dokument_id', 'session_id'],
+    },
+  },
+  {
+    name: 'set_session_agenda',
+    description:
+      'Schreibt die Tagesordnung einer Sitzung als Ganzes: alle Punkte in ihrer Reihenfolge, mit Verknüpfung auf die Drucksachen im Dokumenten-Hub und mit dem Beratungsergebnis. Punkte ohne Drucksache ("Eröffnung der Sitzung", "Einwohnerfragestunde") gehören dazu - sie strukturieren den Ablauf und machen rund ein Viertel einer Ratstagesordnung aus. Die Drucksachen werden über ihre Nummer aufgelöst (das Tool sucht das Dokument, dessen Titel mit der Nummer beginnt); welche Nummern im Hub fehlen, steht in der Antwort - die herunterladen, mit create_document hochladen und erneut aufrufen. Schlüssel jedes Punkts ist seine TOP-Nummer, ein erneuter Aufruf aktualisiert dieselbe Tagesordnung also statt sie zu verdoppeln. Von Hand im Cockpit gesetzte Sitzungs-Verknüpfungen (ohne TOP-Nummer) bleiben unberührt.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string', description: 'UUID der Sitzung (aus list_sessions). Alternativ ics_uid angeben.' },
+        ics_uid: {
+          type: 'string',
+          description:
+            'Statt session_id: die ALLRIS-Kennung der Sitzung, "ALLRIS-Sitzung-2001745" oder nur "2001745". Das ist dieselbe SILFDNR, die im Kopf der Tagesordnung steht (to010?SILFDNR=...), und damit der zuverlässigste Weg, eine Tagesordnung ihrer Sitzung zuzuordnen.',
+        },
+        punkte: {
+          type: 'array',
+          description:
+            'Die Tagesordnungspunkte in ihrer Reihenfolge. Ohne reihenfolge-Angabe gilt die Position in dieser Liste.',
+          items: {
+            type: 'object',
+            properties: {
+              top_nummer: {
+                type: 'string',
+                description: 'Nummer des Punkts, z. B. "Ö 3.1" oder "N 4.2" (erforderlich, innerhalb der Sitzung eindeutig).',
+              },
+              top_titel: { type: 'string', description: 'Wortlaut des Punkts (Betreff aus der Tagesordnung).' },
+              drucksache: {
+                type: 'string',
+                description: 'Drucksachennummer der Vorlage, z. B. "DS11/0108" (optional). Wird zum Dokument im Hub aufgelöst.',
+              },
+              dokument_id: {
+                type: 'string',
+                description: 'UUID des Dokuments, falls bereits bekannt (optional, Alternative zu drucksache).',
+              },
+              ergebnis: {
+                type: 'string',
+                description: 'Beratungsergebnis aus der Spalte "Zuständigkeit", z. B. "ungeändert beschlossen" oder "abgelehnt" (optional, bei vergangenen Sitzungen nachtragen).',
+              },
+              reihenfolge: { type: 'number', description: 'Position auf der Tagesordnung (optional, Standard: Listenposition).' },
+            },
+            required: ['top_nummer'],
+          },
+        },
+        modus: {
+          type: 'string',
+          enum: ['ersetzen', 'anhaengen'],
+          description:
+            'Standard "ersetzen": die bisherige importierte Tagesordnung dieser Sitzung wird durch die übergebene Liste ersetzt, entfallene Punkte verschwinden. "anhaengen" rührt nur die übergebenen Punkte an - für lange Tagesordnungen, die in Teilstücken kommen (ein einzelner MCP-Aufruf wird ab ca. 13 KB unzuverlässig).',
+        },
+      },
+      required: ['punkte'],
+    },
+  },
+  {
+    name: 'list_session_agenda',
+    description:
+      'Listet die hinterlegte Tagesordnung einer Sitzung: TOP-Nummer, Wortlaut, verknüpftes Dokument und Beratungsergebnis, in der Reihenfolge der Tagesordnung. Zum Prüfen nach einem Import und für Rückblicke ("was wurde in TOP 3.1 beschlossen").',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string', description: 'UUID der Sitzung (aus list_sessions). Alternativ ics_uid angeben.' },
+        ics_uid: {
+          type: 'string',
+          description: 'Statt session_id: die ALLRIS-Kennung, "ALLRIS-Sitzung-2001745" oder nur "2001745".',
+        },
+      },
     },
   },
   {

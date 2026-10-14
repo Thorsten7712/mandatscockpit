@@ -70,10 +70,22 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   ToDo-Karten verknüpfen (`todo_dokumente`, `0037_todo_dokumente.sql`). Beide Verknüpfungen sind im
   Detail-Modal auf beiden Seiten sichtbar/editierbar und über den MCP-Server steuerbar
   (`link_document_session`/`unlink_document_session`, `link_todo_document`/`unlink_todo_document`).
-  Die Verknüpfungszeile trägt zugleich den **Tagesordnungspunkt** (`top_nummer`, `top_titel`,
-  `reihenfolge`; `0043_sitzung_dokumente_top.sql`) – dasselbe Dokument kann in zwei Sitzungen unter
+  Die Verknüpfungszeile **ist** zugleich der **Tagesordnungspunkt** (`top_nummer`, `top_titel`,
+  `reihenfolge`, `ergebnis`; `0043`/`0044`) – dasselbe Dokument kann in zwei Sitzungen unter
   verschiedenen Nummern stehen. `reihenfolge` gibt es zusätzlich zu `top_nummer`, weil Text falsch
-  sortiert („3.10" vor „3.2").
+  sortiert („3.10" vor „3.2"). `dokument_id` ist seit `0044_tagesordnungspunkte.sql` **nullable**:
+  rund ein Viertel der Punkte einer Ratstagesordnung hat keine Drucksache („Eröffnung der Sitzung",
+  „Einwohnerfragestunde"), und ohne sie springt die Nummerierung. `ergebnis` ist die Spalte
+  „Zuständigkeit" aus ALLRIS („ungeändert beschlossen", „abgelehnt") – Freitext, weil die Wertemenge
+  ALLRIS gehört und ein unbekannter Wert keinen Import abbrechen darf; sie gehört an den TOP und
+  nicht ans Dokument, weil dieselbe Vorlage im Ausschuss empfohlen und im Rat beschlossen wird.
+  Geschrieben wird die Tagesordnung ausschließlich über den MCP-Server (`set_session_agenda`, aus
+  dailyallris heraus); Punkte ohne Dokument lassen sich per RLS nur an **selbst nachgetragenen**
+  Sitzungen anlegen, weil es dort kein Dokument gibt, an dem die Berechtigung hängen könnte.
+  Eindeutigkeit und Idempotenz des Imports hängen an einem partiellen Unique-Index auf
+  (`session_id`, `top_nummer`) – ohne ihn hätte ein zweiter Lauf alle Punkte ohne Drucksache
+  verdoppelt (NULL ist in Postgres zu jedem anderen NULL ungleich, `unique (session_id,
+  dokument_id)` greift dort also nicht).
   **Archiv:** Ein Dokument gilt als archiviert, wenn entweder die **letzte** verknüpfte Sitzung
   vorbei ist (nicht irgendeine – sonst verschwände eine Vorlage nach dem Fachausschuss, während der
   Rat noch entscheidet) oder
@@ -98,7 +110,13 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   **Drei Leselayouts**, umschaltbar im Kopf des Modals und pro Gerät in
   `localStorage` gemerkt: A = Dokument + Notizen, B = zusätzlich eine linke Spalte, C = Lesemodus
   (68 Zeichen Zeilenbreite, Notizen einklappbar). In B steht links die **Tagesordnung** der Sitzung,
-  aus der heraus geöffnet wurde – ein Klick wechselt das Dokument. Die Auswahl besitzt der Aufrufer
+  aus der heraus geöffnet wurde – ein Klick wechselt das Dokument; Punkte ohne Drucksache stehen
+  kursiv und grau da, es gibt nichts zu öffnen. Zwei `localStorage`-Schlüssel, weil die beiden
+  Aufrufwege verschiedene Vorlieben haben: aus dem Hub heraus (`mc.dokument.variante`) wäre die
+  linke Spalte leer, Standard sind dort zwei Spalten; aus einer Sitzung heraus
+  (`mc.sitzung.variante`) ist die Tagesordnung der Einstieg, Standard sind drei Spalten. Beim
+  Wechsel über die Tagesordnung scrollt der aktive Punkt wieder in den sichtbaren Bereich – der
+  Remount setzt die Spalte sonst an den Anfang zurück, was bei 84 Punkten stört. Die Auswahl besitzt der Aufrufer
   (`TerminDetailPanel`) und remountet das Modal per `key`: die lokalen Spiegel im Modal (Tags,
   Archiv-Status, Freigaben) werden nur beim Mounten aus der Prop aufgesetzt.
   Die **Listenansicht** zeigt nur `vorschau()` – zwei Zeilen reiner Text, bevorzugt der
@@ -120,14 +138,17 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 33 Tools über
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 35 Tools über
   ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
   README.md Abschnitt 9 und `docs/CHANGELOG.md`). `list_documents` kennt das Dokumenten-Archiv
   (Parameter `archiv`, Standard „ohne" wie in der Web-UI) und einen Titel-Filter (`titel`, greift
   in der DB-Abfrage, damit das Limit ältere Drucksachen nicht verdeckt), `update_document_archiv` legt ein
   Dokument von Hand hinein bzw. holt es zurück. `delete_document` ist der einzige
   Löschweg für Hub-Dokumente, seit der Bestand dem technischen Import-Konto gehört und in der
-  Web-UI niemand mehr Eigentümer ist. `update_document_inhalt` setzt den Markdown-Text
+  Web-UI niemand mehr Eigentümer ist. `set_session_agenda` schreibt die ganze Tagesordnung einer
+  Sitzung in einem Aufruf (Punkte mit und ohne Drucksache, Reihenfolge, Ergebnis; Drucksachennummern
+  werden zum Hub-Dokument aufgelöst, fehlende nennt die Antwort, damit dailyallris sie nachlädt),
+  `list_session_agenda` liest sie zurück. `update_document_inhalt` setzt den Markdown-Text
   nachträglich (für dailyallris, das bereits hochgeladene Vorlagen nachrüstet) – mit
   `modus="anhaengen"` auch stückweise, weil ein einzelner MCP-Aufruf ab ca. 13 KB unzuverlässig wird. Die Archiv-Regel ist in `tools/dokumente.ts`
   bewusst gespiegelt statt geteilt (kein gemeinsames Build-Tooling zwischen Deno und Frontend).

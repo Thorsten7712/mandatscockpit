@@ -120,34 +120,37 @@ export function TerminDetailPanel({
   async function loadLinkedDokumente() {
     if (kind !== 'session') {
       setLinkedDokumente([])
-      return
-    }
-    // Über die n:m-Tabelle (0042_sitzung_dokumente.sql) - ein Dokument kann an
-    // mehreren Sitzungen hängen, die frühere Spalte dokumente.session_id gibt
-    // es nicht mehr. Die Verknüpfungszeile trägt zugleich den
-    // Tagesordnungspunkt (0043).
-    const { data: links } = await supabase
-      .from('sitzung_dokumente')
-      .select('dokument_id, top_nummer, top_titel, reihenfolge')
-      .eq('session_id', id)
-    const eintraege = (links ?? []) as Omit<TagesordnungsEintrag, 'titel'>[]
-    const ids = eintraege.map((l) => l.dokument_id)
-    if (ids.length === 0) {
-      setLinkedDokumente([])
       setTagesordnung([])
       return
     }
-    const { data } = await supabase.from('dokumente').select('*').in('id', ids).order('erstellt_am')
+    // Die Tagesordnung IST die Verknüpfungstabelle (0042-0044): jede Zeile ist
+    // ein Tagesordnungspunkt, der ein Dokument tragen KANN. Punkte ohne
+    // Drucksache ("Eröffnung der Sitzung", "Einwohnerfragestunde") machen rund
+    // ein Viertel einer Ratstagesordnung aus und gehören dazu - ohne sie
+    // springt die Nummerierung.
+    const { data: links } = await supabase
+      .from('sitzung_dokumente')
+      .select('dokument_id, top_nummer, top_titel, reihenfolge, ergebnis')
+      .eq('session_id', id)
+    const eintraege = (links ?? []) as Omit<TagesordnungsEintrag, 'titel'>[]
+    const ids = eintraege.map((l) => l.dokument_id).filter((d): d is string => d !== null)
+    const { data } =
+      ids.length > 0
+        ? await supabase.from('dokumente').select('*').in('id', ids).order('erstellt_am')
+        : { data: [] as DokumentRow[] }
     const dokumente = data ?? []
-    setLinkedDokumente(dokumente)
+    const titelById = new Map(dokumente.map((d) => [d.id, d.titel]))
 
+    // Beide States nach demselben await setzen, damit React einmal rendert -
+    // sonst stünde für einen Moment eine Tagesordnung ohne Dokumente da
+    // (siehe CLAUDE.md).
+    setLinkedDokumente(dokumente)
     // Nach der Tagesordnung sortieren, wo sie bekannt ist - top_nummer taugt
     // als Text nicht ("3.10" käme vor "3.2"). Einträge ohne Reihenfolge landen
     // hinten, alphabetisch nach Titel.
-    const titelById = new Map(dokumente.map((d) => [d.id, d.titel]))
     setTagesordnung(
       eintraege
-        .map((e) => ({ ...e, titel: titelById.get(e.dokument_id) ?? '' }))
+        .map((e) => ({ ...e, titel: (e.dokument_id ? titelById.get(e.dokument_id) : '') ?? '' }))
         .sort((a, b) => {
           if (a.reihenfolge !== null && b.reihenfolge !== null) return a.reihenfolge - b.reihenfolge
           if (a.reihenfolge !== null) return -1
@@ -184,6 +187,12 @@ export function TerminDetailPanel({
   // sessions_delete_own_manuell, supabase/migrations/0028+0029) - importierte
   // Sitzungen (erstellt_von = null) bleiben read-only.
   const canManageSession = kind === 'session' && session?.erstellt_von === userId
+
+  // Eine echte Tagesordnung liegt vor, sobald mindestens ein Punkt eine
+  // TOP-Nummer trägt (die setzt nur der Import, siehe set_session_agenda im
+  // MCP-Server). Ohne das sind es von Hand gesetzte Verknüpfungen, für die
+  // "Tagesordnung" als Überschrift zu viel behauptet.
+  const hatTagesordnung = tagesordnung.some((t) => t.top_nummer !== null)
 
   function startEdit() {
     if (kind === 'event' && event) {
@@ -518,20 +527,47 @@ export function TerminDetailPanel({
             )}
           </ul>
 
-          <h3 className="mb-2 text-sm font-semibold text-slate-900">Verknüpfte Dokumente</h3>
-          <ul className="mb-6 space-y-2">
-            {linkedDokumente.map((d) => (
-              <li key={d.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenDokument(d)}
-                  className="w-full truncate rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-800 shadow-sm transition-shadow duration-150 hover:shadow-md"
-                >
-                  {d.titel}
-                </button>
-              </li>
-            ))}
-            {linkedDokumente.length === 0 && (
+          <h3 className="mb-2 text-sm font-semibold text-slate-900">
+            {hatTagesordnung ? 'Tagesordnung' : 'Verknüpfte Dokumente'}
+          </h3>
+          <ul className="mb-6 space-y-1.5">
+            {tagesordnung.map((t) => {
+              const dok = t.dokument_id ? linkedDokumente.find((d) => d.id === t.dokument_id) : null
+              const inhalt = (
+                <>
+                  {t.top_nummer && (
+                    <span className="shrink-0 font-mono text-[11px] text-slate-400">{t.top_nummer}</span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{t.top_titel || t.titel || '(ohne Titel)'}</span>
+                  {t.ergebnis && (
+                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                      {t.ergebnis}
+                    </span>
+                  )}
+                </>
+              )
+              return (
+                <li key={`${t.top_nummer ?? ''}|${t.dokument_id ?? ''}`}>
+                  {dok ? (
+                    <button
+                      type="button"
+                      onClick={() => setOpenDokument(dok)}
+                      className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-800 shadow-sm transition-shadow duration-150 hover:shadow-md"
+                    >
+                      {inhalt}
+                    </button>
+                  ) : (
+                    // Punkt ohne Drucksache: sichtbar, aber nicht anklickbar -
+                    // es gibt kein Dokument zum Öffnen. Gestrichelter Rahmen
+                    // statt Karte, damit das auf einen Blick klar ist.
+                    <div className="flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
+                      {inhalt}
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+            {tagesordnung.length === 0 && (
               <li className="text-slate-400 text-sm">Keine verknüpften Dokumente.</li>
             )}
           </ul>
