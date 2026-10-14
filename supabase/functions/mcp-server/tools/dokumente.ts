@@ -13,6 +13,18 @@ const EBENE_LABEL: Record<string, string> = {
   bund: 'Bund',
 }
 
+/**
+ * Maskiert die Platzhalter von ILIKE, damit ein Suchbegriff wörtlich gesucht
+ * wird. PostgREST ersetzt in Mustern zusätzlich `*` durch `%`, deshalb wird
+ * auch das maskiert - sonst wäre ein Stern im Suchbegriff eine Wildcard.
+ * Drucksachennummern enthalten davon nichts, aber der Parameter ist allgemein
+ * nutzbar.
+ */
+function ilikeMuster(suchbegriff: string): string {
+  const maskiert = suchbegriff.replace(/[\\%_*]/g, (zeichen) => `\\${zeichen}`)
+  return `%${maskiert}%`
+}
+
 /** Beginn des heutigen Tages als ISO-String - Grundlage der Archiv-Regel.
  *  Edge Functions laufen in UTC, die Web-UI rechnet in der lokalen Zeitzone des
  *  Browsers; die Abweichung von bis zu zwei Stunden ist hier folgenlos, weil
@@ -305,6 +317,11 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   const ebeneFilter = typeof args.ebene === 'string' && args.ebene.trim() ? args.ebene.trim() : ''
   const tag = typeof args.tag === 'string' && args.tag.trim() ? args.tag.trim().toLowerCase() : ''
   const sessionIdFilter = typeof args.session_id === 'string' && args.session_id.trim() ? args.session_id.trim() : ''
+  // Titel-Teilstring, z. B. eine Drucksachennummer. Anders als tag/ebene wird
+  // dieser Filter in der Datenbankabfrage angewendet und nicht erst beim
+  // Formatieren: das Limit greift sonst zuerst, und eine ältere Drucksache
+  // wäre unauffindbar, weil sie nicht unter den neuesten Treffern liegt.
+  const titelFilter = typeof args.titel === 'string' && args.titel.trim() ? args.titel.trim() : ''
   // Standard "ohne" spiegelt die Web-UI (Dokumente.tsx blendet Archiviertes
   // aus). "alle"/"nur" für den Blick ins Archiv, siehe archivGrund() oben.
   const archivFilter = args.archiv === 'alle' || args.archiv === 'nur' ? args.archiv : 'ohne'
@@ -321,6 +338,7 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
     'id, parent_id, session_id, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url, archiviert_am, erstellt_am, user_id'
   let baseQuery = supabase.from('dokumente').select(cols)
   baseQuery = parentIdFilter ? baseQuery.eq('parent_id', parentIdFilter) : baseQuery.is('parent_id', null)
+  if (titelFilter) baseQuery = baseQuery.ilike('titel', ilikeMuster(titelFilter))
 
   // Eigene Zeilen + potenziell sichtbare geteilte/einzelpersonen-Zeilen laden
   // (Filterung auf "wirklich sichtbar" passiert unten in JS, siehe darfSehen() -
@@ -328,21 +346,23 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   const [ownRows, geteiltRows, shareRows] = await Promise.all([
     baseQuery.eq('user_id', userId),
     caller.ebenen.length > 0
-      ? supabase.from('dokumente').select(cols).eq('sichtbarkeit', 'geteilt').in('ebene', caller.ebenen).then((r) => {
-          const rows = (r.data ?? []) as DokumentListRow[]
-          return { data: parentIdFilter ? rows.filter((d) => d.parent_id === parentIdFilter) : rows.filter((d) => !d.parent_id) }
-        })
+      ? (() => {
+          let q = supabase.from('dokumente').select(cols).eq('sichtbarkeit', 'geteilt').in('ebene', caller.ebenen)
+          if (titelFilter) q = q.ilike('titel', ilikeMuster(titelFilter))
+          return q.then((r) => {
+            const rows = (r.data ?? []) as DokumentListRow[]
+            return { data: parentIdFilter ? rows.filter((d) => d.parent_id === parentIdFilter) : rows.filter((d) => !d.parent_id) }
+          })
+        })()
       : Promise.resolve({ data: [] as DokumentListRow[] }),
     supabase.from('dokument_shares').select('dokument_id').eq('user_id', userId),
   ])
 
   const sharedDokIds = (shareRows.data ?? []).map((s) => s.dokument_id as string)
-  const { data: einzelRows } =
-    sharedDokIds.length > 0
-      ? await (parentIdFilter
-          ? supabase.from('dokumente').select(cols).in('id', sharedDokIds).eq('parent_id', parentIdFilter)
-          : supabase.from('dokumente').select(cols).in('id', sharedDokIds).is('parent_id', null))
-      : { data: [] as DokumentListRow[] }
+  let einzelQuery = supabase.from('dokumente').select(cols).in('id', sharedDokIds)
+  einzelQuery = parentIdFilter ? einzelQuery.eq('parent_id', parentIdFilter) : einzelQuery.is('parent_id', null)
+  if (titelFilter) einzelQuery = einzelQuery.ilike('titel', ilikeMuster(titelFilter))
+  const { data: einzelRows } = sharedDokIds.length > 0 ? await einzelQuery : { data: [] as DokumentListRow[] }
 
   const byId = new Map<string, DokumentListRow>()
   for (const row of [...((ownRows.data ?? []) as DokumentListRow[]), ...((geteiltRows.data ?? []) as DokumentListRow[]), ...((einzelRows ?? []) as DokumentListRow[])]) {
@@ -388,11 +408,12 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   rows = rows.slice(0, limit)
 
   if (rows.length === 0) {
-    if (archivFilter === 'nur') return toolTextResult('Keine archivierten Dokumente gefunden.')
+    const zusatz = titelFilter ? ` für Titel-Suche "${titelFilter}"` : ''
+    if (archivFilter === 'nur') return toolTextResult(`Keine archivierten Dokumente gefunden${zusatz}.`)
     return toolTextResult(
       archivFilter === 'ohne'
-        ? 'Keine Dokumente gefunden (archivierte sind ausgeblendet - archiv="alle" oder archiv="nur" zeigt sie).'
-        : 'Keine Dokumente gefunden.',
+        ? `Keine Dokumente gefunden${zusatz} (archivierte sind ausgeblendet - archiv="alle" oder archiv="nur" zeigt sie).`
+        : `Keine Dokumente gefunden${zusatz}.`,
     )
   }
 

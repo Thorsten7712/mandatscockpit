@@ -2165,3 +2165,34 @@ unterscheiden („AfD Fraktion" / „AfD-Fraktion", „Fraktion Die Linke" / „
 ist dadurch höher als der erste Listeneintrag. Das ist ein Datenproblem aus der Tag-Vergabe in
 dailyallris, kein Anzeigefehler - aber die Leiste sollte damit umgehen können (Begrenzung auf die
 häufigsten Tags plus Aufklappen).
+
+### list_documents bekommt einen Titel-Filter (2026-10-14)
+
+Anforderung aus `dailyallris`: Das Skript muss vor jedem Upload prüfen, ob zu einer Drucksache
+(z. B. `DS11/0941`) schon ein Dokument im Hub liegt, und für den einmaligen Nachtrag per
+`update_document_inhalt` das passende Dokument finden.
+
+Das ging bisher nicht zuverlässig. `list_documents` liefert höchstens 100 Treffer ohne
+Paginierung, im Hub liegen aber über 200 geteilte Dokumente - beide Archiv-Hälften stoßen schon
+für sich an die Grenze. Ein Abgleich über den exakten Titel oder ein festes Tag scheidet aus, weil
+beides nachträglich von Hand geändert wird; stabil ist nur die DS-Nummer am Titelanfang.
+
+Neuer optionaler Parameter `titel`: Teilstring-Suche, Groß-/Kleinschreibung egal.
+
+**Der Filter läuft in der Datenbankabfrage, nicht beim Formatieren.** Das ist der eigentliche Punkt:
+`limit` wird erst nach dem Sortieren nach `erstellt_am` angewendet, ein nachgelagerter Filter würde
+also nur die 100 neuesten Dokumente durchsuchen und eine ältere Drucksache nie finden. `.ilike()`
+hängt deshalb an allen drei Teilabfragen - eigene Zeilen, Ebene-weit geteilte und per
+`dokument_shares` einzeln freigegebene.
+
+`ilikeMuster()` maskiert `%`, `_` und `\` im Suchbegriff, zusätzlich `*`: PostgREST ersetzt in
+Mustern `*` durch `%`, ein Stern im Suchbegriff wäre sonst eine Wildcard. Drucksachennummern
+enthalten nichts davon, aber der Parameter ist allgemein nutzbar.
+
+Sichtbarkeitsprüfung (`darfSehen`) und Archiv-Logik bleiben unverändert, ebenso das Ausgabeformat -
+dailyallris parst die Zeilen mit einem festen Muster und prüft zusätzlich, ob jeder zurückgegebene
+Titel den Suchbegriff enthält; eine Formatänderung würde den Upload stillegen. Die
+"keine Treffer"-Meldung nennt jetzt den Suchbegriff mit, sonst sieht ein Tippfehler aus wie ein
+leerer Hub.
+
+Ohne `titel` verhält sich das Tool unverändert.

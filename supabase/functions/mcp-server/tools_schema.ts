@@ -502,7 +502,7 @@ export const TOOLS = [
   {
     name: 'list_documents',
     description:
-      'Listet Dokumente aus dem Dokumenten-Hub auf - eigene (persönlich, geteilt und einzelpersonen) sowie die geteilten bzw. mit dem Nutzer individuell geteilten Dokumente anderer Mitglieder. Ohne parent_id nur Top-Level-Dokumente (z. B. hochgeladene Sitzungsvorlagen); mit parent_id gezielt die an ein bestimmtes Dokument angehängten Notizen/Analysen. Liefert je Dokument auch die id (für parent_id bei create_document oder spätere Verwaltung) und ggf. den Ersteller-Namen bei fremden Dokumenten. Archivierte Dokumente sind standardmäßig ausgeblendet (siehe Parameter archiv) und in der Ausgabe mit ARCHIV markiert.',
+      'Listet Dokumente aus dem Dokumenten-Hub auf - eigene (persönlich, geteilt und einzelpersonen) sowie die geteilten bzw. mit dem Nutzer individuell geteilten Dokumente anderer Mitglieder. Ohne parent_id nur Top-Level-Dokumente (z. B. hochgeladene Sitzungsvorlagen); mit parent_id gezielt die an ein bestimmtes Dokument angehängten Notizen/Analysen. Liefert je Dokument auch die id (für parent_id bei create_document oder spätere Verwaltung) und ggf. den Ersteller-Namen bei fremden Dokumenten. Archivierte Dokumente sind standardmäßig ausgeblendet (siehe Parameter archiv) und in der Ausgabe mit ARCHIV markiert. Mit titel lässt sich gezielt nach einer Drucksache suchen - der Filter greift in der Datenbank, also auch für Dokumente, die nicht unter den neuesten Treffern liegen.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -521,6 +521,11 @@ export const TOOLS = [
           description: 'Filtert geteilte Dokumente nach Ebene (optional).',
         },
         tag: { type: 'string', description: 'Filtert per Teilstring-Suche nach Tag, Groß-/Kleinschreibung egal (optional).' },
+        titel: {
+          type: 'string',
+          description:
+            'Filtert per Teilstring-Suche nach Titel, Groß-/Kleinschreibung egal (optional), z. B. eine DS-Nummer wie "DS11/0941". Wird vor dem Limit angewendet, findet also auch ältere Dokumente.',
+        },
         session_id: {
           type: 'string',
           description: 'Filtert auf Dokumente, die mit dieser Sitzung verknüpft sind (optional).',

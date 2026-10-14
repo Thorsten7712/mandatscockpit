@@ -108,7 +108,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 31 Tools über
   ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
   README.md Abschnitt 9 und `docs/CHANGELOG.md`). `list_documents` kennt das Dokumenten-Archiv
-  (Parameter `archiv`, Standard „ohne" wie in der Web-UI), `update_document_archiv` legt ein
+  (Parameter `archiv`, Standard „ohne" wie in der Web-UI) und einen Titel-Filter (`titel`, greift
+  in der DB-Abfrage, damit das Limit ältere Drucksachen nicht verdeckt), `update_document_archiv` legt ein
   Dokument von Hand hinein bzw. holt es zurück. `update_document_inhalt` setzt den Markdown-Text
   nachträglich (für dailyallris, das bereits hochgeladene Vorlagen nachrüstet) – mit
   `modus="anhaengen"` auch stückweise, weil ein einzelner MCP-Aufruf ab ca. 13 KB unzuverlässig wird. Die Archiv-Regel ist in `tools/dokumente.ts`
