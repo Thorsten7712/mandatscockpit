@@ -112,7 +112,12 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   **Drei Leselayouts**, umschaltbar im Kopf des Modals und pro Gerät in
   `localStorage` gemerkt: A = Dokument + Notizen, B = zusätzlich eine linke Spalte, C = Lesemodus
   (68 Zeichen Zeilenbreite, Notizen einklappbar). In B steht links die **Tagesordnung** der Sitzung,
-  aus der heraus geöffnet wurde – ein Klick wechselt das Dokument; Punkte ohne Drucksache stehen
+  aus der heraus geöffnet wurde – ein Klick wechselt das Dokument. Eine Sitzung **mit** Tagesordnung
+  öffnet direkt in dieser Leseansicht: `TerminDetailPanel` schlägt beim ersten Laden den ersten
+  Punkt mit Dokument auf, statt erst die Liste davor zu zeigen. Nur bei echter Tagesordnung
+  (TOP-Nummern aus dem Import) – lose Verknüpfungen bleiben eine Liste. Der Rückweg steht als
+  Sitzungstitel über der Tagesordnungsspalte (`sitzungTitel`-Prop), weil Anträge, Sitzungsnotizen
+  und hochgeladene Dateien nur in der Sitzungsansicht liegen; Punkte ohne Drucksache stehen
   kursiv und grau da, es gibt nichts zu öffnen. Zwei `localStorage`-Schlüssel, weil die beiden
   Aufrufwege verschiedene Vorlieben haben: aus dem Hub heraus (`mc.dokument.variante`) wäre die
   linke Spalte leer, Standard sind dort zwei Spalten; aus einer Sitzung heraus

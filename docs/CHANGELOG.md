@@ -2562,3 +2562,20 @@ Verknüpfung desselben Dokuments. Blanke Verknüpfungen zu Dokumenten, die nicht
 stehen, bleiben unangetastet. Derselbe Fehler steckte in `set_session_agenda` – dort im Modus
 "ersetzen", während "anhaengen" ihn zufällig nicht hatte, weil es ohnehin nach `dokument_id`
 löscht. Beides korrigiert. Ohne den Live-Lauf wäre das erst dailyallris um die Ohren geflogen.
+
+### Sitzung öffnet direkt im Leser (2026-10-15)
+
+Nutzerwunsch nach dem ersten echten Tagesordnungs-Datensatz: Eine Sitzung zeigte beim Öffnen die
+alte Liste („Verknüpfte Anträge", „Tagesordnung", rechts die Notizen), und erst ein Klick auf einen
+Tagesordnungspunkt führte in die dreispaltige Leseansicht. Das soll gleich so aufgehen.
+
+`TerminDetailPanel` schlägt deshalb beim **ersten** Laden einer Sitzung den ersten Punkt mit
+Dokument auf. Zwei Einschränkungen: nur bei einer echten Tagesordnung (mindestens eine TOP-Nummer,
+die setzt nur der Import) – bei losen Verknüpfungen wäre die Wahl eines Dokuments Willkür. Und nur
+beim ersten Laden: `loadLinkedDokumente()` läuft auch nach dem Löschen eines Dokuments erneut, und
+dann spränge das Modal dem Nutzer wieder vor die Nase.
+
+Damit wird der Rückweg zur Sitzung zum Problem: Anträge, Sitzungsnotizen und die hochgeladenen
+Zusammenfassungen liegen in der Sitzungsansicht, die man jetzt überspringt. Über der
+Tagesordnungsspalte steht deshalb der Sitzungstitel als Rücksprung (`sitzungTitel`-Prop,
+schließt das Dokument-Modal und legt die Sitzung darunter frei).

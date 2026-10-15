@@ -117,7 +117,12 @@ export function TerminDetailPanel({
     setLinkedAntraege(data ?? [])
   }
 
-  async function loadLinkedDokumente() {
+  /** autoOeffnen: beim ersten Laden einer Sitzung mit Tagesordnung gleich den
+   *  ersten Punkt mit Dokument aufschlagen - der Leser ist der Zweck der
+   *  Sitzungsansicht, nicht die Liste davor. Beim Neuladen nach einer Änderung
+   *  (z. B. Löschen eines Dokuments) bleibt es aus, sonst spränge das Modal
+   *  dem Nutzer wieder vor die Nase. */
+  async function loadLinkedDokumente(autoOeffnen = false) {
     if (kind !== 'session') {
       setLinkedDokumente([])
       setTagesordnung([])
@@ -148,16 +153,23 @@ export function TerminDetailPanel({
     // Nach der Tagesordnung sortieren, wo sie bekannt ist - top_nummer taugt
     // als Text nicht ("3.10" käme vor "3.2"). Einträge ohne Reihenfolge landen
     // hinten, alphabetisch nach Titel.
-    setTagesordnung(
-      eintraege
-        .map((e) => ({ ...e, titel: (e.dokument_id ? titelById.get(e.dokument_id) : '') ?? '' }))
-        .sort((a, b) => {
-          if (a.reihenfolge !== null && b.reihenfolge !== null) return a.reihenfolge - b.reihenfolge
-          if (a.reihenfolge !== null) return -1
-          if (b.reihenfolge !== null) return 1
-          return (a.top_titel || a.titel).localeCompare(b.top_titel || b.titel, 'de')
-        }),
-    )
+    const sortiert = eintraege
+      .map((e) => ({ ...e, titel: (e.dokument_id ? titelById.get(e.dokument_id) : '') ?? '' }))
+      .sort((a, b) => {
+        if (a.reihenfolge !== null && b.reihenfolge !== null) return a.reihenfolge - b.reihenfolge
+        if (a.reihenfolge !== null) return -1
+        if (b.reihenfolge !== null) return 1
+        return (a.top_titel || a.titel).localeCompare(b.top_titel || b.titel, 'de')
+      })
+    setTagesordnung(sortiert)
+
+    // Nur bei einer echten Tagesordnung (TOP-Nummern aus dem Import). Ohne sie
+    // sind es lose Verknüpfungen, und eine davon aufzuschlagen wäre Willkür.
+    if (autoOeffnen && sortiert.some((t) => t.top_nummer !== null)) {
+      const erster = sortiert.find((t) => t.dokument_id !== null)
+      const dok = erster ? dokumente.find((d) => d.id === erster.dokument_id) : undefined
+      if (dok) setOpenDokument(dok)
+    }
   }
 
   useEffect(() => {
@@ -169,7 +181,7 @@ export function TerminDetailPanel({
     loadSummaries()
     loadLinkedTodos()
     loadLinkedAntraege()
-    loadLinkedDokumente()
+    loadLinkedDokumente(true)
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id)
     })
@@ -665,6 +677,7 @@ export function TerminDetailPanel({
           key={openDokument.id}
           document={openDokument}
           tagesordnung={kind === 'session' ? tagesordnung : undefined}
+          sitzungTitel={kind === 'session' ? session?.titel : undefined}
           onAuswahl={(dokumentId) => {
             const naechstes = linkedDokumente.find((d) => d.id === dokumentId)
             if (naechstes) setOpenDokument(naechstes)

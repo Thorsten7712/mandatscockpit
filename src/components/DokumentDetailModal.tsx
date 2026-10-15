@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ArchiveRestore, Columns2, Columns3, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronLeft, Columns2, Columns3, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
@@ -63,6 +63,7 @@ export function DokumentDetailModal({
   onDeleted,
   tagesordnung,
   onAuswahl,
+  sitzungTitel,
 }: {
   document: DokumentRow
   onClose: () => void
@@ -73,6 +74,11 @@ export function DokumentDetailModal({
    *  aufgesetzt. */
   tagesordnung?: TagesordnungsEintrag[]
   onAuswahl?: (dokumentId: string) => void
+  /** Titel der Sitzung, aus der heraus geöffnet wurde. Macht den Rückweg
+   *  sichtbar: Die Sitzung selbst trägt Anträge, Notizen und Dateien, die es
+   *  hier nicht gibt - seit die Sitzungsansicht direkt im Leser aufgeht, muss
+   *  man wieder dorthin finden. */
+  sitzungTitel?: string
 }) {
   // Mit Tagesordnung = aus einer Sitzung heraus geöffnet. Eine leere Liste
   // zählt nicht: dann gäbe es links nichts zu zeigen.
@@ -841,6 +847,17 @@ export function DokumentDetailModal({
   // Dokuments bereits in VorlageAnsicht als Chipleiste sitzt.
   const tagesordnungSpalte = (
     <nav aria-label="Tagesordnung" className="p-3">
+      {sitzungTitel && (
+        <button
+          type="button"
+          onClick={onClose}
+          title="Zurück zur Sitzung - dort liegen Anträge, Notizen und Dateien der Sitzung"
+          className="mb-2 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold text-slate-600 transition-colors hover:bg-white hover:text-primary"
+        >
+          <ChevronLeft size={14} className="shrink-0" />
+          <span className="truncate">{sitzungTitel}</span>
+        </button>
+      )}
       <h3 className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
         {imSitzungskontext ? 'Tagesordnung' : 'Keine Tagesordnung'}
       </h3>
