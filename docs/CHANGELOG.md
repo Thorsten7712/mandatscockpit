@@ -2515,3 +2515,26 @@ enthalten **keinen einzigen** Termin aus Nov/Dez 2025. Ein Wechsel auf die öffe
 also 22 Termine kosten und die fehlenden Sitzungen nicht zurückbringen – das gleitende Fenster
 gehört ALLRIS, nicht dem Abonnement. Die Quelle bleibt daher unverändert; Vergangenes kann nur über
 den ALLRIS-Sitzungskalender selbst nachgetragen werden (dailyallris), nicht über ICS.
+
+### 36 fehlende Ausschusssitzungen nachgetragen (2026-10-15)
+
+Nutzerlieferung aus dem ALLRIS-Sitzungskalender: 36 Sitzungen aus Nov 2025 bis Mai 2026, die im
+Cockpit fehlten. Stichprobe im Bestand bestätigt das Muster – für Feb–Mai 2026 liegen dort nur Rat,
+Sportausschuss, Verkehrsausschuss, Aufsichtsräte und die Fraktionstermine; sämtliche Fachausschüsse
+fehlen. Ursache ist dieselbe wie bei den sieben Sitzungen vom Vortag: der ALLRIS-ICS-Feed hat ein
+gleitendes Fenster und reicht nicht in die Vergangenheit.
+
+Nachgetragen per Migration (`0045_sitzungen_nachtragen.sql`) statt per Skript – einmaliger Vorgang,
+derselbe Weg wie jede andere Änderung an der Live-DB, und nachlesbar. Die Festlegungen stehen im
+Kopf der Migration; die beiden nicht offensichtlichen: `source_id` wird **nicht** hart verdrahtet,
+sondern aus dem Bestand abgeleitet (die Quelle, die die meisten Sitzungen des Rates trägt – das
+überlebt ein Umbenennen), und `ort` bleibt **null** statt geraten; „Sitzungssaal Reiterweg" wäre
+für die meisten richtig, aber eben nicht für alle, und ein falscher Ort ist schlechter als keiner.
+Idempotent über (Quelle, Gremium, Zeitpunkt).
+
+**Folge für den Tagesordnungs-Import:** Diese Zeilen haben keine `ics_uid`, die ALLRIS-Kennung ist
+hier nicht bekannt. `set_session_agenda`/`list_session_agenda` nehmen deshalb jetzt auch
+**`gremium` + `datum`** entgegen. Verglichen wird auf den **Tag**, nicht auf die Minute: ALLRIS
+meldet im Kalender gern 17:03, wo die Tagesordnung 17:00 sagt. Wird die Sitzung so gefunden und
+kommt eine `ics_uid` mit, trägt der Server sie nach – danach greift wieder der direkte Weg. Bei
+mehreren Treffern bricht der Aufruf ab und verlangt die `session_id`, statt zu raten.

@@ -636,6 +636,15 @@ export const TOOLS = [
           description:
             'Statt session_id: die ALLRIS-Kennung der Sitzung, "ALLRIS-Sitzung-2001745" oder nur "2001745". Das ist dieselbe SILFDNR, die im Kopf der Tagesordnung steht (to010?SILFDNR=...), und damit der zuverlässigste Weg, eine Tagesordnung ihrer Sitzung zuzuordnen.',
         },
+        gremium: {
+          type: 'string',
+          description:
+            'Dritter Weg, zusammen mit datum: der Gremienname, genau wie in list_sessions. Nötig für von Hand nachgetragene Sitzungen, die keine ics_uid haben (der ALLRIS-Feed reicht nicht in die Vergangenheit). Wird zusätzlich ics_uid übergeben, trägt der Server sie an der gefundenen Sitzung nach.',
+        },
+        datum: {
+          type: 'string',
+          description: 'Zusammen mit gremium: der Sitzungstag als ISO-Datum, z. B. "2025-12-04". Verglichen wird auf den Tag, nicht auf die Minute.',
+        },
         punkte: {
           type: 'array',
           description:
@@ -682,11 +691,13 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        session_id: { type: 'string', description: 'UUID der Sitzung (aus list_sessions). Alternativ ics_uid angeben.' },
+        session_id: { type: 'string', description: 'UUID der Sitzung (aus list_sessions). Alternativ ics_uid oder gremium+datum angeben.' },
         ics_uid: {
           type: 'string',
           description: 'Statt session_id: die ALLRIS-Kennung, "ALLRIS-Sitzung-2001745" oder nur "2001745".',
         },
+        gremium: { type: 'string', description: 'Zusammen mit datum als dritter Weg, die Sitzung zu benennen.' },
+        datum: { type: 'string', description: 'Sitzungstag als ISO-Datum, z. B. "2025-12-04".' },
       },
     },
   },

@@ -80,7 +80,9 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   ALLRIS gehört und ein unbekannter Wert keinen Import abbrechen darf; sie gehört an den TOP und
   nicht ans Dokument, weil dieselbe Vorlage im Ausschuss empfohlen und im Rat beschlossen wird.
   Geschrieben wird die Tagesordnung ausschließlich über den MCP-Server (`set_session_agenda`, aus
-  dailyallris heraus); Punkte ohne Dokument lassen sich per RLS nur an **selbst nachgetragenen**
+  dailyallris heraus; die Sitzung lässt sich dort über `session_id`, `ics_uid` oder `gremium`+`datum`
+  benennen – Letzteres für die von Hand nachgetragenen Sitzungen ohne ALLRIS-Kennung, siehe
+  `0045_sitzungen_nachtragen.sql`); Punkte ohne Dokument lassen sich per RLS nur an **selbst nachgetragenen**
   Sitzungen anlegen, weil es dort kein Dokument gibt, an dem die Berechtigung hängen könnte.
   Eindeutigkeit und Idempotenz des Imports hängen an einem partiellen Unique-Index auf
   (`session_id`, `top_nummer`) – ohne ihn hätte ein zweiter Lauf alle Punkte ohne Drucksache

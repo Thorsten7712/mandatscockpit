@@ -55,28 +55,80 @@ function passtZurNummer(titel: string, nummer: string): boolean {
 }
 
 /**
- * Findet die Sitzung über session_id ODER ics_uid. Letzteres ist der
- * verlässlichere Weg für einen Importeur: ALLRIS legt im ICS-Feed
- * "ALLRIS-Sitzung-<SILFDNR>" ab, und dieselbe SILFDNR steht im Kopf der
- * Tagesordnung ("...to010?SILFDNR=2001745"). Eine nackte Nummer wird deshalb
- * zum vollen UID ergänzt.
+ * Findet die Sitzung über session_id, ics_uid oder gremium+datum.
+ *
+ * ics_uid ist der verlässlichste Weg für einen Importeur: ALLRIS legt im
+ * ICS-Feed "ALLRIS-Sitzung-<SILFDNR>" ab, und dieselbe SILFDNR steht im Kopf
+ * der Tagesordnung ("...to010?SILFDNR=2001745"). Eine nackte Nummer wird
+ * deshalb zum vollen UID ergänzt.
+ *
+ * gremium+datum gibt es für die von Hand nachgetragenen Sitzungen
+ * (0045_sitzungen_nachtragen.sql): Der ICS-Feed reicht nicht in die
+ * Vergangenheit, diese Zeilen haben deshalb keine ics_uid. Wird eine solche
+ * Sitzung so gefunden und kommt eine ics_uid mit, wird sie nachgetragen -
+ * danach greift wieder der direkte Weg. Das Datum wird auf den Tag genau
+ * verglichen, nicht auf die Minute: ALLRIS meldet im Kalender gern 17:03,
+ * wo die Tagesordnung 17:00 sagt.
  */
 async function findeSitzung(supabase: SupabaseClient, args: Record<string, unknown>) {
   const sessionId = typeof args.session_id === 'string' ? args.session_id.trim() : ''
   const rohUid = typeof args.ics_uid === 'string' ? args.ics_uid.trim() : ''
+  const uid = rohUid ? (/^\d+$/.test(rohUid) ? `ALLRIS-Sitzung-${rohUid}` : rohUid) : ''
+  const gremium = typeof args.gremium === 'string' ? args.gremium.trim() : ''
+  const datum = typeof args.datum === 'string' ? args.datum.trim().slice(0, 10) : ''
+
   if (sessionId) {
-    const { data } = await supabase.from('sessions').select('id, titel, datum').eq('id', sessionId).maybeSingle()
+    const { data } = await supabase
+      .from('sessions')
+      .select('id, titel, datum, ics_uid')
+      .eq('id', sessionId)
+      .maybeSingle()
     return { session: data, hinweis: `Sitzung ${sessionId} wurde nicht gefunden.` }
   }
-  if (rohUid) {
-    const uid = /^\d+$/.test(rohUid) ? `ALLRIS-Sitzung-${rohUid}` : rohUid
-    const { data } = await supabase.from('sessions').select('id, titel, datum').eq('ics_uid', uid).maybeSingle()
-    return {
-      session: data,
-      hinweis: `Keine Sitzung mit ics_uid "${uid}". Sie ist entweder nie aus dem Kalender importiert worden (der ALLRIS-Feed hat ein gleitendes Fenster und reicht nicht in die Vergangenheit) oder gehört zu einer anderen Quelle.`,
+
+  if (uid) {
+    const { data } = await supabase.from('sessions').select('id, titel, datum, ics_uid').eq('ics_uid', uid).maybeSingle()
+    if (data) return { session: data, hinweis: '' }
+    if (!gremium || !datum) {
+      return {
+        session: null,
+        hinweis: `Keine Sitzung mit ics_uid "${uid}". Sie ist entweder nie aus dem Kalender importiert worden (der ALLRIS-Feed hat ein gleitendes Fenster und reicht nicht in die Vergangenheit) oder gehört zu einer anderen Quelle. Mit gremium und datum lässt sie sich auch ohne Kennung finden.`,
+      }
     }
   }
-  return { session: null, hinweis: 'session_id oder ics_uid ist erforderlich.' }
+
+  if (gremium && datum) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) {
+      return { session: null, hinweis: `datum muss als ISO-Datum kommen (2025-12-04), nicht "${datum}".` }
+    }
+    const tagEnde = new Date(`${datum}T00:00:00Z`)
+    tagEnde.setUTCDate(tagEnde.getUTCDate() + 1)
+    const { data } = await supabase
+      .from('sessions')
+      .select('id, titel, datum, ics_uid')
+      .eq('gremium', gremium)
+      .gte('datum', `${datum}T00:00:00Z`)
+      .lt('datum', tagEnde.toISOString())
+    const treffer = (data ?? []) as { id: string; titel: string; datum: string; ics_uid: string | null }[]
+    if (treffer.length === 1) {
+      const session = treffer[0]
+      // Kennung nachtragen, wenn sie fehlt - beim nächsten Mal reicht dann
+      // wieder ics_uid allein.
+      if (uid && !session.ics_uid) {
+        await supabase.from('sessions').update({ ics_uid: uid }).eq('id', session.id)
+      }
+      return { session, hinweis: '' }
+    }
+    if (treffer.length > 1) {
+      return {
+        session: null,
+        hinweis: `Mehrere Sitzungen von "${gremium}" am ${datum} gefunden (${treffer.length}) - bitte session_id angeben.`,
+      }
+    }
+    return { session: null, hinweis: `Keine Sitzung von "${gremium}" am ${datum} gefunden.` }
+  }
+
+  return { session: null, hinweis: 'session_id, ics_uid oder gremium+datum ist erforderlich.' }
 }
 
 export async function setSessionAgenda(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
