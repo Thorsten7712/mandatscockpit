@@ -559,7 +559,7 @@ export const TOOLS = [
   {
     name: 'delete_document',
     description:
-      'Löscht ein eigenes Dokument oder eine eigene Notiz im Dokumenten-Hub endgültig, samt der zugehörigen Dateien im Speicher. Nur der/die Ersteller*in darf das. Am Dokument hängende Notizen werden mitgelöscht - sind Notizen anderer Personen dabei, bricht der Aufruf ab und muss mit auch_fremde_notizen=true wiederholt werden.',
+      'Löscht ein eigenes Dokument oder eine eigene Notiz im Dokumenten-Hub endgültig, samt der zugehörigen Dateien im Speicher. Nur der/die Ersteller*in darf das - Admins zusätzlich die Dokumente der Automatik-Konten (der ALLRIS-Import gehört dem technischen Konto, sonst käme niemand mehr an den Bestand heran). Am Dokument hängende Notizen werden mitgelöscht - sind Notizen anderer Personen dabei, bricht der Aufruf ab und muss mit auch_fremde_notizen=true wiederholt werden.',
     inputSchema: {
       type: 'object',
       properties: {

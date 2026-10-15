@@ -147,7 +147,10 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   in der DB-Abfrage, damit das Limit ältere Drucksachen nicht verdeckt), `update_document_archiv` legt ein
   Dokument von Hand hinein bzw. holt es zurück. `delete_document` ist der einzige
   Löschweg für Hub-Dokumente, seit der Bestand dem technischen Import-Konto gehört und in der
-  Web-UI niemand mehr Eigentümer ist. `set_session_agenda` schreibt die ganze Tagesordnung einer
+  Web-UI niemand mehr Eigentümer ist. Admins dürfen dort zusätzlich die Dokumente der
+  Automatik-Konten (`profiles.technisch`) löschen – ohne das käme an den Hub-Bestand niemand mehr
+  heran außer dem Konto selbst mit seinem Token aus der GitHub-Action. Fremde **persönliche**
+  Notizen bleiben auch für Admins unantastbar. `set_session_agenda` schreibt die ganze Tagesordnung einer
   Sitzung in einem Aufruf (Punkte mit und ohne Drucksache, Reihenfolge, Ergebnis; Drucksachennummern
   werden zum Hub-Dokument aufgelöst, fehlende nennt die Antwort, damit dailyallris sie nachlädt),
   `list_session_agenda` liest sie zurück. `update_document_inhalt` setzt den Markdown-Text

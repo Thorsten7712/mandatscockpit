@@ -721,8 +721,29 @@ export async function deleteDocument(supabase: SupabaseClient, userId: string, a
     .eq('id', dokumentId)
     .maybeSingle()
   if (!dok) return toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+
+  // Eigene Dokumente immer. Dazu die des Automatik-Kontos, wenn der Aufrufer
+  // Admin ist: Seit der Bestand dem technischen Import-Konto gehört
+  // (0041_profiles_technisch.sql), kommt sonst NIEMAND mehr an den Hub heran -
+  // weder die Web-UI noch ein Mitglied über MCP, nur das Konto selbst mit
+  // seinem Token aus der GitHub-Action. Aufräumen wie das Entfernen der
+  // Tagesordnungs-PDFs wäre damit nur von außen möglich. Eng gefasst: Es geht
+  // ausschließlich um Automatik-Konten, fremde persönliche Notizen bleiben
+  // auch für Admins unantastbar.
   if (dok.user_id !== userId) {
-    return toolTextResult('Fehler: nur der/die Ersteller*in eines Dokuments darf es löschen.', true)
+    const { data: beteiligte } = await supabase
+      .from('profiles')
+      .select('id, rolle, technisch')
+      .in('id', [userId, dok.user_id])
+    const profile = (beteiligte ?? []) as { id: string; rolle: string | null; technisch: boolean }[]
+    const istAdmin = profile.find((p) => p.id === userId)?.rolle === 'admin'
+    const gehoertBot = profile.find((p) => p.id === dok.user_id)?.technisch === true
+    if (!istAdmin || !gehoertBot) {
+      return toolTextResult(
+        'Fehler: nur der/die Ersteller*in eines Dokuments darf es löschen (Admins zusätzlich die Dokumente der Automatik-Konten).',
+        true,
+      )
+    }
   }
 
   const { data: kinder } = await supabase
@@ -730,7 +751,10 @@ export async function deleteDocument(supabase: SupabaseClient, userId: string, a
     .select('id, user_id, datei_url')
     .eq('parent_id', dokumentId)
   const notizen = (kinder ?? []) as { id: string; user_id: string; datei_url: string | null }[]
-  const fremde = notizen.filter((k) => k.user_id !== userId)
+  // Maßgeblich ist der Eigentümer des Dokuments, nicht der Aufrufer: Löscht
+  // ein Admin ein Dokument des Automatik-Kontos, sind dessen eigene Notizen
+  // keine "fremden" - gemeint sind die der Mitglieder.
+  const fremde = notizen.filter((k) => k.user_id !== dok.user_id && k.user_id !== userId)
 
   if (fremde.length > 0 && !auchFremde) {
     const { data: profile } = await supabase
