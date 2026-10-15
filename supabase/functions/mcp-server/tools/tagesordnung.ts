@@ -273,6 +273,8 @@ export async function setSessionAgenda(supabase: SupabaseClient, userId: string,
   // "ersetzen" räumt die ganze importierte Tagesordnung dieser Sitzung weg -
   // nur die, denn Verknüpfungen ohne TOP-Nummer stammen aus der Web-UI und
   // gehören dem Nutzer, nicht dem Import.
+  const neueDokumentIds = zeilen.map((z) => z.dokument_id).filter((i): i is string => i !== null)
+
   if (modus === 'ersetzen') {
     const { error } = await supabase
       .from('sitzung_dokumente')
@@ -280,6 +282,21 @@ export async function setSessionAgenda(supabase: SupabaseClient, userId: string,
       .eq('session_id', sessionId)
       .not('top_nummer', 'is', null)
     if (error) return toolTextResult(`Fehler beim Leeren der alten Tagesordnung: ${error.message}`, true)
+    // Zusätzlich die blanken Verknüpfungen zu genau den Dokumenten, die jetzt
+    // auf der Tagesordnung stehen: unique (session_id, dokument_id) aus 0042
+    // lässt dasselbe Dokument kein zweites Mal zu, und die Zeile mit
+    // Tagesordnungspunkt ist die reichere. Verknüpfungen zu Dokumenten, die
+    // nicht auf der Tagesordnung stehen, bleiben unangetastet.
+    if (neueDokumentIds.length > 0) {
+      const { error: blankFehler } = await supabase
+        .from('sitzung_dokumente')
+        .delete()
+        .eq('session_id', sessionId)
+        .in('dokument_id', neueDokumentIds)
+      if (blankFehler) {
+        return toolTextResult(`Fehler beim Ersetzen bestehender Verknüpfungen: ${blankFehler.message}`, true)
+      }
+    }
   } else {
     // "anhaengen": nur die Punkte dieses Teilstücks und die Zeilen der darin
     // verknüpften Dokumente, damit beides kollisionsfrei neu eingefügt werden
@@ -290,13 +307,12 @@ export async function setSessionAgenda(supabase: SupabaseClient, userId: string,
       .eq('session_id', sessionId)
       .in('top_nummer', punkte.map((p) => p.top_nummer))
     if (error) return toolTextResult(`Fehler beim Ersetzen der Teil-Tagesordnung: ${error.message}`, true)
-    const ids = zeilen.map((z) => z.dokument_id).filter((i): i is string => i !== null)
-    if (ids.length > 0) {
+    if (neueDokumentIds.length > 0) {
       const { error: docFehler } = await supabase
         .from('sitzung_dokumente')
         .delete()
         .eq('session_id', sessionId)
-        .in('dokument_id', ids)
+        .in('dokument_id', neueDokumentIds)
       if (docFehler) return toolTextResult(`Fehler beim Ersetzen der Verknüpfungen: ${docFehler.message}`, true)
     }
   }

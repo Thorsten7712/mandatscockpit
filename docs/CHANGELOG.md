@@ -2538,3 +2538,27 @@ hier nicht bekannt. `set_session_agenda`/`list_session_agenda` nehmen deshalb je
 meldet im Kalender gern 17:03, wo die Tagesordnung 17:00 sagt. Wird die Sitzung so gefunden und
 kommt eine `ics_uid` mit, trägt der Server sie nach – danach greift wieder der direkte Weg. Bei
 mehreren Treffern bricht der Aufruf ab und verlangt die `session_id`, statt zu raten.
+
+### Erste echte Tagesordnung im Bestand – und ein Fehler, den erst sie zeigte (2026-10-15)
+
+Die Ratssitzung vom 09.12.2025 bekommt ihre Tagesordnung: 84 Punkte aus dem Markdown-Dokument im
+Hub, mit Drucksachen-Verknüpfung und Ergebnis (`0046_sitzung_09122025_tagesordnung.sql`). Erster
+echter Datensatz dieser Art – bisher gab es nur das Modell (0043/0044) und das Werkzeug.
+
+**Die Sitzung war entgegen meiner Annahme bereits vorhanden.** Ich hatte sie für fehlend gehalten,
+weil sie in einer auf 100 Zeilen begrenzten Abfrage nicht auftauchte – die reichte nur bis Februar
+2026 zurück. Die Migration fängt das ab: Sie sucht erst über `ics_uid`, dann über Gremium + Tag,
+legt nur an, wenn beides nichts findet, und trägt bei einem Treffer ohne Kennung die ALLRIS-Nummer
+nach.
+
+**Der Fehler, den der erste Durchlauf zutage förderte:** `duplicate key value violates unique
+constraint "sitzung_dokumente_session_id_dokument_id_key"`. dailyallris hatte die Vorlagen dieser
+Sitzung längst hochgeladen **und verknüpft** – 55 Dokumente, alle ohne TOP-Nummer. Das Löschen vor
+dem Schreiben entfernte aber nur Zeilen *mit* TOP-Nummer, also blieben die blanken stehen, und
+`unique (session_id, dokument_id)` aus 0042 lässt dasselbe Dokument kein zweites Mal zu.
+
+Die Regel dazu: Eine Zeile mit Tagesordnungspunkt ist die reichere und **ersetzt** die blanke
+Verknüpfung desselben Dokuments. Blanke Verknüpfungen zu Dokumenten, die nicht auf der Tagesordnung
+stehen, bleiben unangetastet. Derselbe Fehler steckte in `set_session_agenda` – dort im Modus
+"ersetzen", während "anhaengen" ihn zufällig nicht hatte, weil es ohnehin nach `dokument_id`
+löscht. Beides korrigiert. Ohne den Live-Lauf wäre das erst dailyallris um die Ohren geflogen.
