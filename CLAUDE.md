@@ -115,9 +115,11 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   aus der heraus geöffnet wurde – ein Klick wechselt das Dokument. Eine Sitzung **mit** Tagesordnung
   öffnet direkt in dieser Leseansicht: `TerminDetailPanel` schlägt beim ersten Laden den ersten
   Punkt mit Dokument auf, statt erst die Liste davor zu zeigen. Nur bei echter Tagesordnung
-  (TOP-Nummern aus dem Import) – lose Verknüpfungen bleiben eine Liste. Der Rückweg steht als
-  Sitzungstitel über der Tagesordnungsspalte (`sitzungTitel`-Prop), weil Anträge, Sitzungsnotizen
-  und hochgeladene Dateien nur in der Sitzungsansicht liegen; Punkte ohne Drucksache stehen
+  (TOP-Nummern aus dem Import) – lose Verknüpfungen bleiben eine Liste. Das **X schließt dann die ganze Sitzung**
+  (`onCloseAll`-Prop von `TerminDetailModal`) und nicht nur das Dokument – sonst läge darunter
+  wieder die Listenansicht, die man gerade übersprungen hat. Der Rückweg dorthin steht als
+  Sitzungstitel über der Tagesordnungsspalte (`sitzungTitel`/`onZurueck`), weil Anträge,
+  Sitzungsnotizen und hochgeladene Dateien nur in der Sitzungsansicht liegen; Punkte ohne Drucksache stehen
   kursiv und grau da, es gibt nichts zu öffnen. Zwei `localStorage`-Schlüssel, weil die beiden
   Aufrufwege verschiedene Vorlieben haben: aus dem Hub heraus (`mc.dokument.variante`) wäre die
   linke Spalte leer, Standard sind dort zwei Spalten; aus einer Sitzung heraus

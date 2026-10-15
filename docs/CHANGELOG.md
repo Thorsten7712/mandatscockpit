@@ -2579,3 +2579,10 @@ Damit wird der Rückweg zur Sitzung zum Problem: Anträge, Sitzungsnotizen und d
 Zusammenfassungen liegen in der Sitzungsansicht, die man jetzt überspringt. Über der
 Tagesordnungsspalte steht deshalb der Sitzungstitel als Rücksprung (`sitzungTitel`-Prop,
 schließt das Dokument-Modal und legt die Sitzung darunter frei).
+
+**Nachbesserung am selben Tag:** Beim Schließen des Lesers lag darunter wieder die alte
+Sitzungsliste – also genau das, was gerade übersprungen werden sollte. Das X schließt deshalb jetzt
+die gesamte Sitzungsansicht (`onCloseAll`, von `TerminDetailModal` durchgereicht); es bedeutet
+„fertig mit der Sitzung", nicht „eine Ebene zurück". Der Rücksprung auf die Sitzungsebene bleibt
+dem Sitzungstitel über der Tagesordnung vorbehalten (`onZurueck`). Auf der eigenen Seite
+`/termin/:kind/:id` bleibt `onCloseAll` leer – dort gibt es nichts zu schließen.

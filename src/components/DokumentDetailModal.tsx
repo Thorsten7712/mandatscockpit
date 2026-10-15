@@ -64,6 +64,7 @@ export function DokumentDetailModal({
   tagesordnung,
   onAuswahl,
   sitzungTitel,
+  onZurueck,
 }: {
   document: DokumentRow
   onClose: () => void
@@ -79,6 +80,11 @@ export function DokumentDetailModal({
    *  hier nicht gibt - seit die Sitzungsansicht direkt im Leser aufgeht, muss
    *  man wieder dorthin finden. */
   sitzungTitel?: string
+  /** Rückweg zur Sitzungsansicht (Anträge, Sitzungsnotizen, Dateien). Ohne
+   *  das schließt der Rücksprung einfach das Modal. Bewusst getrennt von
+   *  onClose: Das X bedeutet "fertig" und schließt die Sitzung mit, der
+   *  Rücksprung bleibt eine Ebene darunter. */
+  onZurueck?: () => void
 }) {
   // Mit Tagesordnung = aus einer Sitzung heraus geöffnet. Eine leere Liste
   // zählt nicht: dann gäbe es links nichts zu zeigen.
@@ -850,7 +856,7 @@ export function DokumentDetailModal({
       {sitzungTitel && (
         <button
           type="button"
-          onClick={onClose}
+          onClick={onZurueck ?? onClose}
           title="Zurück zur Sitzung - dort liegen Anträge, Notizen und Dateien der Sitzung"
           className="mb-2 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold text-slate-600 transition-colors hover:bg-white hover:text-primary"
         >

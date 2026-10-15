@@ -28,11 +28,19 @@ export function TerminDetailPanel({
   kind,
   id,
   onDeleted,
+  onCloseAll,
   layout = 'stacked',
 }: {
   kind: 'event' | 'session'
   id: string
   onDeleted?: () => void
+  /** Schließt die gesamte Termin-/Sitzungsansicht, nicht nur das Dokument.
+   *  Eine Sitzung mit Tagesordnung geht direkt im Leser auf - das X dort
+   *  bedeutet dann "fertig mit der Sitzung" und darf nicht die Listenansicht
+   *  freilegen, die man gerade übersprungen hat. Der Rückweg dorthin steht
+   *  als Sitzungstitel über der Tagesordnung. Auf der eigenen Seite
+   *  (/termin/:kind/:id) gibt es nichts zu schließen, dort bleibt es leer. */
+  onCloseAll?: () => void
   /** 'columns' wird von TerminDetailModal für die breite 2-Spalten-Ansicht genutzt. */
   layout?: 'stacked' | 'columns'
 }) {
@@ -682,7 +690,11 @@ export function TerminDetailPanel({
             const naechstes = linkedDokumente.find((d) => d.id === dokumentId)
             if (naechstes) setOpenDokument(naechstes)
           }}
-          onClose={() => setOpenDokument(null)}
+          onZurueck={() => setOpenDokument(null)}
+          onClose={() => {
+            setOpenDokument(null)
+            onCloseAll?.()
+          }}
           onDeleted={() => {
             setOpenDokument(null)
             loadLinkedDokumente()

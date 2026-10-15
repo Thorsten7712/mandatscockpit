@@ -43,6 +43,7 @@ export function TerminDetailModal({
             kind={kind}
             id={id}
             layout="columns"
+            onCloseAll={onClose}
             onDeleted={() => {
               onDeleted?.()
               onClose()
