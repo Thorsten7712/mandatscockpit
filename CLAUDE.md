@@ -113,13 +113,19 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   `localStorage` gemerkt: A = Dokument + Notizen, B = zusätzlich eine linke Spalte, C = Lesemodus
   (68 Zeichen Zeilenbreite, Notizen einklappbar). In B steht links die **Tagesordnung** der Sitzung,
   aus der heraus geöffnet wurde – ein Klick wechselt das Dokument. Eine Sitzung **mit** Tagesordnung
-  öffnet direkt in dieser Leseansicht: `TerminDetailPanel` schlägt beim ersten Laden den ersten
-  Punkt mit Dokument auf, statt erst die Liste davor zu zeigen. Nur bei echter Tagesordnung
-  (TOP-Nummern aus dem Import) – lose Verknüpfungen bleiben eine Liste. Das **X schließt dann die ganze Sitzung**
-  (`onCloseAll`-Prop von `TerminDetailModal`) und nicht nur das Dokument – sonst läge darunter
-  wieder die Listenansicht, die man gerade übersprungen hat. Der Rückweg dorthin steht als
-  Sitzungstitel über der Tagesordnungsspalte (`sitzungTitel`/`onZurueck`), weil Anträge,
-  Sitzungsnotizen und hochgeladene Dateien nur in der Sitzungsansicht liegen; Punkte ohne Drucksache stehen
+  hat nur noch **diese eine Ansicht**: `TerminDetailPanel` schlägt beim Laden den ersten Punkt mit
+  Dokument auf und rendert dann *kein eigenes Chrome mehr* (`imLeser`) – die frühere Listenansicht
+  lag sonst nach dem Schließen wieder frei, obwohl sie gerade übersprungen worden war. Die Sitzung
+  selbst – Kopfdaten, Aufgaben, Anträge, Notizen, Dateien – ist dort der **erste Eintrag über der
+  Tagesordnung** (`uebersicht`/`uebersichtTitel`); im Übersichts-Modus zeigt der Kopf den
+  Sitzungstitel und nur noch das Schließen-X, die Spalten werden zu Navigation + Sitzung.
+  Rückfall auf die Liste bleibt für Termine, Sitzungen ohne Tagesordnung und den seltenen Fall
+  einer Tagesordnung ganz ohne Drucksache (dann gibt es kein Dokument, mit dem der Leser
+  aufmachen könnte). Das Modal-Chrome (Overlay, Kopfzeile, Schließen) liegt deshalb in
+  `TerminDetailPanel` (`layout="modal"`) statt in `TerminDetailModal` – nur die Komponente weiß,
+  ob sie überhaupt eines braucht; `TerminDetailModal` ist nur noch der Einstiegspunkt für die drei
+  Aufrufer. Auf der eigenen Seite `/termin/:kind/:id` springt nichts automatisch auf, sonst läge
+  sofort ein Overlay über der gerade aufgerufenen Seite; Punkte ohne Drucksache stehen
   kursiv und grau da, es gibt nichts zu öffnen. Zwei `localStorage`-Schlüssel, weil die beiden
   Aufrufwege verschiedene Vorlieben haben: aus dem Hub heraus (`mc.dokument.variante`) wäre die
   linke Spalte leer, Standard sind dort zwei Spalten; aus einer Sitzung heraus

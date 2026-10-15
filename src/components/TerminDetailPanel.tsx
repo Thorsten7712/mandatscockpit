@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { AntragRow, CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, SummaryRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
@@ -41,8 +42,9 @@ export function TerminDetailPanel({
    *  als Sitzungstitel über der Tagesordnung. Auf der eigenen Seite
    *  (/termin/:kind/:id) gibt es nichts zu schließen, dort bleibt es leer. */
   onCloseAll?: () => void
-  /** 'columns' wird von TerminDetailModal für die breite 2-Spalten-Ansicht genutzt. */
-  layout?: 'stacked' | 'columns'
+  /** 'modal' bringt das eigene Overlay samt Kopfzeile mit (TerminDetailModal),
+   *  'stacked' rendert nur den Inhalt für die eigene Seite. */
+  layout?: 'stacked' | 'modal'
 }) {
   const [userId, setUserId] = useState<string | null>(null)
   const [event, setEvent] = useState<EventRow | null>(null)
@@ -189,7 +191,10 @@ export function TerminDetailPanel({
     loadSummaries()
     loadLinkedTodos()
     loadLinkedAntraege()
-    loadLinkedDokumente(true)
+    // Nur im Modal direkt in den Leser springen. Auf der eigenen Seite
+    // (/termin/:kind/:id) läge sonst sofort ein Overlay über der Seite, die
+    // man gerade aufgerufen hat.
+    loadLinkedDokumente(layout === 'modal')
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id)
     })
@@ -213,6 +218,15 @@ export function TerminDetailPanel({
   // MCP-Server). Ohne das sind es von Hand gesetzte Verknüpfungen, für die
   // "Tagesordnung" als Überschrift zu viel behauptet.
   const hatTagesordnung = tagesordnung.some((t) => t.top_nummer !== null)
+
+  // Eine Sitzung mit Tagesordnung hat nur noch EINE Ansicht: den Leser. Die
+  // frühere Listenansicht darunter gibt es nicht mehr - sie lag nach dem
+  // Schließen des Lesers wieder frei, obwohl sie gerade übersprungen worden
+  // war. Die Sitzung selbst ist dort der erste Punkt der Tagesordnung.
+  // Rückfall bleibt die Liste: Termine, Sitzungen ohne Tagesordnung, und der
+  // (seltene) Fall einer Tagesordnung ganz ohne Drucksache - dann gibt es
+  // kein Dokument, mit dem der Leser aufmachen könnte.
+  const imLeser = kind === 'session' && hatTagesordnung && openDokument !== null
 
   function startEdit() {
     if (kind === 'event' && event) {
@@ -547,6 +561,16 @@ export function TerminDetailPanel({
             )}
           </ul>
 
+        </>
+      )}
+    </>
+  )
+
+  /** Die Tagesordnung als Liste - nur für den Rückfall ohne Leser (Termine und
+   *  Sitzungen ohne Tagesordnung). Mit Tagesordnung übernimmt die
+   *  Navigationsspalte im Leser diese Rolle. */
+  const tagesordnungBlock = kind === 'session' && (
+    <>
           <h3 className="mb-2 text-sm font-semibold text-slate-900">
             {hatTagesordnung ? 'Tagesordnung' : 'Verknüpfte Dokumente'}
           </h3>
@@ -591,8 +615,6 @@ export function TerminDetailPanel({
               <li className="text-slate-400 text-sm">Keine verknüpften Dokumente.</li>
             )}
           </ul>
-        </>
-      )}
     </>
   )
 
@@ -669,6 +691,17 @@ export function TerminDetailPanel({
     </>
   )
 
+  /** Die Sitzung selbst, wie sie im Leser als erster Punkt der Tagesordnung
+   *  erscheint: Kopfdaten, verknüpfte Aufgaben und Anträge, Notizen und
+   *  Dateien. Ohne die Tagesordnungsliste - die steht links daneben. */
+  const uebersichtBlock = (
+    <>
+      {detailsBlock}
+      {linkedBlock}
+      {notesBlock}
+    </>
+  )
+
   const nestedModals = (
     <>
       {openTodoId && (
@@ -685,12 +718,12 @@ export function TerminDetailPanel({
           key={openDokument.id}
           document={openDokument}
           tagesordnung={kind === 'session' ? tagesordnung : undefined}
-          sitzungTitel={kind === 'session' ? session?.titel : undefined}
+          uebersicht={imLeser ? uebersichtBlock : undefined}
+          uebersichtTitel={session?.titel}
           onAuswahl={(dokumentId) => {
             const naechstes = linkedDokumente.find((d) => d.id === dokumentId)
             if (naechstes) setOpenDokument(naechstes)
           }}
-          onZurueck={() => setOpenDokument(null)}
           onClose={() => {
             setOpenDokument(null)
             onCloseAll?.()
@@ -711,16 +744,55 @@ export function TerminDetailPanel({
     </>
   )
 
-  if (layout === 'columns') {
+  // Sitzung mit Tagesordnung: nur der Leser, kein eigenes Chrome. Er bringt
+  // sein eigenes Overlay mit, und die Sitzung selbst ist dort der erste Punkt
+  // der Tagesordnung.
+  if (imLeser) {
     return (
-      <div className="grid h-full min-h-0 grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <div className="min-h-0 overflow-y-auto border-b border-slate-200 p-6 md:border-b-0 md:border-r">
-          {detailsBlock}
-          {linkedBlock}
-        </div>
-        <div className="min-h-0 overflow-y-auto p-6">{notesBlock}</div>
+      <>
         {nestedModals}
         {loeschDialog}
+      </>
+    )
+  }
+
+  if (layout === 'modal') {
+    return (
+      <div
+        className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]"
+        onClick={onCloseAll}
+      >
+        <div
+          className="mc-animate-pop flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
+            <h1 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              {kind === 'session' ? 'Sitzung' : 'Termin'}
+            </h1>
+            <button
+              type="button"
+              onClick={onCloseAll}
+              aria-label="Schließen"
+              title="Schließen"
+              className="mc-btn-ghost shrink-0 !p-2"
+            >
+              <X size={18} />
+            </button>
+          </header>
+          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+            <div className="min-h-0 overflow-y-auto border-b border-slate-200 p-6 md:border-b-0 md:border-r">
+              {detailsBlock}
+              {linkedBlock}
+              {tagesordnungBlock}
+            </div>
+            <div className="min-h-0 overflow-y-auto p-6">{notesBlock}</div>
+          </div>
+          {/* Innerhalb der Karte, damit Klicks in einem verschachtelten Modal
+              nicht bis zum schließenden Hintergrund durchschlagen. */}
+          {nestedModals}
+          {loeschDialog}
+        </div>
       </div>
     )
   }
@@ -729,6 +801,7 @@ export function TerminDetailPanel({
     <div>
       {detailsBlock}
       {linkedBlock}
+      {tagesordnungBlock}
       {notesBlock}
       {nestedModals}
       {loeschDialog}

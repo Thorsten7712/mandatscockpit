@@ -2586,3 +2586,39 @@ die gesamte Sitzungsansicht (`onCloseAll`, von `TerminDetailModal` durchgereicht
 „fertig mit der Sitzung", nicht „eine Ebene zurück". Der Rücksprung auf die Sitzungsebene bleibt
 dem Sitzungstitel über der Tagesordnung vorbehalten (`onZurueck`). Auf der eigenen Seite
 `/termin/:kind/:id` bleibt `onCloseAll` leer – dort gibt es nichts zu schließen.
+
+### Die Sitzungsansicht ist der Leser (2026-10-15)
+
+Nutzerwunsch, nachdem der direkte Einstieg in den Leser stand: „also ganz aus dem Code raus, ich
+möchte einen Umbau an der Stelle." Gemeint war die alte Listenansicht der Sitzung, die nach dem
+Schließen des Lesers wieder frei lag – ein zweites Modal hinter dem ersten, das man gerade
+übersprungen hatte. Ein Fallback, der das nur versteckt, wäre die falsche Antwort gewesen.
+
+**Eine Sitzung mit Tagesordnung hat jetzt genau eine Ansicht.** `TerminDetailPanel` rendert bei
+`imLeser` (Sitzung + echte Tagesordnung + geöffnetes Dokument) nichts als den Leser – kein eigenes
+Overlay, keine Kopfzeile, nichts dahinter.
+
+**Die Sitzung selbst wurde dadurch zum ersten Punkt ihrer eigenen Tagesordnung.** Kopfdaten,
+verknüpfte Aufgaben und Anträge, Notizen und Dateien stehen im Leser über der Tagesordnungsspalte
+zur Auswahl (`uebersicht`/`uebersichtTitel` an `DokumentDetailModal`). Im Übersichts-Modus zeigt
+der Kopf den Sitzungstitel statt des Dokumenttitels, blendet Tags, Metadaten und alle
+Dokument-Aktionen aus und behält nur das Schließen-X; die Spalten werden zu Navigation + Sitzung,
+die Notizspalte des Dokuments entfällt (die Sitzung bringt ihre eigenen mit). Damit ist der
+Rücksprung kein „eine Ebene zurück" mehr, sondern ein Navigationsziel wie jeder TOP.
+
+**Das Modal-Chrome ist von `TerminDetailModal` nach `TerminDetailPanel` gewandert**
+(`layout="modal"`). Nur die Komponente weiß, ob sie überhaupt eines braucht – der Wrapper hätte es
+blind gerendert. `TerminDetailModal` ist damit auf einen Einstiegspunkt für seine drei Aufrufer
+(Dashboard-Kalender, Archiv, Anträge) geschrumpft, die unverändert bleiben. Die verschachtelten
+Modals liegen bewusst **innerhalb** der Karte, sonst schlügen Klicks darin bis zum schließenden
+Hintergrund durch.
+
+Zwei Rückfälle bleiben bewusst erhalten: Termine und Sitzungen ohne Tagesordnung zeigen weiterhin
+die Liste, ebenso eine Tagesordnung ganz ohne Drucksache – dann gibt es kein Dokument, mit dem der
+Leser aufmachen könnte. Und auf der eigenen Seite `/termin/:kind/:id` springt nichts automatisch
+auf, sonst läge dort sofort ein Overlay über der gerade aufgerufenen Seite.
+
+Im Harness gegen die echte Tagesordnung geprüft: Einstieg auf Ö 3.1, Klick auf den Sitzungseintrag
+wechselt Kopf und Inhalt auf die Sitzung, Klick zurück auf einen TOP bringt Dokument, Tags,
+Aktionen und Notizspalte wieder. Der Listen-Rückfall ist nur über `tsc`/`vite build` abgesichert –
+ohne Login lässt er sich nicht im Browser aufrufen.

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ArchiveRestore, ChevronLeft, Columns2, Columns3, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
+import { Archive, ArchiveRestore, Columns2, Columns3, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
@@ -63,8 +63,8 @@ export function DokumentDetailModal({
   onDeleted,
   tagesordnung,
   onAuswahl,
-  sitzungTitel,
-  onZurueck,
+  uebersicht,
+  uebersichtTitel,
 }: {
   document: DokumentRow
   onClose: () => void
@@ -75,16 +75,13 @@ export function DokumentDetailModal({
    *  aufgesetzt. */
   tagesordnung?: TagesordnungsEintrag[]
   onAuswahl?: (dokumentId: string) => void
-  /** Titel der Sitzung, aus der heraus geöffnet wurde. Macht den Rückweg
-   *  sichtbar: Die Sitzung selbst trägt Anträge, Notizen und Dateien, die es
-   *  hier nicht gibt - seit die Sitzungsansicht direkt im Leser aufgeht, muss
-   *  man wieder dorthin finden. */
-  sitzungTitel?: string
-  /** Rückweg zur Sitzungsansicht (Anträge, Sitzungsnotizen, Dateien). Ohne
-   *  das schließt der Rücksprung einfach das Modal. Bewusst getrennt von
-   *  onClose: Das X bedeutet "fertig" und schließt die Sitzung mit, der
-   *  Rücksprung bleibt eine Ebene darunter. */
-  onZurueck?: () => void
+  /** Die Sitzung selbst - Anträge, Notizen, Dateien, Bearbeiten/Löschen.
+   *  Wird als erster Eintrag der Tagesordnung angeboten und IN diesem Modal
+   *  angezeigt, nicht in einem zweiten darunter: Eine Sitzung mit
+   *  Tagesordnung hat nur noch diese eine Ansicht (siehe TerminDetailPanel). */
+  uebersicht?: ReactNode
+  /** Überschrift dieses Eintrags, üblicherweise der Sitzungstitel. */
+  uebersichtTitel?: string
 }) {
   // Mit Tagesordnung = aus einer Sitzung heraus geöffnet. Eine leere Liste
   // zählt nicht: dann gäbe es links nichts zu zeigen.
@@ -93,6 +90,10 @@ export function DokumentDetailModal({
   // (key-Prop), die linke Spalte springt dadurch an den Anfang zurück. Bei
   // ~84 Punkten wäre der gerade gewählte sonst nicht mehr im Bild.
   const aktiverPunkt = useRef<HTMLLIElement | null>(null)
+  // Zeigt statt des Dokuments die Sitzung selbst. Beim Wechsel auf einen
+  // Tagesordnungspunkt remountet der Aufrufer dieses Modal (key), der Zustand
+  // fällt damit von allein zurück.
+  const [zeigeUebersicht, setZeigeUebersicht] = useState(false)
   const [variante, setVariante] = useState<LeseVariante>(() =>
     imSitzungskontext ? ladeVariante(VARIANTE_KEY_SITZUNG, 'b') : ladeVariante(VARIANTE_KEY_HUB, 'a'),
   )
@@ -599,6 +600,14 @@ export function DokumentDetailModal({
     if (wert !== 'c') setNotizenOffen(true)
   }
 
+  // Eigene Variable, weil der Übersichts-Modus alle Dokument-Aktionen
+  // ausblendet, das Schließen aber bleiben muss.
+  const schliessenKnopf = (
+    <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost !p-2">
+      <X size={18} />
+    </button>
+  )
+
   const kopfAktionen = (
     <>
       <div className="mr-1 hidden items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 sm:flex">
@@ -700,9 +709,7 @@ export function DokumentDetailModal({
           <Trash2 size={17} />
         </button>
       )}
-      <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost !p-2">
-        <X size={18} />
-      </button>
+      {schliessenKnopf}
     </>
   )
 
@@ -838,9 +845,12 @@ export function DokumentDetailModal({
     </>
   )
 
-  const zeigeNotizen = variante !== 'c' || notizenOffen
-  const spaltenKlasse =
-    variante === 'b'
+  const zeigeNotizen = !zeigeUebersicht && (variante !== 'c' || notizenOffen)
+  const spaltenKlasse = zeigeUebersicht
+    ? // Übersicht: Navigation links, die Sitzung füllt den Rest. Ihre eigenen
+      // Notizen bringt sie mit, die Notizspalte des Dokuments entfällt.
+      'md:grid-cols-[250px_minmax(0,1fr)]'
+    : variante === 'b'
       ? 'md:grid-cols-[250px_minmax(0,1.5fr)_minmax(0,1fr)]'
       : variante === 'c'
         ? zeigeNotizen
@@ -853,15 +863,22 @@ export function DokumentDetailModal({
   // Dokuments bereits in VorlageAnsicht als Chipleiste sitzt.
   const tagesordnungSpalte = (
     <nav aria-label="Tagesordnung" className="p-3">
-      {sitzungTitel && (
+      {uebersicht && (
         <button
           type="button"
-          onClick={onZurueck ?? onClose}
-          title="Zurück zur Sitzung - dort liegen Anträge, Notizen und Dateien der Sitzung"
-          className="mb-2 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold text-slate-600 transition-colors hover:bg-white hover:text-primary"
+          onClick={() => setZeigeUebersicht(true)}
+          aria-pressed={zeigeUebersicht}
+          title="Die Sitzung selbst: Anträge, Notizen, Dateien"
+          className={`mb-2 block w-full rounded-md border-l-2 px-2 py-1.5 text-left text-xs leading-snug transition-colors ${
+            zeigeUebersicht
+              ? 'border-accent bg-white font-semibold text-primary'
+              : 'border-transparent font-medium text-slate-600 hover:bg-white/70 hover:text-slate-900'
+          }`}
         >
-          <ChevronLeft size={14} className="shrink-0" />
-          <span className="truncate">{sitzungTitel}</span>
+          <span className="line-clamp-2">{uebersichtTitel ?? 'Die Sitzung'}</span>
+          <span className="mt-0.5 block text-[10px] font-normal text-slate-400">
+            Anträge, Notizen, Dateien
+          </span>
         </button>
       )}
       <h3 className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
@@ -896,7 +913,10 @@ export function DokumentDetailModal({
                 <button
                   type="button"
                   title={beschriftung}
-                  onClick={() => onAuswahl?.(t.dokument_id as string)}
+                  onClick={() => {
+                    setZeigeUebersicht(false)
+                    onAuswahl?.(t.dokument_id as string)
+                  }}
                   className={`block w-full rounded-md border-l-2 px-2 py-1.5 text-left text-xs leading-snug transition-colors ${
                     aktiv
                       ? 'border-accent bg-white font-semibold text-primary'
@@ -937,11 +957,15 @@ export function DokumentDetailModal({
               Lesen und Notieren frei. */}
           <header className="shrink-0 border-b border-slate-200 px-5 py-3">
             <div className="flex items-start gap-3">
-              <h1 className="min-w-0 flex-1 text-base font-bold leading-snug text-slate-900">{document.titel}</h1>
-              <div className="flex shrink-0 items-center gap-1.5">{kopfAktionen}</div>
+              <h1 className="min-w-0 flex-1 text-base font-bold leading-snug text-slate-900">
+                {zeigeUebersicht ? uebersichtTitel ?? 'Die Sitzung' : document.titel}
+              </h1>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {zeigeUebersicht ? schliessenKnopf : kopfAktionen}
+              </div>
             </div>
 
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className={`mt-2 flex-wrap items-center gap-1.5 ${zeigeUebersicht ? 'hidden' : 'flex'}`}>
               {document.ebene && (
                 <span
                   className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[document.ebene].chip}`}
@@ -987,7 +1011,11 @@ export function DokumentDetailModal({
               </button>
             </div>
 
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+            <div
+              className={`mt-1.5 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 ${
+                zeigeUebersicht ? 'hidden' : 'flex'
+              }`}
+            >
               {document.user_id !== userId && <span>{authorNames.get(document.user_id) ?? 'Unbekannt'}</span>}
               {document.user_id !== userId && <span className="text-slate-300">·</span>}
               <span>{formatDateTime(document.erstellt_am)}</span>
@@ -1011,7 +1039,7 @@ export function DokumentDetailModal({
             </div>
           </header>
 
-          {verknuepfungenOffen && (
+          {verknuepfungenOffen && !zeigeUebersicht && (
             <div className="mc-animate-slide shrink-0 border-b border-slate-200 bg-slate-50 px-5 py-3">
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
@@ -1123,14 +1151,18 @@ export function DokumentDetailModal({
           )}
 
           <div className={`grid min-h-0 flex-1 grid-cols-1 ${spaltenKlasse}`}>
-            {variante === 'b' && (
+            {(variante === 'b' || zeigeUebersicht) && (
               <aside className="hidden min-h-0 overflow-y-auto border-r border-slate-200 bg-slate-50 md:block">
                 {tagesordnungSpalte}
               </aside>
             )}
-            <div className="min-h-0 max-h-[46vh] border-b border-slate-200 md:max-h-none md:border-b-0 md:border-r">
-              <VorlageAnsicht inhalt={document.inhalt} zentriert={variante === 'c'} />
-            </div>
+            {zeigeUebersicht ? (
+              <div className="min-h-0 overflow-y-auto p-6">{uebersicht}</div>
+            ) : (
+              <div className="min-h-0 max-h-[46vh] border-b border-slate-200 md:max-h-none md:border-b-0 md:border-r">
+                <VorlageAnsicht inhalt={document.inhalt} zentriert={variante === 'c'} />
+              </div>
+            )}
             {zeigeNotizen && (
               <div className="min-h-0 overflow-y-auto bg-slate-50/60 p-5">{notizenSpalte}</div>
             )}
