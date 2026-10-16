@@ -81,6 +81,10 @@ export function TerminDetailPanel({
   const [linkedDokumente, setLinkedDokumente] = useState<DokumentRow[]>([])
   const [openDokument, setOpenDokument] = useState<DokumentRow | null>(null)
   const [tagesordnung, setTagesordnung] = useState<TagesordnungsEintrag[]>([])
+  // Solange die Verknüpfungen nicht geladen sind, ist noch nicht entschieden,
+  // ob diese Sitzung im Leser oder in der Liste aufgeht. Bis dahin gar nichts
+  // zeigen - sonst blitzt die Liste auf und der Leser legt sich darüber.
+  const [dokumenteGeladen, setDokumenteGeladen] = useState(false)
 
   async function loadTermin() {
     setEvent(null)
@@ -136,6 +140,7 @@ export function TerminDetailPanel({
     if (kind !== 'session') {
       setLinkedDokumente([])
       setTagesordnung([])
+      setDokumenteGeladen(true)
       return
     }
     // Die Tagesordnung IST die Verknüpfungstabelle (0042-0044): jede Zeile ist
@@ -175,11 +180,12 @@ export function TerminDetailPanel({
 
     // Nur bei einer echten Tagesordnung (TOP-Nummern aus dem Import). Ohne sie
     // sind es lose Verknüpfungen, und eine davon aufzuschlagen wäre Willkür.
-    if (autoOeffnen && sortiert.some((t) => t.top_nummer !== null)) {
+    if (autoOeffnen) {
       const erster = sortiert.find((t) => t.dokument_id !== null)
       const dok = erster ? dokumente.find((d) => d.id === erster.dokument_id) : undefined
       if (dok) setOpenDokument(dok)
     }
+    setDokumenteGeladen(true)
   }
 
   useEffect(() => {
@@ -187,6 +193,7 @@ export function TerminDetailPanel({
     setOpenTodoId(null)
     setOpenAntragId(null)
     setOpenDokument(null)
+    setDokumenteGeladen(false)
     loadTermin()
     loadSummaries()
     loadLinkedTodos()
@@ -219,14 +226,18 @@ export function TerminDetailPanel({
   // "Tagesordnung" als Überschrift zu viel behauptet.
   const hatTagesordnung = tagesordnung.some((t) => t.top_nummer !== null)
 
-  // Eine Sitzung mit Tagesordnung hat nur noch EINE Ansicht: den Leser. Die
-  // frühere Listenansicht darunter gibt es nicht mehr - sie lag nach dem
-  // Schließen des Lesers wieder frei, obwohl sie gerade übersprungen worden
-  // war. Die Sitzung selbst ist dort der erste Punkt der Tagesordnung.
-  // Rückfall bleibt die Liste: Termine, Sitzungen ohne Tagesordnung, und der
-  // (seltene) Fall einer Tagesordnung ganz ohne Drucksache - dann gibt es
-  // kein Dokument, mit dem der Leser aufmachen könnte.
-  const imLeser = kind === 'session' && hatTagesordnung && openDokument !== null
+  // Eine Sitzung hat nur noch EINE Ansicht: den Leser. Die frühere
+  // Listenansicht darunter gibt es nicht mehr - sie lag nach dem Schließen
+  // des Lesers wieder frei, obwohl sie gerade übersprungen worden war. Die
+  // Sitzung selbst ist dort der erste Eintrag über der Tagesordnung.
+  //
+  // Es braucht nur irgendein Dokument, nicht zwingend eine importierte
+  // Tagesordnung: Der Leser öffnet mit einem Dokument und zeigt links alles
+  // Verknüpfte. Ohne TOP-Nummern startet er in der Übersicht, weil "das erste
+  // Dokument" dort keine Bedeutung hätte. Rückfall auf die Liste bleibt nur,
+  // wo es nichts zu lesen gibt: eigene Termine und Sitzungen ganz ohne
+  // verknüpftes Dokument.
+  const imLeser = kind === 'session' && openDokument !== null
 
   function startEdit() {
     if (kind === 'event' && event) {
@@ -720,6 +731,7 @@ export function TerminDetailPanel({
           tagesordnung={kind === 'session' ? tagesordnung : undefined}
           uebersicht={imLeser ? uebersichtBlock : undefined}
           uebersichtTitel={session?.titel}
+          starteInUebersicht={!hatTagesordnung}
           onAuswahl={(dokumentId) => {
             const naechstes = linkedDokumente.find((d) => d.id === dokumentId)
             if (naechstes) setOpenDokument(naechstes)
@@ -755,6 +767,10 @@ export function TerminDetailPanel({
       </>
     )
   }
+
+  // Noch nicht entschieden, ob Leser oder Liste - lieber kurz nichts als ein
+  // Aufblitzen der Liste.
+  if (layout === 'modal' && kind === 'session' && !dokumenteGeladen) return null
 
   if (layout === 'modal') {
     return (

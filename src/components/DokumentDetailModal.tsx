@@ -65,6 +65,7 @@ export function DokumentDetailModal({
   onAuswahl,
   uebersicht,
   uebersichtTitel,
+  starteInUebersicht,
 }: {
   document: DokumentRow
   onClose: () => void
@@ -82,10 +83,17 @@ export function DokumentDetailModal({
   uebersicht?: ReactNode
   /** Überschrift dieses Eintrags, üblicherweise der Sitzungstitel. */
   uebersichtTitel?: string
+  /** Mit der Übersicht statt mit dem Dokument aufmachen. Für Sitzungen ohne
+   *  importierte Tagesordnung: Dort sind die Dokumente eine ungeordnete
+   *  Liste, "das erste" hätte keine Bedeutung. */
+  starteInUebersicht?: boolean
 }) {
   // Mit Tagesordnung = aus einer Sitzung heraus geöffnet. Eine leere Liste
   // zählt nicht: dann gäbe es links nichts zu zeigen.
   const imSitzungskontext = (tagesordnung?.length ?? 0) > 0
+  // Ohne TOP-Nummern ist es keine Tagesordnung, sondern eine Liste der
+  // verknüpften Dokumente - die Überschrift sagt das auch so.
+  const echteTagesordnung = (tagesordnung ?? []).some((t) => t.top_nummer !== null)
   // Der Aufrufer remountet dieses Modal beim Wechsel über die Tagesordnung
   // (key-Prop), die linke Spalte springt dadurch an den Anfang zurück. Bei
   // ~84 Punkten wäre der gerade gewählte sonst nicht mehr im Bild.
@@ -93,7 +101,7 @@ export function DokumentDetailModal({
   // Zeigt statt des Dokuments die Sitzung selbst. Beim Wechsel auf einen
   // Tagesordnungspunkt remountet der Aufrufer dieses Modal (key), der Zustand
   // fällt damit von allein zurück.
-  const [zeigeUebersicht, setZeigeUebersicht] = useState(false)
+  const [zeigeUebersicht, setZeigeUebersicht] = useState(starteInUebersicht === true)
   const [variante, setVariante] = useState<LeseVariante>(() =>
     imSitzungskontext ? ladeVariante(VARIANTE_KEY_SITZUNG, 'b') : ladeVariante(VARIANTE_KEY_HUB, 'a'),
   )
@@ -586,7 +594,7 @@ export function DokumentDetailModal({
 
   const varianten: { wert: LeseVariante; icon: typeof Columns2; titel: string }[] = [
     { wert: 'a', icon: Columns2, titel: 'Zwei Spalten: Dokument und Notizen' },
-    { wert: 'b', icon: Columns3, titel: 'Drei Spalten: Tagesordnung, Dokument, Notizen' },
+    { wert: 'b', icon: Columns3, titel: 'Drei Spalten: Navigation, Dokument, Notizen' },
     { wert: 'c', icon: PanelLeft, titel: 'Lesemodus: Dokument breit, Notizen einklappbar' },
   ]
 
@@ -882,7 +890,7 @@ export function DokumentDetailModal({
         </button>
       )}
       <h3 className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-        {imSitzungskontext ? 'Tagesordnung' : 'Keine Tagesordnung'}
+        {!imSitzungskontext ? 'Keine Tagesordnung' : echteTagesordnung ? 'Tagesordnung' : 'Verknüpfte Dokumente'}
       </h3>
       {!imSitzungskontext && (
         <p className="px-2 text-xs text-slate-400">
@@ -891,7 +899,9 @@ export function DokumentDetailModal({
       )}
       <ul className="space-y-0.5">
         {(tagesordnung ?? []).map((t) => {
-          const aktiv = t.dokument_id !== null && t.dokument_id === document.id
+          // In der Übersicht ist kein Punkt aktiv, auch wenn im Hintergrund
+          // noch ein Dokument geladen ist.
+          const aktiv = !zeigeUebersicht && t.dokument_id !== null && t.dokument_id === document.id
           // Lange TOP-Titel auf drei Zeilen kürzen: eine Ratstagesordnung
           // hat ~84 Punkte, ungekürzt wäre die Spalte nicht mehr überschaubar.
           // Der volle Wortlaut steht im title-Attribut.

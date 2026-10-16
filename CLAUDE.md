@@ -112,16 +112,19 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   **Drei Leselayouts**, umschaltbar im Kopf des Modals und pro Gerät in
   `localStorage` gemerkt: A = Dokument + Notizen, B = zusätzlich eine linke Spalte, C = Lesemodus
   (68 Zeichen Zeilenbreite, Notizen einklappbar). In B steht links die **Tagesordnung** der Sitzung,
-  aus der heraus geöffnet wurde – ein Klick wechselt das Dokument. Eine Sitzung **mit** Tagesordnung
-  hat nur noch **diese eine Ansicht**: `TerminDetailPanel` schlägt beim Laden den ersten Punkt mit
-  Dokument auf und rendert dann *kein eigenes Chrome mehr* (`imLeser`) – die frühere Listenansicht
+  aus der heraus geöffnet wurde – ein Klick wechselt das Dokument. Eine **Sitzung** hat nur noch
+  **diese eine Ansicht**: `TerminDetailPanel` schlägt beim Laden ein Dokument auf und rendert dann
+  *kein eigenes Chrome mehr* (`imLeser` – es genügt irgendein verknüpftes Dokument, eine
+  importierte Tagesordnung ist nicht nötig) – die frühere Listenansicht
   lag sonst nach dem Schließen wieder frei, obwohl sie gerade übersprungen worden war. Die Sitzung
   selbst – Kopfdaten, Aufgaben, Anträge, Notizen, Dateien – ist dort der **erste Eintrag über der
   Tagesordnung** (`uebersicht`/`uebersichtTitel`); im Übersichts-Modus zeigt der Kopf den
   Sitzungstitel und nur noch das Schließen-X, die Spalten werden zu Navigation + Sitzung.
-  Rückfall auf die Liste bleibt für Termine, Sitzungen ohne Tagesordnung und den seltenen Fall
-  einer Tagesordnung ganz ohne Drucksache (dann gibt es kein Dokument, mit dem der Leser
-  aufmachen könnte). Das Modal-Chrome (Overlay, Kopfzeile, Schließen) liegt deshalb in
+  Ohne TOP-Nummern startet der Leser in der **Übersicht** (`starteInUebersicht`) und beschriftet
+  die Spalte „Verknüpfte Dokumente" – „das erste Dokument" hätte dort keine Bedeutung. Rückfall
+  auf die Liste bleibt nur, wo es nichts zu lesen gibt: eigene Termine und Sitzungen ganz ohne
+  verknüpftes Dokument. Bis die Verknüpfungen geladen sind, rendert das Modal **nichts**
+  (`dokumenteGeladen`) – sonst blitzt die Liste auf und der Leser legt sich darüber. Das Modal-Chrome (Overlay, Kopfzeile, Schließen) liegt deshalb in
   `TerminDetailPanel` (`layout="modal"`) statt in `TerminDetailModal` – nur die Komponente weiß,
   ob sie überhaupt eines braucht; `TerminDetailModal` ist nur noch der Einstiegspunkt für die drei
   Aufrufer. Auf der eigenen Seite `/termin/:kind/:id` springt nichts automatisch auf, sonst läge

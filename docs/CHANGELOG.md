@@ -2622,3 +2622,12 @@ Im Harness gegen die echte Tagesordnung geprüft: Einstieg auf Ö 3.1, Klick auf
 wechselt Kopf und Inhalt auf die Sitzung, Klick zurück auf einen TOP bringt Dokument, Tags,
 Aktionen und Notizspalte wieder. Der Listen-Rückfall ist nur über `tsc`/`vite build` abgesichert –
 ohne Login lässt er sich nicht im Browser aufrufen.
+
+**Nachbesserung:** Die erste Fassung schaltete den Leser nur bei **echter** Tagesordnung ein – und
+die hat bislang genau eine Sitzung. Überall sonst erschien weiterhin die alte Liste, die eigentlich
+verschwinden sollte. Die Bedingung lautet jetzt: irgendein verknüpftes Dokument genügt. Ohne
+TOP-Nummern startet der Leser in der Übersicht statt auf einem willkürlichen „ersten" Dokument, und
+die Navigationsspalte heißt dort „Verknüpfte Dokumente" statt „Tagesordnung". Dazu ein
+Ladezustand: Bis die Verknüpfungen da sind, rendert das Modal nichts – vorher blitzte die Liste
+kurz auf, bevor der Leser sich darüberlegte. Die Liste bleibt nur noch, wo es nichts zu lesen gibt:
+eigene Termine und Sitzungen ganz ohne Dokument.
