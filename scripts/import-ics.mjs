@@ -36,22 +36,6 @@ function normalizeIcsUrl(url) {
 // Feed-Einträge werden nicht (neu) importiert.
 const MIN_IMPORT_DATUM = new Date('2025-11-11T00:00:00Z')
 
-// Nutzerentscheidung 2026-10-16: Kleine Kommissionen sowie Verwaltungs- und
-// Aufsichtsräte tagen nichtöffentlich und gehören nicht ins Cockpit. ALLRIS
-// führt sie im Sitzungskalender, veröffentlicht dazu aber weder Tagesordnung
-// noch Vorlagen - im Cockpit blieben es dauerhaft leere Termine.
-//
-// Gefiltert wird am Gremiennamen und bewusst nur am Wortanfang: "Aufsichtsrat
-// der Stadtwerke" fliegt raus, ein Ausschuss, der das Wort irgendwo im Titel
-// führt, nicht. Reine Terminkalender-Quellen (art='termin') tragen gar kein
-// gremium und bleiben davon unberührt.
-const NICHT_OEFFENTLICHE_GREMIEN = [/^kleine kommission\b/i, /^verwaltungsrat\b/i, /^aufsichtsrat\b/i]
-
-function istNichtOeffentlich(gremium) {
-  if (!gremium) return false
-  return NICHT_OEFFENTLICHE_GREMIEN.some((muster) => muster.test(gremium.trim()))
-}
-
 // Bug gefunden am 2026-07-26: die ALLRIS-Feeds liefern nur ein rollierendes
 // Zeitfenster (aktuell z. B. "Stadtrat Iserlohn" nur noch ab 2026-06-01,
 // obwohl "heute" der 26.07.2026 ist - ältere Termine fallen mit der Zeit
@@ -177,18 +161,11 @@ async function importSource(source) {
     // der Absage-/Reaktivierungs-Logik nie mehr angefasst.
     const { data: existing } = await supabase
       .from('sessions')
-      .select('ics_uid, status, gremium')
+      .select('ics_uid, status')
       .eq('source_id', source.id)
       .not('ics_uid', 'is', null)
       .gte('datum', startOfTodayUtcIso())
-    // Nichtöffentliche Gremien hier ebenfalls aussortieren: Sie kommen unten
-    // nicht mehr in rows vor, würden also als "aus dem Feed verschwunden" und
-    // damit fälschlich als abgesagt markiert, solange noch Altbestand da ist.
-    const existingByUid = new Map(
-      (existing ?? [])
-        .filter((row) => !istNichtOeffentlich(row.gremium))
-        .map((row) => [row.ics_uid, row.status]),
-    )
+    const existingByUid = new Map((existing ?? []).map((row) => [row.ics_uid, row.status]))
 
     const parsed = await ical.async.fromURL(normalizeIcsUrl(source.ics_url))
     // Wiederkehrende Termine (entry.rrule gesetzt) NICHT hier schon auf
@@ -211,21 +188,19 @@ async function importSource(source) {
     // streuen, obwohl diese Quelle ohnehin ungefiltert übernommen wird
     // (siehe CalendarView.tsx/Archiv.tsx: "termin"-Quellen umgehen die
     // Gremien-Auswahl komplett).
-    const rows = entries
-      .map((entry) => {
-        const summary = toText(entry.summary)
-        return {
-          source_id: source.id,
-          ics_uid: entry.uid,
-          titel: summary || 'Ohne Titel',
-          gremium: source.art === 'termin' ? null : summary ? extractGremium(summary) : null,
-          ebene: source.ebene,
-          datum: new Date(entry.start).toISOString(),
-          ort: toText(entry.location) || null,
-          quelle_url: toText(entry.url) || source.ics_url,
-        }
-      })
-      .filter((row) => !istNichtOeffentlich(row.gremium))
+    const rows = entries.map((entry) => {
+      const summary = toText(entry.summary)
+      return {
+        source_id: source.id,
+        ics_uid: entry.uid,
+        titel: summary || 'Ohne Titel',
+        gremium: source.art === 'termin' ? null : summary ? extractGremium(summary) : null,
+        ebene: source.ebene,
+        datum: new Date(entry.start).toISOString(),
+        ort: toText(entry.location) || null,
+        quelle_url: toText(entry.url) || source.ics_url,
+      }
+    })
 
     if (rows.length === 0) {
       console.log('  Keine VEVENTs im Feed gefunden.')

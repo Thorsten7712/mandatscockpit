@@ -25,14 +25,11 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
   Jede Quelle hat eine `art`: `sitzung` (Gremien-gefiltert via `user_gremien`) oder `termin` (reiner
   Terminkalender, alle Einträge ungefiltert). Import-Horizont: `MIN_IMPORT_DATUM = 2025-11-11`
   (ältere Feed-Einträge werden nicht importiert, ältere DB-Bestände bleiben unangetastet erhalten).
-  **Nichtöffentliche Gremien werden nicht importiert** (`NICHT_OEFFENTLICHE_GREMIEN` in
-  `scripts/import-ics.mjs`): Kleine Kommissionen, Verwaltungs- und Aufsichtsräte. ALLRIS führt sie
-  im Sitzungskalender, veröffentlicht dazu aber weder Tagesordnung noch Vorlagen – im Cockpit
-  blieben es dauerhaft leere Termine. Gefiltert wird am **Wortanfang** des Gremiennamens, damit ein
-  Ausschuss, der eines dieser Wörter mitten im Titel führt, nicht mitgeht; der Altbestand ist mit
-  `0047_nichtoeffentliche_gremien_entfernen.sql` entfallen. Dieselbe Prüfung filtert auch die
-  Bestandsabfrage der Absage-Erkennung – sonst gälten die Altzeilen als „aus dem Feed
-  verschwunden" und würden fälschlich als abgesagt markiert.
+  **Nichtöffentliche Gremien** (Kleine Kommissionen, Verwaltungs- und Aufsichtsräte) werden
+  importiert wie alle anderen und stehen als Kalendereintrag zur Verfügung – sie bekommen nur
+  keinen Inhalt, weil ALLRIS zu ihnen weder Tagesordnung noch Vorlagen veröffentlicht. Ein
+  Import-Filter dafür war kurzzeitig eingebaut (0047) und ist wieder entfernt (0048); die
+  Entscheidung lautet: Termin ja, Inhalt nein.
 - **ToDo-Board:** Kanban-Stil mit frei definierbaren Spalten (`todo_columns`) statt fester Status,
   Drag & Drop via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu

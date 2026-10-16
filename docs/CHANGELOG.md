@@ -2655,3 +2655,16 @@ behalten**. Die Migration löscht bewusst nichts, woran etwas hängt – Sitzung
 Aufgaben, Anträgen oder Dokumenten wären stehen geblieben und namentlich gemeldet worden. Nötig
 ist das, weil die Fremdschlüssel von `summaries`/`todos`/`antraege`/`documents` auf `sessions` ohne
 `ON DELETE` angelegt sind: ein Löschen wäre hart gescheitert statt still mitzunehmen.
+
+**Sofort korrigiert:** „die sollen auch nicht ins Mandatscockpit" hieß nicht, dass die Termine
+verschwinden sollen, sondern dass zu ihnen kein Inhalt kommt – als Kalendereintrag sind sie
+weiterhin gewünscht. Ich hatte das als Löschauftrag gelesen und 20 Sitzungen entfernt. Der
+Import-Filter ist wieder draußen (`scripts/import-ics.mjs` steht wieder exakt auf dem Stand davor),
+`0048_nichtoeffentliche_gremien_zurueck.sql` hat die 7 Sitzungen aus Juni/Juli 2026
+wiederhergestellt, die außerhalb des rollierenden ALLRIS-Fensters liegen und deshalb nicht von
+allein zurückkommen – mit unveränderter `ics_uid`, also ohne Dublettenrisiko. Die übrigen 13 ab
+dem 31.08.2026 holt der nächste ICS-Import zurück. Möglich war das nur, weil 0047 nichts gelöscht
+hat, woran etwas hing, und weil die Bestandsdaten unmittelbar vor dem Löschen noch vorlagen.
+
+Die Entscheidung in einem Satz: **Termin ja, Inhalt nein.** Für dailyallris heißt das, Kleine
+Kommissionen, Verwaltungs- und Aufsichtsräte beim Tagesordnungs-Import zu überspringen.
