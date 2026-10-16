@@ -2631,3 +2631,27 @@ die Navigationsspalte heißt dort „Verknüpfte Dokumente" statt „Tagesordnun
 Ladezustand: Bis die Verknüpfungen da sind, rendert das Modal nichts – vorher blitzte die Liste
 kurz auf, bevor der Leser sich darüberlegte. Die Liste bleibt nur noch, wo es nichts zu lesen gibt:
 eigene Termine und Sitzungen ganz ohne Dokument.
+
+### Nichtöffentliche Gremien raus aus dem Kalender (2026-10-16)
+
+Beim Prüfen, welchen vergangenen Sitzungen noch eine Tagesordnung fehlt, blieb eine Gruppe übrig,
+die partout keine bekam: Kleine Kommission Finanzen/Sport/Schulwesen/Friedhöfe, Verwaltungsrat
+Märkischer Stadtbetrieb, Aufsichtsrat der Stadtwerke / der Gesellschaft für Wirtschaftsförderung /
+der Schillerplatz GmbH. Nutzerentscheidung: Die tagen nichtöffentlich und gehören gar nicht erst
+ins Cockpit – ALLRIS führt sie im Sitzungskalender, veröffentlicht dazu aber weder Tagesordnung
+noch Vorlagen, es blieben dauerhaft leere Termine.
+
+`NICHT_OEFFENTLICHE_GREMIEN` in `scripts/import-ics.mjs` filtert sie beim Import heraus, am
+**Wortanfang** des Gremiennamens: „Aufsichtsrat der Stadtwerke" fliegt raus, ein Ausschuss mit dem
+Wort mitten im Titel nicht. Reine Terminkalender-Quellen (`art='termin'`) tragen gar kein `gremium`
+und bleiben unberührt.
+
+Zwei Stellen, nicht eine: Die Absage-Erkennung („UID fehlt im Feed = vermutlich abgesagt") fragt
+den Bestand separat ab. Ohne dieselbe Filterung dort hätte der nächste Lauf alle noch vorhandenen
+Altzeilen als abgesagt markiert, weil sie in `rows` nicht mehr vorkommen.
+
+`0047_nichtoeffentliche_gremien_entfernen.sql` räumt den Altbestand: **20 Sitzungen gelöscht, keine
+behalten**. Die Migration löscht bewusst nichts, woran etwas hängt – Sitzungen mit Notizen,
+Aufgaben, Anträgen oder Dokumenten wären stehen geblieben und namentlich gemeldet worden. Nötig
+ist das, weil die Fremdschlüssel von `summaries`/`todos`/`antraege`/`documents` auf `sessions` ohne
+`ON DELETE` angelegt sind: ein Löschen wäre hart gescheitert statt still mitzunehmen.
