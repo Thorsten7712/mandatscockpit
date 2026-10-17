@@ -3,6 +3,7 @@ name: Wartung – Dateien und Notizen aufräumen
 # Einmalige Wartungsläufe, Details im jeweiligen Skript:
 #   dateien  scripts/wartung-dateien.mjs  (nach der Upload-Sperre, 0052)
 #   notizen  scripts/wartung-notizen.mjs  (ein Notiz-System, 0055)
+#   vorschau scripts/wartung-vorschau.mjs (Listenvorschau der Dokumente, 0058)
 # Nur von Hand startbar; zuerst mit "probe" laufen lassen und die Ausgabe
 # prüfen, dann mit "ausfuehren".
 #
@@ -24,7 +25,7 @@ on:
         required: true
         default: notizen
         type: choice
-        options: [dateien, notizen]
+        options: [dateien, notizen, vorschau]
       modus:
         description: '"probe" zeigt nur den Plan, "ausfuehren" ändert'
         required: true
@@ -75,7 +76,9 @@ jobs:
           MODUS: ${{ inputs.modus }}
           AUCH_VON: ${{ inputs.auch_von }}
           EXPORT_DIR: export
-        run: node "scripts/wartung-${{ inputs.skript }}.mjs"
+        # --experimental-strip-types: wartung-vorschau importiert die
+        # TypeScript-Datei, die auch Web-Oberfläche und MCP-Server nutzen.
+        run: node --experimental-strip-types "scripts/wartung-${{ inputs.skript }}.mjs"
       # Sicherung des Gelöschten, verschlüsselt; läuft nach 30 Tagen von selbst
       # ab. Entschlüsseln: gpg --decrypt sicherung.tar.gz.gpg | tar xz
       - name: Sicherung verschlüsseln

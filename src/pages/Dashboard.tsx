@@ -9,6 +9,7 @@ import { PresseschauSection } from '../components/PresseschauSection'
 import { NeuigkeitenSection } from '../components/NeuigkeitenSection'
 import { logoUrl, themeById } from '../lib/themes'
 import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
+import { alleZeilen } from '../lib/alleZeilen'
 
 export default function Dashboard() {
   const [profileName, setProfileName] = useState('')
@@ -28,10 +29,14 @@ export default function Dashboard() {
   // Nutzer sichtbaren dokumente-Zeilen (Top-Level + Notizen) reicht, RLS
   // filtert auf das Sichtbare (0033/0034_dokumente*.sql).
   async function loadUngeleseneDokumente(uid: string) {
-    const { data: alle } = await supabase.from('dokumente').select('id, parent_id, erstellt_am')
-    const topLevel = (alle ?? []).filter((d) => !d.parent_id)
+    // Seitenweise: als eine Abfrage kamen nur 1.000 der rund 1.150 Zeilen an,
+    // die Zahl war also stillschweigend zu niedrig (src/lib/alleZeilen.ts).
+    const { zeilen: alle } = await alleZeilen<{ id: string; parent_id: string | null; erstellt_am: string }>((von, bis) =>
+      supabase.from('dokumente').select('id, parent_id, erstellt_am').order('id').range(von, bis),
+    )
+    const topLevel = alle.filter((d) => !d.parent_id)
     const kinderByParent = new Map<string, { erstellt_am: string }[]>()
-    for (const d of alle ?? []) {
+    for (const d of alle) {
       if (!d.parent_id) continue
       const list = kinderByParent.get(d.parent_id) ?? []
       list.push({ erstellt_am: d.erstellt_am })

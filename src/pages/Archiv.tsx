@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { Archive, CheckSquare, FileText, Gavel, History, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { ladeTermineMitNotizen } from '../lib/notizFlags'
-import type { AntragRow, CalendarSource, DokumentRow, Ebene, SessionRow, TodoRow } from '../lib/types'
+import type { AntragRow, CalendarSource, DokumentListenZeile, DokumentRow, Ebene, SessionRow, TodoRow } from '../lib/types'
+import { DOKUMENT_LISTEN_SPALTEN, ladeDokument } from '../lib/dokumentSpalten'
 import { TerminDetailModal } from '../components/TerminDetailModal'
 import { TodoDetailModal } from '../components/TodoDetailModal'
 import { AntragDetailModal } from '../components/AntragDetailModal'
@@ -55,7 +56,7 @@ export default function Archiv() {
 
   // Archivierte Dokumente aus dem Dokumenten-Hub (Dokumente.tsx), siehe
   // src/lib/dokumenteArchiv.ts für die Archiv-Regel.
-  const [hubDokumente, setHubDokumente] = useState<DokumentRow[]>([])
+  const [hubDokumente, setHubDokumente] = useState<DokumentListenZeile[]>([])
   const [hubSitzungen, setHubSitzungen] = useState<SitzungenJeDokument>(new Map())
   const [openHubDoc, setOpenHubDoc] = useState<DokumentRow | null>(null)
 
@@ -186,10 +187,10 @@ export default function Archiv() {
   async function loadHubDokumente() {
     // Seitenweise, siehe src/lib/alleZeilen.ts - sonst fehlten ab 1.000
     // Dokumenten die ältesten, also gerade das, was ins Archiv gehört.
-    const { zeilen: rows } = await alleZeilen<DokumentRow>((von, bis) =>
+    const { zeilen: rows } = await alleZeilen<DokumentListenZeile>((von, bis) =>
       supabase
         .from('dokumente')
-        .select('*')
+        .select(DOKUMENT_LISTEN_SPALTEN)
         .is('parent_id', null)
         .order('erstellt_am', { ascending: false })
         .order('id')
@@ -222,7 +223,7 @@ export default function Archiv() {
   // und Aufgaben gibt es seit 0052/0055 nicht mehr.
   const archivierteHubDokumente = hubDokumente
     .map((d) => ({ dokument: d, grund: archivGrund(d, hubSitzungen) }))
-    .filter((e): e is { dokument: DokumentRow; grund: NonNullable<ReturnType<typeof archivGrund>> } => e.grund !== null)
+    .filter((e): e is { dokument: DokumentListenZeile; grund: NonNullable<ReturnType<typeof archivGrund>> } => e.grund !== null)
 
   const archivDokumente = archivierteHubDokumente
     .map(({ dokument, grund }) => ({ id: dokument.id, datum: dokument.erstellt_am, row: dokument, grund }))
@@ -480,7 +481,11 @@ export default function Archiv() {
                   <li key={`hub-${eintrag.id}`}>
                     <button
                       type="button"
-                      onClick={() => setOpenHubDoc(eintrag.row)}
+                      onClick={async () => {
+                        // Die Liste lädt den Text nicht mit (0058).
+                        const voll = await ladeDokument(eintrag.row.id)
+                        if (voll) setOpenHubDoc(voll)
+                      }}
                       className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
                     >
                       <span className="min-w-0 flex-1">

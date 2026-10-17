@@ -40,6 +40,8 @@ jobs:
         run: |
           status=0
           for dir in supabase/functions/*/; do
+            # _shared enthält gemeinsamen Code, keine eigene Function.
+            [ -f "${dir}index.ts" ] || continue
             echo "== ${dir}"
             (cd "$dir" && deno check index.ts) || status=1
           done

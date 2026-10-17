@@ -9,6 +9,7 @@ import { useLoeschDialog } from './LoeschDialog'
 import { formatDateTime } from '../lib/format'
 import { antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 import { inStuecken } from '../lib/alleZeilen'
+import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
 
 // Gleiche Liste wie in Settings.tsx/Archiv.tsx (Kalenderquellen- bzw.
 // Sitzung-nachtragen-Formular) - bewusst dupliziert, siehe CLAUDE.md.
@@ -159,7 +160,7 @@ export function TerminDetailPanel({
     const ids = eintraege.map((l) => l.dokument_id).filter((d): d is string => d !== null)
     const { data } =
       ids.length > 0
-        ? await supabase.from('dokumente').select('*').in('id', ids).order('erstellt_am')
+        ? await supabase.from('dokumente').select(DOKUMENT_SPALTEN).in('id', ids).order('erstellt_am')
         : { data: [] as DokumentRow[] }
     const dokumente = data ?? []
     const titelById = new Map(dokumente.map((d) => [d.id, d.titel]))

@@ -69,8 +69,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   Personen geteilt (`dokument_shares`-Tabelle, Muster von `antrag_shares`). Alles auch über den
   MCP-Server befüllbar (`create_document`/`list_documents` - der Server läuft über den
   Service-Role-Client, RLS greift dort nicht, die Sichtbarkeitsprüfung passiert deshalb explizit im
-  Tool-Code, siehe `darfSehen()` in `tools/dokumente.ts`). Ebene-/Tag-Filterchips, client-seitige
-  Volltextsuche (Titel/Inhalt/Tags/Autor der Top-Level-Dokumente) und Farbmarkierungen
+  Tool-Code, siehe `darfSehen()` in `tools/dokumente.ts`). Ebene-/Tag-Filterchips, Volltextsuche in der Datenbank
+  (Titel/Inhalt/Tags, `0058`; Autor im Browser) und Farbmarkierungen
   (`EBENE_COLOR`/`tagColor()` in `src/lib/sourceColors.ts`). `DokumentDetailModal.tsx` nutzt die
   gemeinsame `DetailModalShell` (2-Spalten). Gelesen/Ungelesen manuell umschaltbar über einen farbigen
   Punkt-Indikator (kein Umschlag-Icon). Eigener Storage-Bucket
@@ -117,7 +117,7 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   Ebene, Tags, Sitzungs- und ToDo-Chips, Aktionen), darunter links das gerenderte Dokument
   (`VorlageAnsicht.tsx`) und rechts die Notizen. Tags/Sitzung/ToDos werden im Band nur angezeigt;
   die Eingabefelder klappen über „Verknüpfungen" darunter auf. Markdown-Aufbereitung in
-  `src/lib/vorlageMarkdown.ts`, Prosa-Styles als `mc-dokument-content` in `index.css`.
+  `supabase/functions/_shared/vorlageMarkdown.ts` (über `src/lib/vorlageMarkdown.ts` eingebunden), Prosa-Styles als `mc-dokument-content` in `index.css`.
   `prosaGlaetten()` entfernt dort nur noch Mehrfach-Leerzeichen und führt **keine Absätze mehr
   zusammen** – seit dailyallris die Prosa bei der Extraktion normalisiert, verklebte diese
   Heuristik Feldwerte („## Verfasser") mit dem Folgeabsatz.
@@ -289,6 +289,13 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   bewusst dupliziert – kein gemeinsames Backend/Build-Tooling, das eine Abstraktion rechtfertigen
   würde. Faustregel im Projekt: 2 Vorkommen sind tolerierbar, beim 3. wird in eine gemeinsame Stelle
   extrahiert (Beispiel: `fileNameFromPath`, `DetailModalShell`).
+- **`dokumente` nie mit `select('*')` lesen** (seit `0058_dokumente_suche_vorschau.sql`): die
+  generierte Spalte `suchtext` ist eine zweite Kopie des ganzen Textes. Spaltenlisten
+  `DOKUMENT_SPALTEN`/`DOKUMENT_LISTEN_SPALTEN` und `ladeDokument()` in `src/lib/dokumentSpalten.ts`;
+  Listen laden ohne `inhalt` und zeigen `vorschau`. Gesucht wird in der Datenbank
+  (`sucheDokumente()`, ILIKE auf `suchtext` mit Trigramm-Index). `vorschau` muss jeder Schreibweg
+  mitsetzen – die Funktion liegt in `supabase/functions/_shared/vorlageMarkdown.ts`, die Frontend
+  und MCP-Server gemeinsam importieren.
 - **PostgREST liefert höchstens 1.000 Zeilen pro Abfrage und schneidet stillschweigend ab**
   (Supabase-Voreinstellung „Max rows"). Bei 1.141 Drucksachen fehlten `list_documents` dadurch
   zufällige Dokumente, darunter die neuesten. Jede Abfrage, die potenziell den ganzen Hub oder

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { Link } from 'react-router-dom'
 import { Archive, ArchiveRestore, Columns2, Columns3, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
 import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate, formatDateTime, startOfTodayIso } from '../lib/format'
@@ -185,7 +186,7 @@ export function DokumentDetailModal({
   async function loadChildren() {
     const { data } = await supabase
       .from('dokumente')
-      .select('*')
+      .select(DOKUMENT_SPALTEN)
       .eq('parent_id', document.id)
       .order('erstellt_am', { ascending: false })
     setChildren(data ?? [])
