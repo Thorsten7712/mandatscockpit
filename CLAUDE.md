@@ -328,6 +328,10 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 2. **Fraktionsbüro-Variante der Termin-Erstellung**: eigene Termine anlegen/bearbeiten/löschen ist
    fertig (siehe oben), es fehlt noch die Rolle „Fraktionsbüro", die ein Zielmitglied aus der eigenen
    Fraktion auswählen und für dieses einen Termin (`herkunft = 'fraktionsbuero'`) anlegen kann.
+   **Entschieden (17.10.2026):** Das Fraktionsbüro darf selbst angelegte Termine jederzeit ändern
+   und löschen, auch nachdem das Mitglied sie bearbeitet hat. Offen dabei: Am Termin hängen Daten des Mitglieds (Notizen, Dateien, verknüpfte ToDos/Anträge/Dokumente). Ändert oder löscht das Fraktionsbüro den Termin, dürfen die nicht stillschweigend verschwinden – wie das gelöst wird, gehört in die anstehende Grundsatzüberlegung zu Notizen/Zusammenfassungen/Verknüpfungen und Kalender.
+   Die Kalender-Einbindung insgesamt will der Nutzer ebenfalls grundsätzlich neu überdenken – vor
+   dem Bau dieser Rolle also erst das Ergebnis davon abwarten.
 3. **RIS-Dokumenten-Import** (Phase 2, KONZEPT.md Abschnitt 5.1): automatischer Import öffentlicher
    Ratsinformationssystem-Dokumente (Anträge/Vorlagen) in die weiterhin ungenutzte `documents`-Tabelle
    (0001_init.sql) - nicht zu verwechseln mit dem neuen `/dokumente`-Reiter (Tabelle `dokumente`,
@@ -355,7 +359,6 @@ Diese Punkte sind in KONZEPT.md Abschnitt 11 aufgeführt und noch nicht entschie
 lieber nachfragen als eine der Optionen fest einzubauen:
 
 - Sollen Zusammenfassungen standardmäßig privat oder teilbar sein?
-- Darf das Fraktionsbüro Termine nach dem Anlegen auch noch bearbeiten/löschen?
 - Sollen ToDo-Boards mit Standard-Spalten vorbelegt werden?
 - Wie wird die „aktive Sitzung" bestimmt (manuell vs. automatisch anhand des Datums)?
 

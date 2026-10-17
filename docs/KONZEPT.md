@@ -204,7 +204,7 @@ GitHub Issues/Projects (Kanban-Board) eignen sich gut, um die Umsetzung in Phase
 - Wie wird die „aktive Sitzung" bestimmt – manuell vom Ratsbüro gesetzt oder automatisch anhand des nächsten Sitzungstermins?
 - Sollen hochgeladene Zusammenfassungen grundsätzlich privat bleiben oder optional mit anderen Mitgliedern teilbar sein?
 - Welche Dateiformate sollen für den Upload unterstützt werden (Freitext, .txt/.md, auch .pdf)?
-- Darf das Fraktionsbüro von ihm angelegte Termine auch nachträglich bearbeiten/löschen, oder nur einmalig anlegen? Was passiert im Konfliktfall, wenn das Mitglied den Termin inzwischen selbst geändert hat?
+- ~~Darf das Fraktionsbüro von ihm angelegte Termine auch nachträglich bearbeiten/löschen?~~ **Entschieden (17.10.2026): Ja, immer** – auch wenn das Mitglied den Termin inzwischen selbst geändert hat. Folge für die Umsetzung: Am Termin hängen Daten des Mitglieds (Notizen, Dateien, verknüpfte ToDos/Anträge/Dokumente). Ändert oder löscht das Fraktionsbüro den Termin, dürfen die nicht stillschweigend verschwinden – wie das gelöst wird, gehört in die anstehende Grundsatzüberlegung zu Notizen/Zusammenfassungen/Verknüpfungen und Kalender.
 - ~~Sollen ToDo-Boards mit sinnvollen Standard-Spalten vorbelegt werden?~~ – erledigt: „Neu", „Geplant", „Wartet", „Fertig" (siehe Abschnitt 5.4).
 - Endgültige Wahl des Backend-Anbieters (Supabase empfohlen, Alternativen möglich).
 - ~~Repo öffentlich oder privat~~ – erledigt, public (GitHub-Pages-Zwang im Free-Tier, siehe Abschnitt 8).
