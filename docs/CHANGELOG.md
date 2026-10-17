@@ -2668,3 +2668,33 @@ hat, woran etwas hing, und weil die Bestandsdaten unmittelbar vor dem Löschen n
 
 Die Entscheidung in einem Satz: **Termin ja, Inhalt nein.** Für dailyallris heißt das, Kleine
 Kommissionen, Verwaltungs- und Aufsichtsräte beim Tagesordnungs-Import zu überspringen.
+
+### Supabase-Linter: Suchpfad der SECURITY-DEFINER-Funktionen (2026-10-17)
+
+Mit dem Supabase-MCP-Connector kam erstmals `get_advisors` ins Spiel – ein Linter über Sicherheit
+und Performance des Projekts. Das wichtigste Ergebnis ist ein Negativbefund: **kein ERROR, und kein
+einziger Treffer zu fehlendem RLS oder fehlenden Policies.** Bei einem Projekt, in dem RLS die
+einzige Zugriffskontrolle ist, ist genau das der Test, auf den es ankommt.
+
+Behoben wurde der klarste Befund (`0049_search_path_fixieren.sql`): Zehn der elf
+SECURITY-DEFINER-Funktionen in `public` hatten keinen festen `search_path`. Sie laufen mit den
+Rechten ihres Eigentümers, lösten ihre Tabellen aber über den Suchpfad des Aufrufers auf – und es
+sind genau die Funktionen, an denen die RLS hängt (`current_user_partei`,
+`dokument_ist_geteilt_mit`, …).
+
+`public, pg_temp` statt nur `public`, weil `pg_temp` sonst implizit **zuerst** durchsucht wird und
+eine temporäre Tabelle gleichen Namens die echte verdecken könnte; explizit ans Ende gestellt ist
+das ausgeschlossen. `current_user_fraktion()` ist mitgenommen, obwohl der Linter sie nicht meldete:
+Sie trug bereits `search_path=public`, aber ohne `pg_temp`.
+
+Die Funktionskörper blieben unangetastet – vorher über `pg_proc.prosrc` geprüft, dass sie
+ausschließlich `public`-Tabellen anfassen und das auth-Schema bereits qualifiziert ansprechen
+(`auth.uid()`), was vom Suchpfad unabhängig ist. Ein `do`-Block am Ende der Migration bricht ab,
+falls eine SECURITY-DEFINER-Funktion ohne Suchpfad übrig bleibt; damit fällt auch jede künftig
+hinzugefügte auf. Nach dem Anwenden ist `function_search_path_mutable` aus den Befunden
+verschwunden.
+
+Die übrigen Befunde sind in `docs/UEBERGABE-CLOUD.md` festgehalten, mit Begründung, warum der
+naheliegende Fix beim größten davon (`revoke execute` auf die RPC-erreichbaren Helfer) **falsch**
+wäre: Policy-Ausdrücke laufen mit den Rechten der aufrufenden Rolle – ohne EXECUTE schlüge jede
+Abfrage fehl.

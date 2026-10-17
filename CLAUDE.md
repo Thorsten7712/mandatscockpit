@@ -188,6 +188,13 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 
 ### Technische Fallstricke & Muster (aus der Historie gelernt)
 
+- **SECURITY-DEFINER-Funktionen brauchen `set search_path = public, pg_temp`** (seit
+  `0049_search_path_fixieren.sql`, Befund des Supabase-Linters). Ohne festen Suchpfad lösen sie
+  ihre Tabellen über den Pfad des Aufrufers auf – bei Funktionen, die mit erhöhten Rechten laufen
+  und an denen die gesamte RLS hängt, ist das eine offene Flanke. `pg_temp` gehört **ans Ende**:
+  sonst wird es implizit zuerst durchsucht und eine temporäre Tabelle könnte die echte verdecken.
+  Die Migration hat ein Sicherheitsnetz, das abbricht, sobald eine neue Funktion ohne Suchpfad
+  dazukommt – neue Helfer also gleich mit `set search_path` anlegen.
 - **RLS-Rekursion**: Eine Policy, die in ihrer eigenen USING-Klausel dieselbe Tabelle per Subquery
   abfragt (z. B. `profiles`-Policy fragt `profiles` ab), verursacht „infinite recursion detected in
   policy" (Postgres 42P17). Fix: SECURITY DEFINER-Helper-Funktion, die die Tabelle direkt abfragt

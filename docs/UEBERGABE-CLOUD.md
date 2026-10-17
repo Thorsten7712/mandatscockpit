@@ -65,8 +65,53 @@ Liste bleibt, wo es nichts zu lesen gibt: eigene Termine und Sitzungen ganz ohne
 
 1. **dailyallris:** Kleine Kommissionen, Verwaltungs- und Aufsichtsräte beim Tagesordnungs-Import
    überspringen. Dazu: die 33 verbliebenen Tagesordnungs-PDFs nach dem Einlesen löschen.
-2. Die sechs Punkte unter „Geplante nächste Schritte" in `CLAUDE.md` (ToDo-Zuständigkeit,
+2. **Datenbank-Hygiene aus dem Linter-Durchlauf vom 17.10.2026** – siehe eigener Abschnitt unten.
+3. Die sechs Punkte unter „Geplante nächste Schritte" in `CLAUDE.md` (ToDo-Zuständigkeit,
    Fraktionsbüro-Termine, RIS-Import, iCal-Export, Bilder in Vorlagen, MCP-Tools für Fakten).
+
+### Befunde des Supabase-Linters (17.10.2026)
+
+`get_advisors` über beide Kategorien. **Kein ERROR, und kein einziger Befund zu fehlendem RLS oder
+fehlenden Policies** – bei einem Projekt, in dem RLS die einzige Zugriffskontrolle ist, ist das der
+Test, auf den es ankommt. Erledigt ist bereits:
+
+- ✅ **`search_path` der SECURITY-DEFINER-Funktionen** (`0049_search_path_fixieren.sql`). Alle elf
+  Funktionen in `public` haben jetzt `public, pg_temp`; die Migration bricht ab, falls später eine
+  ohne Suchpfad dazukommt.
+
+Offen, in der Reihenfolge des Nutzens:
+
+**1. `auth.uid()` wird in 70 Policies pro Zeile ausgewertet** statt einmal (`auth_rls_initplan`).
+Der Fix ist mechanisch – `auth.uid()` → `(select auth.uid())`, semantisch identisch – und betrifft
+jede größere Abfrage im Projekt. Das ist der Befund mit dem besten Verhältnis von Aufwand zu
+Wirkung, aber er schreibt die **einzige Zugriffskontrolle** des Projekts um. Mit dem
+Supabase-Connector lässt sich das jetzt absichern: vorher und nachher dieselbe Abfrage als
+betroffener Nutzer laufen lassen und vergleichen, dass genau dieselben Zeilen sichtbar sind.
+
+**2. Einigen Policies fehlt `to authenticated`.** Aufgefallen daran, dass
+`multiple_permissive_policies` Befunde für die Rolle `anon` meldet – diese Policies werden also
+auch für nicht angemeldete Aufrufer ausgewertet. Ein Loch ist das nicht (`auth.uid()` ist dort
+null, es kommt keine Zeile zurück), aber unsauber und unnötige Arbeit für die Datenbank.
+
+**3. Die SECURITY-DEFINER-Helfer sind als REST-Endpunkte erreichbar**
+(`/rest/v1/rpc/dokument_ist_geteilt_mit` & Co., für `anon` wie `authenticated`). **Achtung:
+`revoke execute` ist der falsche Fix** – Policy-Ausdrücke laufen mit den Rechten der aufrufenden
+Rolle, ohne EXECUTE schlägt jede Abfrage fehl. Der saubere Weg wäre ein eigenes, nicht exponiertes
+Schema für die Helfer, und das heißt: jede Policy anfassen, die sie referenziert. Die reale
+Angriffsfläche ist gering – die meisten Funktionen liefern Daten des Aufrufers selbst, für `anon`
+also nichts; `dokument_ist_geteilt_mit`/`antrag_ist_geteilt_mit` verraten bei bekannten UUIDs, ob
+ein Dokument mit einer Person geteilt ist. Bewusste Entscheidung nötig, keine schnelle Aufgabe.
+
+**4. 34 Fremdschlüssel ohne Index** (`unindexed_foreign_keys`, nur INFO). Spürbar beim Löschen in
+der Elterntabelle, weil jede gelöschte Zeile die Kindtabellen durchsucht. Bei 799 Sitzungen
+irrelevant – die 20 Löschungen in `0047` liefen in Millisekunden. Im Hinterkopf behalten.
+
+**5. Leaked-Password-Protection ist aus.** Ein Schalter im Supabase-Dashboard (Auth-Einstellungen),
+der Passwörter gegen HaveIBeenPwned prüft. Passt zum Projekt, das bereits erzwungenen
+Passwortwechsel kennt. **Muss Thorsten selbst klicken**, das geht nicht über eine Migration.
+
+Keiner dieser Befunde stammt aus der Tagesordnungs-Arbeit – die neuen Tabellen `sitzung_dokumente`
+und `fakten` zeigen dieselben Muster wie der Bestand, weil sie denselben Konventionen folgen.
 
 ---
 
@@ -194,7 +239,13 @@ Auswertungen Stichproben.
 1. Die 33 verbliebenen Tagesordnungs-PDFs im Dokumenten-Hub aufräumen, sobald die jeweilige
    Tagesordnung strukturiert vorliegt (`delete_document`; der Hub-Bestand gehört dem Konto
    „ALLRIS-Import", Admins dürfen dessen Dokumente löschen).
-2. Danach die Punkte unter „Geplante nächste Schritte" in `CLAUDE.md`.
+2. **`auth.uid()` → `(select auth.uid())` in den 70 betroffenen Policies.** Mechanisch, aber es
+   schreibt die einzige Zugriffskontrolle des Projekts um: vorher und nachher mit `execute_sql`
+   prüfen, dass als derselbe Nutzer genau dieselben Zeilen sichtbar sind. Dabei gleich die
+   fehlenden `to authenticated`-Klauseln ergänzen. Details im Abschnitt „Befunde des
+   Supabase-Linters" in `docs/UEBERGABE-CLOUD.md` – dort steht auch, warum `revoke execute` bei
+   den RPC-erreichbaren Helfern der **falsche** Fix wäre.
+3. Danach die Punkte unter „Geplante nächste Schritte" in `CLAUDE.md`.
 
 **Zwei Dinge, die dich sonst Zeit kosten:**
 
