@@ -21,7 +21,11 @@ name: Backup der Datenbank
 # Wiederherstellen: Artefakt laden, dann
 #   gpg --decrypt backup.tar.gz.gpg | tar xz
 # und die drei SQL-Dateien in dieser Reihenfolge einspielen: rollen, schema,
-# daten (z. B. mit psql in ein neues Supabase-Projekt).
+# daten (z. B. mit psql in ein neues Supabase-Projekt). Die Daten mit
+# `SET session_replication_role = replica;` davor laden: dokumente verweist
+# auf sich selbst (parent_id), pg_dump warnt deshalb vor der Reihenfolge, und
+# ohne die Einstellung liefen außerdem alle Trigger (Löschprotokoll,
+# Zuständigkeitsprüfung) beim Einspielen mit.
 
 on:
   schedule:

@@ -27,6 +27,8 @@ const EBENEN: { value: Ebene; label: string }[] = [
   { value: 'bund', label: 'Bund' },
 ]
 
+type ErledigteKarte = TodoRow & { zustaendig_profil: { name: string } | null }
+
 export default function Archiv() {
   const [tab, setTab] = useState<Tab>('sitzungen')
 
@@ -47,7 +49,7 @@ export default function Archiv() {
   const [newSaving, setNewSaving] = useState(false)
   const [newError, setNewError] = useState<string | null>(null)
 
-  const [completedTodos, setCompletedTodos] = useState<TodoRow[]>([])
+  const [completedTodos, setCompletedTodos] = useState<ErledigteKarte[]>([])
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
 
 
@@ -164,12 +166,15 @@ export default function Archiv() {
 
 
   async function loadCompletedTodos() {
+    // Name der zuständigen Person gleich mitladen (0056). Zwei Fremdschlüssel
+    // auf profiles (user_id, zustaendig_user_id) - der Hinweis wählt den
+    // richtigen.
     const { data } = await supabase
       .from('todos')
-      .select('*')
+      .select('*, zustaendig_profil:profiles!todos_zustaendig_user_id_fkey(name)')
       .eq('erledigt', true)
       .order('erledigt_am', { ascending: false })
-    setCompletedTodos(data ?? [])
+    setCompletedTodos((data ?? []) as ErledigteKarte[])
   }
 
   // Top-Level-Dokumente des Dokumenten-Hubs samt Datum der verknüpften
@@ -448,8 +453,8 @@ export default function Archiv() {
                         {t.titel}
                       </span>
                       <span className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-slate-500">
-                        {t.zustaendig && (
-                          <span className="rounded-sm bg-slate-100 px-1.5 py-0.5">👤 {t.zustaendig}</span>
+                        {t.zustaendig_profil && (
+                          <span className="rounded-sm bg-slate-100 px-1.5 py-0.5">👤 {t.zustaendig_profil.name}</span>
                         )}
                         {t.erledigt_am && <span>Erledigt am {formatDate(t.erledigt_am)}</span>}
                         <span>Erstellt am {formatDate(t.created_at)}</span>

@@ -30,12 +30,18 @@ function Card({
   onOpen,
   terminLabel,
   hatDokument,
+  zustaendigName,
+  mirZugewiesen,
 }: {
   todo: TodoRow
   settings: TodoBoardSettings | null
   onOpen: () => void
   terminLabel: string | null
   hatDokument: boolean
+  /** Name der zuständigen Person (0056), null = niemand. */
+  zustaendigName: string | null
+  /** Mir zugewiesen, aber von jemand anderem angelegt - hervorgehoben. */
+  mirZugewiesen: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: todo.id })
   // touchAction: 'none' ist auf Touch-Geräten (iPad) nötig, sonst interpretiert
@@ -46,7 +52,7 @@ function Card({
     ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
   }
   const zeigeTermin = (settings?.zeige_termin ?? true) && Boolean(terminLabel)
-  const zeigeZustaendig = (settings?.zeige_zustaendig ?? true) && todo.zustaendig
+  const zeigeZustaendig = (settings?.zeige_zustaendig ?? true) && Boolean(zustaendigName)
   return (
     <div
       ref={setNodeRef}
@@ -69,7 +75,12 @@ function Card({
             </span>
           )}
           {zeigeZustaendig && (
-            <span className="rounded-sm bg-slate-100 px-1.5 py-0.5">👤 {todo.zustaendig}</span>
+            <span
+              className={`rounded-sm px-1.5 py-0.5 ${mirZugewiesen ? 'bg-amber-100 font-medium text-amber-800' : 'bg-slate-100'}`}
+              title={mirZugewiesen ? 'Dir zugewiesen' : 'Zuständig'}
+            >
+              👤 {zustaendigName}
+            </span>
           )}
         </p>
       )}
@@ -86,6 +97,8 @@ function Column({
   canAddCard,
   terminLabels,
   dokumentIds,
+  namen,
+  userId,
 }: {
   column: TodoColumn
   entries: TodoRow[]
@@ -95,6 +108,8 @@ function Column({
   canAddCard: boolean
   terminLabels: Record<string, string | null>
   dokumentIds: Set<string>
+  namen: Map<string, string>
+  userId: string | null
 }) {
   const { setNodeRef } = useDroppable({ id: column.id })
   const [newCardTitel, setNewCardTitel] = useState('')
@@ -125,6 +140,8 @@ function Column({
             onOpen={() => onOpenTodo(t.id)}
             terminLabel={terminLabels[t.id] ?? null}
             hatDokument={dokumentIds.has(t.id)}
+            zustaendigName={t.zustaendig_user_id ? (namen.get(t.zustaendig_user_id) ?? '…') : null}
+            mirZugewiesen={t.zustaendig_user_id === userId && t.user_id !== userId}
           />
         ))}
       </div>
@@ -153,6 +170,7 @@ export function TodoBoard() {
   const [eventById, setEventById] = useState<Map<string, { titel: string; start: string }>>(new Map())
   const [sessionById, setSessionById] = useState<Map<string, { titel: string; datum: string }>>(new Map())
   const [dokumentIds, setDokumentIds] = useState<Set<string>>(new Set())
+  const [namen, setNamen] = useState<Map<string, string>>(new Map())
 
   // MouseSensor + TouchSensor statt PointerSensor: Auf iPad/Touch-Geräten
   // kollidiert ein reiner PointerSensor oft mit Safaris nativer Scroll-
@@ -222,6 +240,21 @@ export function TodoBoard() {
         .select('id, titel, datum')
         .in('id', sessionIds)
         .then(({ data }) => setSessionById(new Map((data ?? []).map((s) => [s.id, s]))))
+    }
+
+    // Namen der Zuständigen (0056) - RLS gibt Profile gleicher Partei und
+    // Ebene frei, und zuweisen lässt sich nur, wer die Karte teilen kann.
+    const zustaendigIds = Array.from(
+      new Set(todos.map((t) => t.zustaendig_user_id).filter((z): z is string => Boolean(z))),
+    )
+    if (zustaendigIds.length === 0) {
+      setNamen(new Map())
+    } else {
+      supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', zustaendigIds)
+        .then(({ data }) => setNamen(new Map((data ?? []).map((p) => [p.id, p.name]))))
     }
 
     // 📝-Flag fürs "Enthält Notizen" (siehe TodoDetailModal.tsx "Notizen")
@@ -348,6 +381,8 @@ export function TodoBoard() {
               canAddCard={col.id === neuColumn.id}
               terminLabels={terminLabels}
               dokumentIds={dokumentIds}
+              namen={namen}
+              userId={userId}
             />
           ))}
         </div>

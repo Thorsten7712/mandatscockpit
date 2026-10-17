@@ -69,7 +69,7 @@ interface TodoListRow {
   id: string
   titel: string
   faellig_am: string | null
-  zustaendig: string | null
+  zustaendig_user_id: string | null
   erledigt: boolean
   erledigt_am: string | null
   session_id: string | null
@@ -96,7 +96,7 @@ export async function listTodos(supabase: SupabaseClient, userId: string, args: 
   const columnTitleById = new Map((columns ?? []).map((c) => [c.id as string, c.titel as string]))
 
   const baseQuery = () => {
-    let q = supabase.from('todos').select('id, titel, faellig_am, zustaendig, erledigt, erledigt_am, session_id, user_id')
+    let q = supabase.from('todos').select('id, titel, faellig_am, zustaendig_user_id, erledigt, erledigt_am, session_id, user_id')
     if (status === 'offen') q = q.eq('erledigt', false)
     else if (status === 'erledigt') q = q.eq('erledigt', true)
     if (sessionIdFilter) q = q.eq('session_id', sessionIdFilter)
@@ -160,6 +160,13 @@ export async function listTodos(supabase: SupabaseClient, userId: string, args: 
     for (const d of dokRows ?? []) dokumentTitelById.set(d.id as string, d.titel as string)
   }
 
+  const zustaendigIds = Array.from(new Set(rows.map((t) => t.zustaendig_user_id).filter((v): v is string => Boolean(v))))
+  const nameById = new Map<string, string>()
+  if (zustaendigIds.length > 0) {
+    const { data: profs } = await supabase.from('profiles').select('id, name').in('id', zustaendigIds)
+    for (const p of profs ?? []) nameById.set(p.id as string, p.name as string)
+  }
+
   const lines = rows.map((t) => {
     const box = t.erledigt ? '[x]' : '[ ]'
     const details: string[] = []
@@ -167,7 +174,9 @@ export async function listTodos(supabase: SupabaseClient, userId: string, args: 
     else if (t.faellig_am) details.push(`fällig ${formatDate(t.faellig_am)}`)
     const spaltenTitel = columnTitleById.get(columnIdByTodo.get(t.id) ?? '')
     if (spaltenTitel) details.push(`Spalte: ${spaltenTitel}`)
-    if (t.zustaendig) details.push(`zuständig: ${t.zustaendig}`)
+    if (t.zustaendig_user_id) {
+      details.push(t.zustaendig_user_id === userId ? 'zuständig: ich' : `zuständig: ${nameById.get(t.zustaendig_user_id) ?? 'unbekannt'}`)
+    }
     if (t.session_id) details.push(`Sitzung: ${sessionTitelById.get(t.session_id) ?? t.session_id}`)
     const dokTitel = (dokumentIdsByTodo.get(t.id) ?? []).map((did) => dokumentTitelById.get(did) ?? did)
     if (dokTitel.length > 0) details.push(`Dokumente: ${dokTitel.join(', ')}`)
@@ -191,6 +200,38 @@ export async function todoIstZugreifbar(supabase: SupabaseClient, userId: string
     .eq('user_id', userId)
     .maybeSingle()
   return Boolean(placement)
+}
+
+/** Löst einen Namen für update_todo(zustaendig) zur Person auf (0056). Zur
+ *  Auswahl stehen - wie in der Web-UI für Nicht-Ersteller - nur Personen, die
+ *  die Karte schon haben (Ersteller*in und Platzierte); Teilen mit neuen
+ *  Kolleg*innen läuft über die Web-Oberfläche, weil nur dort share-todo
+ *  Partei und Ebene prüft. "ich" meint den Aufrufer, leer heißt niemand.
+ *  Liefert die id, '' für niemand oder ein Fehlerergebnis. */
+async function zustaendigAufloesen(
+  supabase: SupabaseClient,
+  userId: string,
+  todoId: string,
+  eingabe: string,
+): Promise<string | ReturnType<typeof toolTextResult>> {
+  if (!eingabe) return ''
+  const { data: todo } = await supabase.from('todos').select('user_id').eq('id', todoId).single()
+  const { data: platziert } = await supabase.from('todo_placements').select('user_id').eq('todo_id', todoId)
+  const ids = Array.from(new Set([todo?.user_id as string, ...(platziert ?? []).map((p) => p.user_id as string)]))
+  if (['ich', 'mich', 'mir'].includes(eingabe.toLowerCase())) {
+    return ids.includes(userId) ? userId : toolTextResult('Fehler: Die Karte liegt nicht auf deinem Board.', true)
+  }
+  const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
+  const treffer = (profs ?? []).filter((p) => (p.name as string).toLowerCase().includes(eingabe.toLowerCase()))
+  if (treffer.length === 1) return treffer[0].id as string
+  const namen = (profs ?? []).map((p) => p.name).join(', ')
+  if (treffer.length === 0) {
+    return toolTextResult(
+      `Fehler: "${eingabe}" hat die Karte nicht. Zuweisbar sind: ${namen}. Mit anderen Kolleg*innen die Karte zuerst in der Web-Oberfläche teilen.`,
+      true,
+    )
+  }
+  return toolTextResult(`Fehler: "${eingabe}" ist nicht eindeutig (${treffer.map((p) => p.name).join(', ')}).`, true)
 }
 
 export async function completeTodo(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
@@ -229,7 +270,11 @@ export async function updateTodo(supabase: SupabaseClient, userId: string, args:
   if (typeof args.titel === 'string' && args.titel.trim()) updates.titel = args.titel.trim()
   if (typeof args.beschreibung === 'string') updates.beschreibung = args.beschreibung.trim() || null
   if (typeof args.faellig_am === 'string') updates.faellig_am = args.faellig_am.trim() || null
-  if (typeof args.zustaendig === 'string') updates.zustaendig = args.zustaendig.trim() || null
+  if (typeof args.zustaendig === 'string') {
+    const zustaendig = await zustaendigAufloesen(supabase, userId, todoId, args.zustaendig.trim())
+    if (typeof zustaendig === 'object') return zustaendig
+    updates.zustaendig_user_id = zustaendig === '' ? null : zustaendig
+  }
   if (typeof args.session_id === 'string') {
     const neueSessionId = args.session_id.trim() || null
     if (neueSessionId) {
