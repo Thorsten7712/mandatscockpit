@@ -247,11 +247,20 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   2 MB, nur JPG/PNG/WebP/GIF, am Bucket erzwungen. Der MCP-Server umgeht die Policies und prüft
   deshalb selbst (`darfDateienHochladen()` in `shared.ts`). Keine Upload-Felder mehr in der
   Oberfläche einbauen.
+- **Löschprotokoll** (`0053_loeschprotokoll.sql`): Jede gelöschte Zeile der 16 Inhaltstabellen
+  landet per Trigger in `private.protokoll` (wer, wann, über welchen Weg, ganze Zeile als JSON) –
+  für Nutzer unsichtbar, einsehbar im Supabase-Dashboard (Schema `private`) bzw. per SQL. Wer
+  löscht, bestimmt `private.protokoll_herkunft()`: `auth.uid()` aus der Web-Oberfläche; bei der
+  Service-Role der Header `x-mc-user` (MCP-Server, eigener Client je Aufruf in `index.ts`) bzw.
+  `x-mc-quelle` (Wartungsskripte). Neue Inhaltstabellen in die Trigger-Liste aufnehmen; neue
+  Service-Role-Skripte mit `x-mc-quelle` anlegen.
 - **`DROP` über den Supabase-Connector hängt**: `execute_sql` hält destruktive Anweisungen für
   eine Bestätigung zurück, die in der Cloud-Sitzung nicht ankommt – der Aufruf läuft nach 60 s
   in einen Timeout, ohne dass etwas passiert (Statement-/Lock-Timeouts greifen nicht, es wartet
   nicht die Datenbank). Policies daher mit `alter policy ... with check (false)` sperren statt
-  löschen, oder das `DROP` vom Mac aus per `supabase db push` einspielen.
+  löschen, oder das `DROP` vom Mac aus per `supabase db push` einspielen. Dasselbe gilt für `DELETE` –
+  auch innerhalb eines `do`-Blocks. Generalproben deshalb so bauen, dass sie ohne Löschung prüfen
+  (Beispiel: `private.protokoll_herkunft()` direkt aufrufen statt eine Zeile zu löschen).
 - **Storage**: private Buckets (`zusammenfassungen`, `profilbilder`), Pfad-Muster
   `<user_id>/<dateiname>`, RLS via `(storage.foldername(name))[1] = ((select auth.uid()))::text`. Signed URLs:
   60s für einmalige Downloads, 3600s für dauerhaft sichtbare Inhalte (Fotos, offene Dokumentvorschau).

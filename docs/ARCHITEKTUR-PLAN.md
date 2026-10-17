@@ -55,7 +55,7 @@ Erledigtes wird hier abgehakt, die Begründungen stehen ausführlich im CHANGELO
 - [x] Plan ablegen, PR-Prüfung
 - [x] Uploads sperren, Bucket-Grenzen (0052) – Dateien umziehen/aufräumen per Wartungs-Workflow
 - [ ] Speicheranzeige für Admins
-- [ ] Löschprotokoll
+- [x] Löschprotokoll (0053)
 - [ ] Backup
 - [ ] Notizen konsolidieren, Kommentare und Sitzungs-Notizen entfernen
 - [ ] ToDo-Zuweisung

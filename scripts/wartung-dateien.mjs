@@ -33,7 +33,12 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY fehlen.')
   process.exit(1)
 }
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+// x-mc-quelle: so steht im Löschprotokoll (0053) "service_role: wartung-dateien"
+// statt einer anonymen Service-Role-Löschung.
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false },
+  global: { headers: { 'x-mc-quelle': 'wartung-dateien' } },
+})
 const aendern = MODUS === 'ausfuehren'
 console.log(`Modus: ${MODUS}${aendern ? '' : ' (es wird nichts geändert)'}\n`)
 
