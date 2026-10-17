@@ -89,7 +89,7 @@ export function PresseschauSection() {
             openReader()
           }
         }}
-        className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-[#fbf9f4] to-[#f4f1ea] shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.995]"
+        className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-linear-to-br from-[#fbf9f4] to-[#f4f1ea] shadow-xs transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.995]"
       >
         <div className="flex items-center justify-between gap-3 border-b-4 border-double border-slate-800 px-5 pb-2.5 pt-3.5 sm:px-6">
           <div className="flex items-center gap-2">
@@ -101,13 +101,13 @@ export function PresseschauSection() {
               type="button"
               onClick={() => setIndex((i) => Math.min(i + 1, dates.length - 1))}
               disabled={isAeltest}
-              className="mc-btn-ghost !px-1.5 !py-1"
+              className="mc-btn-ghost px-1.5! py-1!"
               title="Älterer Eintrag"
               aria-label="Älterer Eintrag"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
-            <span className="min-w-[6rem] text-center text-xs font-medium text-slate-500">
+            <span className="min-w-24 text-center text-xs font-medium text-slate-500">
               {formatDate(current.datum)}
               {isNeuest && ' · neueste'}
             </span>
@@ -115,7 +115,7 @@ export function PresseschauSection() {
               type="button"
               onClick={() => setIndex((i) => Math.max(i - 1, 0))}
               disabled={isNeuest}
-              className="mc-btn-ghost !px-1.5 !py-1"
+              className="mc-btn-ghost px-1.5! py-1!"
               title="Neuerer Eintrag"
               aria-label="Neuerer Eintrag"
             >

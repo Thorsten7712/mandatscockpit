@@ -90,7 +90,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="h-1.5 bg-topbar" aria-hidden="true" />
-      <header className="bg-gradient-to-r from-primary to-primary-hover text-white shadow-md">
+      <header className="bg-linear-to-r from-primary to-primary-hover text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <div className="relative flex min-w-0 items-center gap-3" ref={menuRef}>
             <button
@@ -100,7 +100,7 @@ export default function Dashboard() {
               aria-expanded={menuOffen}
               aria-label="Profilmenü öffnen"
               title="Einstellungen und Abmelden"
-              className="group relative shrink-0 rounded-full ring-2 ring-white/40 transition hover:ring-white/80 focus:outline-none focus-visible:ring-white"
+              className="group relative shrink-0 rounded-full ring-2 ring-white/40 transition hover:ring-white/80 focus:outline-hidden focus-visible:ring-white"
             >
               {profileFotoUrl ? (
                 <img src={profileFotoUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
@@ -109,7 +109,7 @@ export default function Dashboard() {
                   {profileName ? profileName.charAt(0).toUpperCase() : '?'}
                 </span>
               )}
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-primary shadow">
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-primary shadow-sm">
                 <ChevronDown size={12} className={`transition-transform ${menuOffen ? 'rotate-180' : ''}`} />
               </span>
             </button>
@@ -153,7 +153,7 @@ export default function Dashboard() {
             >
               Dokumente
               {ungeleseneDokumente > 0 && (
-                <span className="ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">
                   {ungeleseneDokumente}
                 </span>
               )}
@@ -171,7 +171,7 @@ export default function Dashboard() {
               Archiv
             </Link>
             {parteiLogo && (
-              <span className="ml-2 flex h-11 items-center rounded-lg bg-white px-2.5 shadow-sm">
+              <span className="ml-2 flex h-11 items-center rounded-lg bg-white px-2.5 shadow-xs">
                 <img src={parteiLogo} alt={theme.label} className="h-7 w-auto" />
               </span>
             )}

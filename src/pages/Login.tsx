@@ -34,6 +34,7 @@ export default function Login() {
         </div>
         <input
           type="email"
+          autoComplete="username"
           placeholder="E-Mail"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -42,6 +43,7 @@ export default function Login() {
         />
         <input
           type="password"
+          autoComplete="current-password"
           placeholder="Passwort"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -49,7 +51,7 @@ export default function Login() {
           required
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="submit" disabled={loading} className="mc-btn-primary w-full !py-2.5">
+        <button type="submit" disabled={loading} className="mc-btn-primary w-full py-2.5!">
           {loading ? 'Anmelden...' : 'Anmelden'}
         </button>
         <p className="text-center text-xs text-slate-400">

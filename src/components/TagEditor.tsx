@@ -67,7 +67,7 @@ export function TagEditor({
               setInput('')
             }
           }}
-          className="mc-input !w-32 !py-1 !text-xs"
+          className="mc-input w-32! py-1! text-xs!"
         />
       </div>
     </div>

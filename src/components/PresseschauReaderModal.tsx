@@ -29,14 +29,14 @@ export function PresseschauReaderModal({
 }) {
   return (
     <div
-      className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+      className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <div
         className="mc-animate-pop flex h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-[#fbf9f4] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 border-b-4 border-double border-slate-800 bg-[#fbf9f4]/95 px-5 pb-3 pt-4 backdrop-blur sm:px-8">
+        <div className="flex items-center justify-between gap-3 border-b-4 border-double border-slate-800 bg-[#fbf9f4]/95 px-5 pb-3 pt-4 backdrop-blur-sm sm:px-8">
           <div className="flex items-center gap-2">
             <Newspaper className="h-5 w-5 shrink-0 text-slate-700" />
             <h2 className="font-serif text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Presseschau</h2>
@@ -46,13 +46,13 @@ export function PresseschauReaderModal({
               type="button"
               onClick={onPrev}
               disabled={isAeltest}
-              className="mc-btn-ghost !px-2 !py-1"
+              className="mc-btn-ghost px-2! py-1!"
               title="Älterer Eintrag"
               aria-label="Älterer Eintrag"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="min-w-[7rem] text-center text-xs font-medium text-slate-500">
+            <span className="min-w-28 text-center text-xs font-medium text-slate-500">
               {formatDate(current.datum)}
               {isNeuest && ' · neueste'}
             </span>
@@ -60,7 +60,7 @@ export function PresseschauReaderModal({
               type="button"
               onClick={onNext}
               disabled={isNeuest}
-              className="mc-btn-ghost !px-2 !py-1"
+              className="mc-btn-ghost px-2! py-1!"
               title="Neuerer Eintrag"
               aria-label="Neuerer Eintrag"
             >
@@ -71,7 +71,7 @@ export function PresseschauReaderModal({
               onClick={onClose}
               aria-label="Schließen"
               title="Schließen"
-              className="mc-btn-ghost !ml-1 !p-2"
+              className="mc-btn-ghost ml-1! p-2!"
             >
               <X size={18} />
             </button>

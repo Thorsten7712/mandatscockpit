@@ -2698,3 +2698,58 @@ Die übrigen Befunde sind in `docs/UEBERGABE-CLOUD.md` festgehalten, mit Begrün
 naheliegende Fix beim größten davon (`revoke execute` auf die RPC-erreichbaren Helfer) **falsch**
 wäre: Policy-Ausdrücke laufen mit den Rechten der aufrufenden Rolle – ohne EXECUTE schlüge jede
 Abfrage fehl.
+
+### Umgebung ohne Meldungen: Lint, Sicherheitsupdates, Tailwind 4 (2026-10-17)
+
+Beim ersten Start in einer Cloud-Sitzung kamen Dev-Server und Build zwar durch, aber mit einer Reihe
+von Meldungen. Nutzerwunsch: alle beheben, keine Meldungen mehr.
+
+- **`npm run lint` lief gar nicht**: Das Skript stand in `package.json`, aber ESLint war keine
+  Abhängigkeit und es gab keine Konfiguration. Jetzt `eslint.config.js` nach dem Vite-Template
+  (typescript-eslint, react-hooks, react-refresh), Edge Functions und Node-Skripte ausgenommen.
+  Behoben, was die Regeln fanden: `Date.now()` im Render (Antrags-Überfälligkeit, jetzt einmal beim
+  Mounten festgehalten), fehlende Effekt-Abhängigkeiten in `DokumentDetailModal.tsx`, und die
+  Datei-Helfer `fileNameFromPath`/`fileExtension`/`IMAGE_EXTENSIONS` liegen jetzt in
+  `src/lib/dateien.ts` statt in der Modal-Komponente (Fast Refresh kann nur Dateien hot-reloaden,
+  die ausschließlich Komponenten exportieren). **Abgeschaltet** ist `react-hooks/set-state-in-effect`:
+  Die Regel meldet 24-mal das im ganzen Projekt verwendete Lade-Muster `useEffect(() => { loadX() })`,
+  weil loadX vor dem ersten `await` den Ladezustand setzt – beabsichtigt, und ein Umbau auf
+  Suspense/Data-Router wäre ein eigenes Vorhaben.
+- **16 Sicherheitswarnungen von `npm audit` → 0.** Fünf gingen mit `npm audit fix`, der Rest nur über
+  Major-Upgrades: **Vite 5 → 8**, **React Router 6 → 7**, **Tailwind 3 → 4**. Die React-Router-
+  Warnungen zu den v7-Future-Flags sind damit ebenfalls weg. Die Lücken betrafen überwiegend den
+  Dev-Server bzw. Build-Werkzeuge, React Router aber den ausgelieferten Code (Open Redirect über
+  Backslash in `<Link>`/`useNavigate`).
+- **Tailwind 4** per offiziellem Upgrade-Werkzeug migriert (24 Dateien, rein mechanische
+  Klassen-Umbenennungen). Danach von Hand: ein Kompatibilitätsblock für drei geänderte v3-Standards
+  (Rahmenfarbe, Placeholder-Farbe, Button-Cursor) und ein verrutschter Kommentar. Verglichen per
+  Screenshot der öffentlichen Seiten vorher/nachher: pixelgleich bis auf Kantenglättung. Die Seiten
+  hinter dem Login ließen sich nicht im Browser prüfen (Passworteingabe tabu).
+- **Bundle unter 500 kB**: Die geschützten Seiten werden per `React.lazy` nachgeladen; der
+  Einstiegs-Chunk schrumpft von 806 auf 401 kB, die Login-Seite lädt weder Markdown-Renderer noch
+  Drag & Drop.
+- **Favicon** (`public/favicon.svg`) – vorher fragte jeder Seitenaufruf `/favicon.ico` an und bekam 404.
+- **`autocomplete`** an Login (`username`/`current-password`), Kontaktformular (`email`) und
+  Benutzerverwaltung (`off` für die E-Mail des anzulegenden Kontos, damit der Passwortmanager nicht
+  die eigene einträgt).
+- **Deploy-Workflow auf Node 22** (vorher 20): Vite 8 verlangt mindestens 20.19, und Node 20 ist
+  seit April 2026 ohne Support. Der ICS-Import lief schon auf 22.
+
+### Migrationen aus der Cloud-Sitzung: über den Supabase-Connector (2026-10-17)
+
+Die Übergabe-Doku sah vor, `SUPABASE_ACCESS_TOKEN` und `SUPABASE_DB_PASSWORD` in die Cloud-Umgebung
+zu legen, damit `supabase db push` dort läuft. Getestet: Das geht nicht, mit keinem Zugang. Der
+Container darf nach außen nur HTTPS; die Postgres-Ports 5432/6543 des Poolers sind direkt gesperrt,
+und durch den Proxy der Umgebung kommt Postgres auch nicht, weil der Proxy den Tunnel als HTTPS
+aufbricht (Postgres verhandelt TLS innerhalb seines eigenen Protokolls – Verbindung wird
+zurückgesetzt). Freigegebene Domains ändern daran nichts.
+
+Entscheidung (Nutzer): Migrationen aus der Cloud laufen über den Supabase-Connector, der über HTTPS
+geht und am Konto hängt – damit auch aus Sitzungen, die am Handy oder iPad gestartet werden.
+DB-Zugangsdaten kommen nicht in die Umgebung. Verfahren: committete Datei per `execute_sql` in einem
+`begin … commit` ausführen und im selben Aufruf unter ihrer Nummer in
+`supabase_migrations.schema_migrations` eintragen. Bewusst **nicht** `apply_migration`: das trägt
+einen Zeitstempel statt der Dateinummer ein, die bisher lückenlose Historie (`0001`–`0049`, exakt
+die Dateinamen) käme aus dem Takt, und der nächste `supabase db push` vom Mac bräche ab. So bleiben
+Mac und Cloud austauschbar. Festgehalten in `docs/UEBERGABE-CLOUD.md`, CLAUDE.md und im Skill
+`supabase-migration`.

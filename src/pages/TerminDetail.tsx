@@ -20,7 +20,7 @@ export default function TerminDetail() {
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="h-1.5 bg-topbar" aria-hidden="true" />
-      <header className="bg-gradient-to-r from-primary to-primary-hover text-white shadow-md">
+      <header className="bg-linear-to-r from-primary to-primary-hover text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <h1 className="text-lg font-bold">Termindetails</h1>
           <Link to="/" className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">

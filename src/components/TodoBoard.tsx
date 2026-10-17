@@ -54,7 +54,7 @@ function Card({
       {...listeners}
       {...attributes}
       onClick={onOpen}
-      className={`cursor-grab select-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-shadow duration-150 hover:shadow-md active:cursor-grabbing ${isDragging ? 'z-10 shadow-lg ring-2 ring-primary/40' : ''}`}
+      className={`cursor-grab select-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-xs transition-shadow duration-150 hover:shadow-md active:cursor-grabbing ${isDragging ? 'z-10 shadow-lg ring-2 ring-primary/40' : ''}`}
     >
       <p className={`text-sm font-medium ${todo.erledigt ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
         {todo.ebene && <span title="Für Kolleg*innen freigebbar/geteilt">🔗 </span>}
@@ -64,12 +64,12 @@ function Card({
       {(zeigeTermin || zeigeZustaendig) && (
         <p className="mt-1.5 flex flex-wrap gap-1.5 text-xs text-slate-500">
           {zeigeTermin && (
-            <span className="max-w-[14rem] truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+            <span className="max-w-56 truncate rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
               📅 {terminLabel}
             </span>
           )}
           {zeigeZustaendig && (
-            <span className="rounded bg-slate-100 px-1.5 py-0.5">👤 {todo.zustaendig}</span>
+            <span className="rounded-sm bg-slate-100 px-1.5 py-0.5">👤 {todo.zustaendig}</span>
           )}
         </p>
       )}
@@ -111,7 +111,7 @@ function Column({
       <div className="mb-2.5 flex items-center justify-between px-1">
         <h3 className="text-sm font-semibold text-slate-700">{column.titel}</h3>
         {entries.length > 0 && (
-          <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
+          <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-xs">
             {entries.length}
           </span>
         )}
@@ -336,7 +336,7 @@ export function TodoBoard() {
             Spalten brechen sie in weitere Zeilen um, bei wenigen teilen sie
             sich die Breite. Drag & Drop über Zeilen hinweg funktioniert,
             weil dnd-kit rein pointer-basiert droppt. */}
-        <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(272px,1fr))]">
+        <div className="grid items-start gap-4 grid-cols-[repeat(auto-fill,minmax(272px,1fr))]">
           {sortedColumns.map((col) => (
             <Column
               key={col.id}

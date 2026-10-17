@@ -580,7 +580,7 @@ export default function Settings() {
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="h-1.5 bg-topbar" aria-hidden="true" />
-      <header className="bg-gradient-to-r from-primary to-primary-hover text-white shadow-md">
+      <header className="bg-linear-to-r from-primary to-primary-hover text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <h1 className="text-lg font-bold">Einstellungen</h1>
           <Link to="/" className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">
@@ -638,7 +638,7 @@ export default function Settings() {
               type="button"
               onClick={handleUploadFoto}
               disabled={!newFoto || savingFoto}
-              className="mc-btn-ghost !px-2 !py-1 !text-xs"
+              className="mc-btn-ghost px-2! py-1! text-xs!"
             >
               {savingFoto ? 'Hochladen...' : 'Foto hochladen'}
             </button>
@@ -735,7 +735,7 @@ export default function Settings() {
           const canManage = s.verwaltet_von === userId || isAdmin
           if (editingId === s.id) {
             return (
-              <li key={s.id} className="mc-card space-y-2 px-3 py-2 !rounded-lg">
+              <li key={s.id} className="mc-card space-y-2 px-3 py-2 rounded-lg!">
                 <form onSubmit={handleSaveEdit} className="space-y-2">
                   <input
                     type="text"
@@ -793,16 +793,16 @@ export default function Settings() {
           const isRefreshing = refreshingSourceId === s.id
           const farbe = sourceColorById(s.farbe)
           return (
-            <li key={s.id} className="mc-card px-3 py-2.5 !rounded-lg">
+            <li key={s.id} className="mc-card px-3 py-2.5 rounded-lg!">
               <div className="flex items-center justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2">
                   <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${farbe.dot}`} aria-hidden="true" />
                   <span className="truncate text-sm font-medium text-slate-900">{s.name}</span>
-                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${farbe.chip}`}>
+                  <span className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${farbe.chip}`}>
                     {EBENE_LABEL[s.ebene] ?? s.ebene}
                   </span>
                   {s.art === 'termin' && (
-                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                       Terminkalender
                     </span>
                   )}
@@ -840,7 +840,7 @@ export default function Settings() {
                     type="button"
                     onClick={() => handleRefreshSource(s.id)}
                     disabled={isRefreshing}
-                    className="mc-btn-ghost !px-2 !py-1 !text-xs"
+                    className="mc-btn-ghost px-2! py-1! text-xs!"
                   >
                     {isRefreshing ? 'Aktualisiert...' : 'Aktualisieren'}
                   </button>
@@ -849,7 +849,7 @@ export default function Settings() {
                       <button
                         type="button"
                         onClick={() => startEdit(s)}
-                        className="mc-btn-ghost !px-2 !py-1 !text-xs"
+                        className="mc-btn-ghost px-2! py-1! text-xs!"
                       >
                         Bearbeiten
                       </button>
@@ -875,7 +875,7 @@ export default function Settings() {
                             ausfuehren: () => handleDelete(s.id),
                           })
                         }
-                        className="mc-btn-danger !px-2 !py-1 !text-xs"
+                        className="mc-btn-danger px-2! py-1! text-xs!"
                       >
                         Löschen
                       </button>
@@ -909,10 +909,10 @@ export default function Settings() {
       </p>
       {gremien.length > 0 && (
         <div className="mb-3 flex gap-2 max-w-md">
-          <button type="button" onClick={selectAllGremien} className="mc-btn-ghost !text-xs">
+          <button type="button" onClick={selectAllGremien} className="mc-btn-ghost text-xs!">
             Alle auswählen
           </button>
-          <button type="button" onClick={deselectAllGremien} className="mc-btn-ghost !text-xs">
+          <button type="button" onClick={deselectAllGremien} className="mc-btn-ghost text-xs!">
             Alle abwählen
           </button>
         </div>
@@ -945,7 +945,7 @@ export default function Settings() {
                 <h3 className="text-sm font-semibold text-slate-900">{source?.name ?? 'Ohne Quelle'}</h3>
                 {source && (
                   <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${farbe.chip}`}
+                    className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${farbe.chip}`}
                   >
                     {EBENE_LABEL[source.ebene] ?? source.ebene}
                   </span>
@@ -955,7 +955,7 @@ export default function Settings() {
                 {entries.map((g) => (
                   <li
                     key={`${source?.id ?? ''}-${g.gremium}`}
-                    className="mc-card flex items-center justify-between px-3 py-2 !rounded-lg"
+                    className="mc-card flex items-center justify-between px-3 py-2 rounded-lg!"
                   >
                     <span className="text-sm">{g.gremium}</span>
                     <input
@@ -1055,7 +1055,7 @@ export default function Settings() {
         <button
           type="submit"
           disabled={saving || !userId}
-          className="w-full bg-primary hover:bg-primary-hover text-white rounded px-3 py-2 disabled:opacity-50"
+          className="w-full bg-primary hover:bg-primary-hover text-white rounded-sm px-3 py-2 disabled:opacity-50"
         >
           {saving ? 'Speichern...' : 'Quelle hinzufügen'}
         </button>
@@ -1078,7 +1078,7 @@ export default function Settings() {
           .map((col, i, sorted) => {
             if (editingColumnId === col.id) {
               return (
-                <li key={col.id} className="mc-card px-3 py-2 !rounded-lg">
+                <li key={col.id} className="mc-card px-3 py-2 rounded-lg!">
                   <input
                     type="text"
                     value={editColumnTitel}
@@ -1095,7 +1095,7 @@ export default function Settings() {
               )
             }
             return (
-              <li key={col.id} className="mc-card flex items-center justify-between px-3 py-2 !rounded-lg">
+              <li key={col.id} className="mc-card flex items-center justify-between px-3 py-2 rounded-lg!">
                 <span className="cursor-pointer" onClick={() => startEditColumn(col)}>
                   {col.titel}
                 </span>
@@ -1144,7 +1144,7 @@ export default function Settings() {
           onChange={(e) => setNewColumnTitel(e.target.value)}
           className="mc-input flex-1"
         />
-        <button type="submit" className="bg-primary hover:bg-primary-hover text-white rounded px-3 py-2 text-sm">
+        <button type="submit" className="bg-primary hover:bg-primary-hover text-white rounded-sm px-3 py-2 text-sm">
           Hinzufügen
         </button>
       </form>
@@ -1260,10 +1260,10 @@ export default function Settings() {
               Diese komplette URL wird nur jetzt im Klartext angezeigt (gespeichert wird nur ein Hash) –
               jetzt kopieren und als Server-URL im Custom Connector eintragen.
             </p>
-            <code className="block break-all rounded bg-white px-2 py-1.5 text-xs text-slate-800">
+            <code className="block break-all rounded-sm bg-white px-2 py-1.5 text-xs text-slate-800">
               {mcpConnectorUrl(mcpGeneratedToken)}
             </code>
-            <button type="button" onClick={handleCopyMcpToken} className="mc-btn-ghost !px-2 !py-1 !text-xs">
+            <button type="button" onClick={handleCopyMcpToken} className="mc-btn-ghost px-2! py-1! text-xs!">
               {mcpCopied ? 'Kopiert ✓' : 'In Zwischenablage kopieren'}
             </button>
           </div>

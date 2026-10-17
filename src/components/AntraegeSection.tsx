@@ -7,7 +7,8 @@ import { computeAntragDeadline } from '../lib/antragDeadline'
 import { AntragDetailModal } from './AntragDetailModal'
 import { TerminDetailModal } from './TerminDetailModal'
 import { TodoDetailModal } from './TodoDetailModal'
-import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
+import { DocumentPreviewModal } from './DocumentPreviewModal'
+import { fileNameFromPath } from '../lib/dateien'
 import { formatDate } from '../lib/format'
 
 /** 'alle' = ungefiltert, 'eigene' = Anträge ohne Sitzungsbezug, sonst ein Gremiumsname. */
@@ -36,6 +37,9 @@ interface DokumentItem {
 // bei "Entwurf".
 export function AntraegeSection() {
   const [userId, setUserId] = useState<string | null>(null)
+  // Bezugszeitpunkt für "überfällig", einmal beim Öffnen festgehalten:
+  // Date.now() direkt im Render wäre bei jedem Rendern ein anderer Wert.
+  const [jetzt] = useState(() => Date.now())
   const [antraege, setAntraege] = useState<AntragRow[]>([])
   const [sessionDocs, setSessionDocs] = useState<SummaryRow[]>([])
   const [todoDocs, setTodoDocs] = useState<SummaryRow[]>([])
@@ -354,22 +358,22 @@ export function AntraegeSection() {
         </div>
       )}
 
-      <ul className="max-h-[26rem] space-y-2 overflow-y-auto pr-1">
+      <ul className="max-h-104 space-y-2 overflow-y-auto pr-1">
         {sichtbar.map((item) => {
           const session = item.sessionId ? sessionById.get(item.sessionId) : undefined
 
           if (item.kind === 'antrag') {
             const a = item.antrag!
             const deadline = computeAntragDeadline(session, a.ebene, tageByEbene)
-            const ueberfaellig = deadline ? deadline.getTime() < Date.now() && a.status === 'entwurf' : false
+            const ueberfaellig = deadline ? deadline.getTime() < jetzt && a.status === 'entwurf' : false
             return (
               <li key={item.key}>
                 <div
                   onClick={() => setOpenId(a.id)}
-                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
                 >
                   <span
-                    className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
+                    className={`shrink-0 rounded-sm px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
                   >
                     {antragStatusLabel(a.status, a.ergebnis)}
                   </span>
@@ -377,7 +381,7 @@ export function AntraegeSection() {
                     <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                       {a.ausschuss && (
-                        <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                        <span className="truncate rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
                           {a.ausschuss}
                         </span>
                       )}
@@ -388,7 +392,7 @@ export function AntraegeSection() {
                             e.stopPropagation()
                             setPreviewDoc({ path: item.primaryDoc!.datei_url!, name: fileNameFromPath(item.primaryDoc!.datei_url!) })
                           }}
-                          className="mc-btn-ghost !px-1.5 !py-0.5 !text-xs"
+                          className="mc-btn-ghost px-1.5! py-0.5! text-xs!"
                         >
                           📎 {fileNameFromPath(item.primaryDoc.datei_url)}
                           {item.weitereCount > 0 && ` +${item.weitereCount}`}
@@ -420,10 +424,10 @@ export function AntraegeSection() {
               <li key={item.key}>
                 <div
                   onClick={() => item.todoId && setOpenTodoId(item.todoId)}
-                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
                 >
                   <span
-                    className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${todo?.erledigt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}
+                    className={`shrink-0 rounded-sm px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${todo?.erledigt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}
                   >
                     {todo?.erledigt ? 'Erledigt' : 'ToDo'}
                   </span>
@@ -439,7 +443,7 @@ export function AntraegeSection() {
                             e.stopPropagation()
                             setPreviewDoc({ path: item.primaryDoc!.datei_url!, name: fileNameFromPath(item.primaryDoc!.datei_url!) })
                           }}
-                          className="mc-btn-ghost !px-1.5 !py-0.5 !text-xs"
+                          className="mc-btn-ghost px-1.5! py-0.5! text-xs!"
                         >
                           📎 {fileNameFromPath(item.primaryDoc.datei_url)}
                           {item.weitereCount > 0 && ` +${item.weitereCount}`}
@@ -464,9 +468,9 @@ export function AntraegeSection() {
             <li key={item.key}>
               <div
                 onClick={() => item.sessionId && setOpenTerminId(item.sessionId)}
-                className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
               >
-                <span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                <span className="shrink-0 rounded-sm bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                   {item.primaryDoc ? 'Dokument' : 'Notiz'}
                 </span>
                 <span className="min-w-0 flex-1">

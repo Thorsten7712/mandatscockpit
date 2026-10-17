@@ -17,7 +17,8 @@ import type {
 import { formatDate, formatDateTime } from '../lib/format'
 import { EBENE_LABEL } from '../lib/sourceColors'
 import { gleicheGliederung } from '../lib/gliederung'
-import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
+import { DocumentPreviewModal } from './DocumentPreviewModal'
+import { fileNameFromPath } from '../lib/dateien'
 import { DetailModalShell } from './DetailModalShell'
 import { useLoeschDialog } from './LoeschDialog'
 
@@ -586,7 +587,7 @@ export function TodoDetailModal({
                 className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${editErledigt ? 'bg-primary' : 'bg-slate-300'}`}
               >
                 <span
-                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${editErledigt ? 'translate-x-5' : 'translate-x-0'}`}
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${editErledigt ? 'translate-x-5' : 'translate-x-0'}`}
                 />
               </button>
             </div>
@@ -681,7 +682,7 @@ export function TodoDetailModal({
           <li>
             <Link
               to={`/termin/session/${linkedSession.id}`}
-              className="block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm transition-shadow duration-150 hover:shadow-md"
+              className="block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-xs transition-shadow duration-150 hover:shadow-md"
             >
               {linkedSession.titel} ({formatDate(linkedSession.datum)})
             </Link>
@@ -695,13 +696,13 @@ export function TodoDetailModal({
         {linkedDokumente.map((d) => (
           <li
             key={d.id}
-            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs"
           >
             <span className="truncate text-sm font-medium text-slate-800">{d.titel}</span>
             <button
               type="button"
               onClick={() => handleUnlinkDokument(d.id)}
-              className="mc-btn-ghost !shrink-0 !px-2 !py-1 !text-xs"
+              className="mc-btn-ghost shrink-0! px-2! py-1! text-xs!"
             >
               Lösen
             </button>
@@ -751,7 +752,7 @@ export function TodoDetailModal({
         type="submit"
         form="todo-edit-form"
         disabled={editSaving}
-        className="mc-btn-primary !px-3 !py-1.5 !text-sm"
+        className="mc-btn-primary px-3! py-1.5! text-sm!"
       >
         {editSaving ? 'Speichern...' : 'Speichern'}
       </button>
@@ -788,7 +789,7 @@ export function TodoDetailModal({
         }
         aria-label={istErsteller ? 'Löschen' : 'Entfernen'}
         title={istErsteller ? 'Löschen' : 'Entfernen'}
-        className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+        className="mc-btn-ghost p-2! text-slate-500 hover:bg-red-50 hover:text-red-600"
       >
         <Trash2 size={17} />
       </button>
@@ -800,13 +801,13 @@ export function TodoDetailModal({
       <h2 className="font-semibold mb-2">Dokumente</h2>
       <ul className="space-y-2 mb-3">
         {documents.map((d) => (
-          <li key={d.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <li key={d.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
             {d.inhalt && <p className="text-sm whitespace-pre-wrap">{d.inhalt}</p>}
             {d.datei_url && (
               <button
                 type="button"
                 onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
-                className="mc-btn-ghost !px-2 !py-1 !text-xs"
+                className="mc-btn-ghost px-2! py-1! text-xs!"
               >
                 📎 {fileNameFromPath(d.datei_url)}
               </button>
@@ -823,7 +824,7 @@ export function TodoDetailModal({
                     ausfuehren: () => handleDeleteDocument(d.id),
                   })
                 }
-                className="mc-btn-danger !px-2 !py-1 !text-xs"
+                className="mc-btn-danger px-2! py-1! text-xs!"
               >
                 Löschen
               </button>
@@ -851,7 +852,7 @@ export function TodoDetailModal({
       <h2 className="font-semibold mb-2">Kommentare</h2>
       <ul className="space-y-2 mb-3">
         {comments.map((c) => (
-          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
             <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
             <div className="flex items-center justify-between mt-1">
               <span className="text-xs text-slate-400">
@@ -868,7 +869,7 @@ export function TodoDetailModal({
                     ausfuehren: () => handleDeleteComment(c.id),
                   })
                 }
-                className="mc-btn-danger !px-2 !py-1 !text-xs"
+                className="mc-btn-danger px-2! py-1! text-xs!"
               >
                 Löschen
               </button>

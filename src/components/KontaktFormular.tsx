@@ -61,6 +61,7 @@ export function KontaktFormular() {
       />
       <input
         type="email"
+        autoComplete="email"
         placeholder="E-Mail"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
