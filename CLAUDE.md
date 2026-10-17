@@ -162,11 +162,13 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 35 Tools über
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 36 Tools über
   ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
-  README.md Abschnitt 9 und `docs/CHANGELOG.md`). `list_documents` kennt das Dokumenten-Archiv
+  README.md Abschnitt 9 und `docs/CHANGELOG.md`). `get_document` liefert den Markdown-Text eines Hub-Dokuments (in Abschnitten bis 20.000
+  Zeichen) – `list_documents` lädt den Text bewusst nicht. `list_documents` kennt das Dokumenten-Archiv
   (Parameter `archiv`, Standard „ohne" wie in der Web-UI) und einen Titel-Filter (`titel`, greift
-  in der DB-Abfrage, damit das Limit ältere Drucksachen nicht verdeckt), `update_document_archiv` legt ein
+  in der DB-Abfrage, damit das Limit ältere Drucksachen nicht verdeckt) und `seit` (Upload-Zeitpunkt, für den
+  täglichen Scan nach neuen Drucksachen), `update_document_archiv` legt ein
   Dokument von Hand hinein bzw. holt es zurück. `delete_document` ist der einzige
   Löschweg für Hub-Dokumente, seit der Bestand dem technischen Import-Konto gehört und in der
   Web-UI niemand mehr Eigentümer ist. Admins dürfen dort zusätzlich die Dokumente der
@@ -246,6 +248,14 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   bewusst dupliziert – kein gemeinsames Backend/Build-Tooling, das eine Abstraktion rechtfertigen
   würde. Faustregel im Projekt: 2 Vorkommen sind tolerierbar, beim 3. wird in eine gemeinsame Stelle
   extrahiert (Beispiel: `fileNameFromPath`, `DetailModalShell`).
+- **PostgREST liefert höchstens 1.000 Zeilen pro Abfrage und schneidet stillschweigend ab**
+  (Supabase-Voreinstellung „Max rows"). Bei 1.141 Drucksachen fehlten `list_documents` dadurch
+  zufällige Dokumente, darunter die neuesten. Jede Abfrage, die potenziell den ganzen Hub oder
+  alle `sitzung_dokumente` lädt, braucht eine stabile Sortierung und seitenweises Laden
+  (`alleZeilen()` in `mcp-server/tools/dokumente.ts`); lange Id-Listen für `.in()` in Stücken
+  (`inStuecken()`), weil sie in der URL landen. **Offen:** `Dokumente.tsx` und `Archiv.tsx`
+  (`loadHubDokumente`) laden den Hub noch in einer Abfrage (neueste zuerst) und zeigen deshalb nur
+  die neuesten 1.000 Dokumente – die ältesten fehlen in Liste, Suche und Archiv.
 - **Zeitstempel-Vergleiche client-seitig immer numerisch**: PostgREST liefert `timestamptz` als
   `...+00:00`, `startOfTodayIso()` erzeugt `...Z` – ein String-Vergleich derselben Zeitpunkte in den
   zwei Schreibweisen ist falsch. `Date.parse(a) < Date.parse(b)` verwenden (siehe

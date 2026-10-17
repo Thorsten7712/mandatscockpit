@@ -36,6 +36,28 @@ function startOfTodayIso(): string {
   return d.toISOString()
 }
 
+/** Wandelt den `seit`-Parameter von list_documents in einen ISO-Zeitpunkt.
+ *  Ein reines Datum ("2026-10-17") gilt als Mitternacht in deutscher Zeit,
+ *  nicht in UTC - sonst fehlten einem Tages-Scan die Uploads zwischen 0 und
+ *  2 Uhr. Der Versatz wird für genau diesen Tag ermittelt (Sommer-/Winterzeit);
+ *  um 00:00 UTC gilt in Berlin noch der Versatz der vorangegangenen Mitternacht,
+ *  das stimmt auch an den Umstellungstagen. Vollständige Zeitstempel werden
+ *  unverändert übernommen. null bei ungültiger Eingabe. */
+function seitAlsIso(wert: string): string | null {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(wert)) {
+    const referenz = new Date(`${wert}T00:00:00Z`)
+    if (Number.isNaN(referenz.getTime())) return null
+    const zone = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', timeZoneName: 'longOffset' })
+      .formatToParts(referenz)
+      .find((p) => p.type === 'timeZoneName')?.value
+    const versatz = zone?.match(/GMT([+-]\d{2}:\d{2})/)?.[1] ?? '+00:00'
+    const t = Date.parse(`${wert}T00:00:00${versatz}`)
+    return Number.isNaN(t) ? null : new Date(t).toISOString()
+  }
+  const t = Date.parse(wert)
+  return Number.isNaN(t) ? null : new Date(t).toISOString()
+}
+
 /** Bewusster Spiegel von archivGrund() in src/lib/dokumenteArchiv.ts - zwischen
  *  Deno und dem React-Frontend gibt es kein gemeinsames Build-Tooling, das eine
  *  Abstraktion rechtfertigen würde (siehe CLAUDE.md). Ein Dokument gilt als
@@ -59,6 +81,35 @@ function archivGrund(
   return letzte < Date.parse(stichtagIso) ? 'sitzung' : null
 }
 
+const SEITENGROESSE = 1000
+
+/** PostgREST liefert pro Abfrage höchstens 1.000 Zeilen (Supabase-Voreinstellung
+ *  „Max rows") und schneidet darüber STILLSCHWEIGEND ab. Bei 1.141 Drucksachen
+ *  fehlten list_documents dadurch zufällige 141 - darunter die neuesten, weil
+ *  ohne Sortierung abgefragt wurde. Holt deshalb seitenweise alles; `abfrage`
+ *  muss eine stabile Sortierung enthalten, sonst überlappen sich die Seiten.
+ *  Gibt den Fehler zurück statt zu werfen: index.ts fängt nichts ab, eine
+ *  Exception würde zu HTTP 500 statt zu einer lesbaren Tool-Meldung. */
+async function alleZeilen<T>(
+  abfrage: (von: number, bis: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<{ zeilen: T[]; fehler: string | null }> {
+  const zeilen: T[] = []
+  for (let von = 0; ; von += SEITENGROESSE) {
+    const { data, error } = await abfrage(von, von + SEITENGROESSE - 1)
+    if (error) return { zeilen, fehler: error.message }
+    zeilen.push(...((data ?? []) as T[]))
+    if (!data || data.length < SEITENGROESSE) return { zeilen, fehler: null }
+  }
+}
+
+/** Teilt lange Id-Listen für `.in()` auf: Die Ids landen in der URL, und 1.000
+ *  UUIDs wären rund 37 KB - mehr, als ein Gateway sicher annimmt. */
+function inStuecken<T>(liste: T[], groesse = 150): T[][] {
+  const stuecke: T[][] = []
+  for (let i = 0; i < liste.length; i += groesse) stuecke.push(liste.slice(i, i + groesse))
+  return stuecke
+}
+
 /** Lädt zu Dokument-Ids alle verknüpften Sitzungen (0042_sitzung_dokumente.sql). */
 async function ladeSitzungen(
   supabase: SupabaseClient,
@@ -68,16 +119,27 @@ async function ladeSitzungen(
   const datenJeDokument = new Map<string, string[]>()
   if (dokumentIds.length === 0) return { titelJeDokument, datenJeDokument }
 
-  const { data: links } = await supabase
-    .from('sitzung_dokumente')
-    .select('dokument_id, session_id, top_nummer')
-    .in('dokument_id', dokumentIds)
-  const paare = (links ?? []) as { dokument_id: string; session_id: string; top_nummer: string | null }[]
+  type Paar = { dokument_id: string; session_id: string; top_nummer: string | null }
+  const paare: Paar[] = []
+  for (const stueck of inStuecken(dokumentIds)) {
+    const { zeilen } = await alleZeilen<Paar>((von, bis) =>
+      supabase
+        .from('sitzung_dokumente')
+        .select('dokument_id, session_id, top_nummer')
+        .in('dokument_id', stueck)
+        .order('id')
+        .range(von, bis),
+    )
+    paare.push(...zeilen)
+  }
   const sessionIds = Array.from(new Set(paare.map((l) => l.session_id)))
   if (sessionIds.length === 0) return { titelJeDokument, datenJeDokument }
 
-  const { data: sessionRows } = await supabase.from('sessions').select('id, titel, datum').in('id', sessionIds)
-  const byId = new Map((sessionRows ?? []).map((si) => [si.id as string, si as { titel: string; datum: string }]))
+  const byId = new Map<string, { titel: string; datum: string }>()
+  for (const stueck of inStuecken(sessionIds)) {
+    const { data: sessionRows } = await supabase.from('sessions').select('id, titel, datum').in('id', stueck)
+    for (const si of sessionRows ?? []) byId.set(si.id as string, si as { titel: string; datum: string })
+  }
   for (const l of paare) {
     const si = byId.get(l.session_id)
     if (!si) continue
@@ -349,7 +411,6 @@ interface DokumentListRow {
   ebene: string | null
   gliederung: string | null
   tags: string[]
-  inhalt: string | null
   datei_url: string | null
   archiviert_am: string | null
   erstellt_am: string
@@ -376,43 +437,73 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   // Web-UI (Dokumente.tsx) - mit parent_id: gezielt die an ein Dokument
   // angehängten Notizen/Analysen.
   const parentIdFilter = typeof args.parent_id === 'string' && args.parent_id.trim() ? args.parent_id.trim() : null
+  // Nur Dokumente ab diesem Zeitpunkt (erstellt_am, also Upload-Zeitpunkt im
+  // Hub) - für den täglichen Scan von dailyallris/Politikbüro. Greift wie
+  // titel in der Datenbank, nicht erst nach dem Limit.
+  let seitIso: string | null = null
+  if (typeof args.seit === 'string' && args.seit.trim()) {
+    seitIso = seitAlsIso(args.seit.trim())
+    if (!seitIso) {
+      return toolTextResult(
+        `Fehler: seit="${args.seit}" ist kein gültiges Datum (erwartet z. B. "2026-10-17" oder "2026-10-17T06:00:00+02:00").`,
+        true,
+      )
+    }
+  }
   const limit = parseLimit(args.limit)
 
   const caller = await loadCallerProfile(supabase, userId)
   if (!caller) return toolTextResult('Fehler: eigenes Profil konnte nicht geladen werden.', true)
 
-  const cols =
-    'id, parent_id, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url, archiviert_am, erstellt_am, user_id'
-  let baseQuery = supabase.from('dokumente').select(cols)
-  baseQuery = parentIdFilter ? baseQuery.eq('parent_id', parentIdFilter) : baseQuery.is('parent_id', null)
-  if (titelFilter) baseQuery = baseQuery.ilike('titel', ilikeMuster(titelFilter))
+  // Ohne `inhalt`: die Liste zeigt ihn nicht an, und bei rund 9.000 Zeichen je
+  // Drucksache wären das für den ganzen Hub etwa 10 MB je Aufruf. Den Text
+  // liefert get_document.
+  const cols = 'id, parent_id, titel, sichtbarkeit, ebene, gliederung, tags, datei_url, archiviert_am, erstellt_am, user_id'
+  // Gemeinsame Filter aller drei Teilabfragen; neueste zuerst und nach id
+  // stabil sortiert, damit die Seiten von alleZeilen() sich nicht überlappen.
+  // deno-lint-ignore no-explicit-any
+  const gemeinsam = (q: any) => {
+    q = parentIdFilter ? q.eq('parent_id', parentIdFilter) : q.is('parent_id', null)
+    if (titelFilter) q = q.ilike('titel', ilikeMuster(titelFilter))
+    if (seitIso) q = q.gte('erstellt_am', seitIso)
+    return q.order('erstellt_am', { ascending: false }).order('id')
+  }
 
   // Eigene Zeilen + potenziell sichtbare geteilte/einzelpersonen-Zeilen laden
   // (Filterung auf "wirklich sichtbar" passiert unten in JS, siehe darfSehen() -
   // der Service-Role-Client umgeht RLS, das muss also hier nachgebaut werden).
   const [ownRows, geteiltRows, shareRows] = await Promise.all([
-    baseQuery.eq('user_id', userId),
+    alleZeilen<DokumentListRow>((von, bis) =>
+      gemeinsam(supabase.from('dokumente').select(cols).eq('user_id', userId)).range(von, bis),
+    ),
     caller.ebenen.length > 0
-      ? (() => {
-          let q = supabase.from('dokumente').select(cols).eq('sichtbarkeit', 'geteilt').in('ebene', caller.ebenen)
-          if (titelFilter) q = q.ilike('titel', ilikeMuster(titelFilter))
-          return q.then((r) => {
-            const rows = (r.data ?? []) as DokumentListRow[]
-            return { data: parentIdFilter ? rows.filter((d) => d.parent_id === parentIdFilter) : rows.filter((d) => !d.parent_id) }
-          })
-        })()
-      : Promise.resolve({ data: [] as DokumentListRow[] }),
+      ? alleZeilen<DokumentListRow>((von, bis) =>
+          gemeinsam(supabase.from('dokumente').select(cols).eq('sichtbarkeit', 'geteilt').in('ebene', caller.ebenen)).range(
+            von,
+            bis,
+          ),
+        )
+      : Promise.resolve({ zeilen: [] as DokumentListRow[], fehler: null }),
     supabase.from('dokument_shares').select('dokument_id').eq('user_id', userId),
   ])
 
   const sharedDokIds = (shareRows.data ?? []).map((s) => s.dokument_id as string)
-  let einzelQuery = supabase.from('dokumente').select(cols).in('id', sharedDokIds)
-  einzelQuery = parentIdFilter ? einzelQuery.eq('parent_id', parentIdFilter) : einzelQuery.is('parent_id', null)
-  if (titelFilter) einzelQuery = einzelQuery.ilike('titel', ilikeMuster(titelFilter))
-  const { data: einzelRows } = sharedDokIds.length > 0 ? await einzelQuery : { data: [] as DokumentListRow[] }
+  const einzelRows: DokumentListRow[] = []
+  let einzelFehler: string | null = null
+  for (const stueck of inStuecken(sharedDokIds)) {
+    const { zeilen, fehler } = await alleZeilen<DokumentListRow>((von, bis) =>
+      gemeinsam(supabase.from('dokumente').select(cols).in('id', stueck)).range(von, bis),
+    )
+    einzelRows.push(...zeilen)
+    einzelFehler ??= fehler
+  }
+
+  // Lieber abbrechen als eine unvollständige Liste als vollständig ausgeben.
+  const ladeFehler = ownRows.fehler ?? geteiltRows.fehler ?? einzelFehler ?? shareRows.error?.message ?? null
+  if (ladeFehler) return toolTextResult(`Fehler beim Laden der Dokumente: ${ladeFehler}`, true)
 
   const byId = new Map<string, DokumentListRow>()
-  for (const row of [...((ownRows.data ?? []) as DokumentListRow[]), ...((geteiltRows.data ?? []) as DokumentListRow[]), ...((einzelRows ?? []) as DokumentListRow[])]) {
+  for (const row of [...ownRows.zeilen, ...geteiltRows.zeilen, ...einzelRows]) {
     byId.set(row.id, row)
   }
 
@@ -448,11 +539,14 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
   if (archivFilter === 'ohne') rows = rows.filter((d) => !archivGrundById.get(d.id))
   else if (archivFilter === 'nur') rows = rows.filter((d) => archivGrundById.get(d.id))
 
-  rows.sort((a, b) => b.erstellt_am.localeCompare(a.erstellt_am))
+  // Numerisch, nicht als Text: PostgREST liefert "...+00:00", und eigene und
+  // fremde Zeilen sollen exakt nach Zeitpunkt gemischt werden.
+  rows.sort((a, b) => Date.parse(b.erstellt_am) - Date.parse(a.erstellt_am))
+  const gesamt = rows.length
   rows = rows.slice(0, limit)
 
   if (rows.length === 0) {
-    const zusatz = titelFilter ? ` für Titel-Suche "${titelFilter}"` : ''
+    const zusatz = [titelFilter ? ` für Titel-Suche "${titelFilter}"` : '', seitIso ? ` seit ${args.seit}` : ''].join('')
     if (archivFilter === 'nur') return toolTextResult(`Keine archivierten Dokumente gefunden${zusatz}.`)
     return toolTextResult(
       archivFilter === 'ohne'
@@ -505,7 +599,135 @@ export async function listDocuments(supabase: SupabaseClient, userId: string, ar
     teile.push(formatDate(d.erstellt_am.slice(0, 10)))
     return teile.join(' · ')
   })
+  // Ein Scan muss erkennen können, dass er nicht alles bekommen hat.
+  if (gesamt > rows.length) {
+    lines.push(
+      `… ${gesamt - rows.length} weitere Treffer nicht angezeigt (insgesamt ${gesamt}, gezeigt die neuesten ${rows.length}) - limit erhöhen (max. 100) oder Filter enger fassen.`,
+    )
+  }
   return toolTextResult(lines.join('\n'))
+}
+
+const GET_DOCUMENT_MAX_ZEICHEN = 20000
+
+/**
+ * Liefert ein einzelnes Dokument samt gespeichertem Markdown-Text - das
+ * Gegenstück zu list_documents, das den Text bewusst weglässt. Ohne dieses Tool
+ * sah ein MCP-Client von den Drucksachen nur Titel, Tags und Sitzungen.
+ *
+ * Lange Texte (im Bestand bis über 30.000 Zeichen) kommen in Abschnitten:
+ * gleiche Vorsicht wie bei update_document_inhalt, ein sehr großer MCP-Aufruf
+ * wird unzuverlässig. Die Antwort nennt den nächsten `ab_zeichen`-Wert.
+ *
+ * Sichtbarkeit wie in list_documents über darfSehen(); ein Dokument, das der
+ * Aufrufer nicht sehen darf, wird wie ein nicht vorhandenes gemeldet, damit
+ * das Tool nicht verrät, dass es eine Id gibt.
+ */
+export async function getDocument(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const roh = typeof args.dokument_id === 'string' ? args.dokument_id : typeof args.id === 'string' ? args.id : ''
+  const dokumentId = roh.trim()
+  if (!dokumentId) return toolTextResult('Fehler: dokument_id ist erforderlich.', true)
+  const abZeichen = typeof args.ab_zeichen === 'number' && args.ab_zeichen > 0 ? Math.floor(args.ab_zeichen) : 0
+  const maxZeichen =
+    typeof args.max_zeichen === 'number' && args.max_zeichen > 0
+      ? Math.min(Math.floor(args.max_zeichen), GET_DOCUMENT_MAX_ZEICHEN)
+      : GET_DOCUMENT_MAX_ZEICHEN
+
+  const caller = await loadCallerProfile(supabase, userId)
+  if (!caller) return toolTextResult('Fehler: eigenes Profil konnte nicht geladen werden.', true)
+
+  const nichtGefunden = toolTextResult(`Fehler: Dokument ${dokumentId} wurde nicht gefunden.`, true)
+  const { data: dok, error } = await supabase
+    .from('dokumente')
+    .select('id, parent_id, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url, archiviert_am, erstellt_am, user_id')
+    .eq('id', dokumentId)
+    .maybeSingle()
+  // Ungültige UUID liefert einen Fehler statt null - für den Aufrufer dasselbe.
+  if (error || !dok) return nichtGefunden
+
+  const [{ data: autor }, { data: freigabe }] = await Promise.all([
+    supabase.from('profiles').select('name, partei').eq('id', dok.user_id).maybeSingle(),
+    supabase.from('dokument_shares').select('id').eq('dokument_id', dok.id).eq('user_id', userId).maybeSingle(),
+  ])
+  const autorPartei = dok.user_id === userId ? caller.partei : ((autor?.partei as string | null) ?? null)
+  if (!darfSehen(caller, userId, dok, autorPartei, Boolean(freigabe))) return nichtGefunden
+
+  const kopf: string[] = [`# ${dok.titel}`, `id: ${dok.id}`]
+  if (dok.parent_id) {
+    const { data: eltern } = await supabase.from('dokumente').select('titel').eq('id', dok.parent_id).maybeSingle()
+    kopf.push(`Notiz zu: "${eltern?.titel ?? 'unbekannt'}" (id: ${dok.parent_id})`)
+  }
+
+  const meta: string[] = []
+  if (dok.sichtbarkeit === 'geteilt') {
+    meta.push(`geteilt, ${EBENE_LABEL[dok.ebene ?? ''] ?? dok.ebene}${dok.gliederung ? ` ${dok.gliederung}` : ''}`)
+  } else if (dok.sichtbarkeit === 'einzelpersonen') {
+    meta.push('mit einzelnen Personen geteilt')
+  } else {
+    meta.push('persönlich')
+  }
+  meta.push(dok.user_id === userId ? 'eigenes Dokument' : `von ${autor?.name ?? 'unbekannt'}`)
+  meta.push(`erstellt ${formatDate((dok.erstellt_am as string).slice(0, 10))}`)
+  kopf.push(meta.join(' · '))
+
+  const tags = (dok.tags ?? []) as string[]
+  if (tags.length > 0) kopf.push(`Tags: ${tags.join(', ')}`)
+
+  const { titelJeDokument, datenJeDokument } = await ladeSitzungen(supabase, [dok.id])
+  const sitzungen = titelJeDokument.get(dok.id) ?? []
+  if (sitzungen.length > 0) kopf.push(`Sitzungen: ${sitzungen.join(', ')}`)
+  const grund = archivGrund(dok, datenJeDokument, startOfTodayIso())
+  if (grund) kopf.push(grund === 'sitzung' ? 'ARCHIV (Sitzung vorbei)' : 'ARCHIV (von Hand)')
+  if (dok.datei_url) kopf.push(`Datei: ${fileNameFromPath(dok.datei_url)}`)
+
+  // Nur Notizen zählen, die der Aufrufer auch sehen darf - fremde persönliche
+  // Notizen bleiben unsichtbar, auch ihre Anzahl.
+  if (!dok.parent_id) {
+    const { data: kinder } = await supabase
+      .from('dokumente')
+      .select('id, user_id, sichtbarkeit, ebene, gliederung')
+      .eq('parent_id', dok.id)
+    const kinderListe = (kinder ?? []) as { id: string; user_id: string; sichtbarkeit: string; ebene: string | null; gliederung: string | null }[]
+    if (kinderListe.length > 0) {
+      const fremdeIds = Array.from(new Set(kinderListe.filter((k) => k.user_id !== userId).map((k) => k.user_id)))
+      const parteiJeAutor = new Map<string, string | null>()
+      if (fremdeIds.length > 0) {
+        const { data: autoren } = await supabase.from('profiles').select('id, partei').in('id', fremdeIds)
+        for (const a of autoren ?? []) parteiJeAutor.set(a.id as string, a.partei as string | null)
+      }
+      const { data: kinderFreigaben } = await supabase
+        .from('dokument_shares')
+        .select('dokument_id')
+        .eq('user_id', userId)
+        .in('dokument_id', kinderListe.map((k) => k.id))
+      const freigegeben = new Set((kinderFreigaben ?? []).map((f) => f.dokument_id as string))
+      const sichtbar = kinderListe.filter((k) =>
+        darfSehen(caller, userId, k, k.user_id === userId ? caller.partei : parteiJeAutor.get(k.user_id) ?? null, freigegeben.has(k.id)),
+      ).length
+      if (sichtbar > 0) kopf.push(`Notizen: ${sichtbar} (abrufbar mit list_documents, parent_id=${dok.id})`)
+    }
+  }
+
+  const inhalt = typeof dok.inhalt === 'string' ? dok.inhalt : ''
+  if (!inhalt) {
+    kopf.push('', dok.datei_url ? 'Kein gespeicherter Text - nur die Datei liegt vor.' : 'Kein gespeicherter Text.')
+    return toolTextResult(kopf.join('\n'))
+  }
+  if (abZeichen >= inhalt.length) {
+    return toolTextResult(`Fehler: ab_zeichen=${abZeichen} liegt hinter dem Textende (${inhalt.length} Zeichen).`, true)
+  }
+
+  const bis = Math.min(abZeichen + maxZeichen, inhalt.length)
+  const fmt = (n: number) => n.toLocaleString('de-DE')
+  if (abZeichen === 0 && bis === inhalt.length) {
+    kopf.push(`Text: ${fmt(inhalt.length)} Zeichen`)
+  } else {
+    kopf.push(
+      `Text: Zeichen ${fmt(abZeichen + 1)}–${fmt(bis)} von ${fmt(inhalt.length)}` +
+        (bis < inhalt.length ? ` - Fortsetzung mit ab_zeichen=${bis}` : ' (Ende)'),
+    )
+  }
+  return toolTextResult(`${kopf.join('\n')}\n\n---\n\n${inhalt.slice(abZeichen, bis)}`)
 }
 
 export async function updateDocumentTitel(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {

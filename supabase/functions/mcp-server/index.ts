@@ -49,6 +49,7 @@ import { startFileUpload, appendFileChunk, finishFileUpload } from './tools/uplo
 import {
   createDocument,
   deleteDocument,
+  getDocument,
   listDocuments,
   updateDocumentArchiv,
   updateDocumentInhalt,
@@ -238,6 +239,9 @@ Deno.serve(async (req) => {
           break
         case 'list_documents':
           result = await listDocuments(supabase, user.id, args)
+          break
+        case 'get_document':
+          result = await getDocument(supabase, user.id, args)
           break
         case 'update_document_titel':
           result = await updateDocumentTitel(supabase, user.id, args)

@@ -2839,3 +2839,44 @@ passiert, die am Termin hängen (Notizen, Dateien, Verknüpfungen) – das soll 
 Grundsatzüberlegung zu Zusammenfassungen, Notizen, eigenen Dokumenten und ToDos einfließen,
 zusammen mit einer grundsätzlichen Neubetrachtung der Kalender-Einbindung. Die Rolle wird erst danach
 gebaut.
+
+### MCP: `get_document`, `seit`-Filter – und die 1.000-Zeilen-Grenze (2026-10-17)
+
+**Anlass (Nutzerwunsch):** Das Politikbüro sah über den MCP-Server von den Drucksachen nur Titel,
+Tags und Sitzungen, nicht den Text – `list_documents` gibt ihn nicht aus, ein Lese-Tool fehlte.
+Dazu sollte der tägliche ALLRIS-Scan nur neue Drucksachen holen können.
+
+- **`get_document(dokument_id, ab_zeichen?, max_zeichen?)`** liefert ein Dokument mit seinem
+  Markdown-Text und Kopfdaten (Sichtbarkeit, Ersteller*in, Tags, Sitzungen mit TOP, Archivstatus,
+  Datei, Zahl der sichtbaren Notizen). Sichtbarkeit wie `list_documents` über `darfSehen()`, weil
+  der MCP-Server RLS umgeht; ein unsichtbares Dokument meldet sich wie ein nicht vorhandenes, damit
+  das Tool keine Ids bestätigt. Lange Texte (bis über 30.000 Zeichen) kommen in Abschnitten von
+  höchstens 20.000 Zeichen – dieselbe Vorsicht wie bei `update_document_inhalt`, sehr große
+  MCP-Nachrichten werden unzuverlässig. Auch `id` statt `dokument_id` wird angenommen.
+- **`list_documents(seit)`**: nur Dokumente ab einem Upload-Zeitpunkt, als DB-Filter vor dem Limit.
+  Ein reines Datum gilt ab Mitternacht **deutscher** Zeit (Versatz je Tag aus `Intl`, an beiden
+  Umstellungstagen getestet) – in UTC fehlten einem Tages-Scan sonst die Uploads zwischen 0 und
+  2 Uhr. Für einen Scan `archiv="alle"`: eine neue Drucksache zu einer schon vergangenen Sitzung
+  gilt sonst als archiviert.
+
+**Dabei gefunden: `list_documents` war unvollständig.** PostgREST liefert pro Abfrage höchstens
+1.000 Zeilen (Supabase-Voreinstellung) und schneidet ohne Fehlermeldung ab. Die Abfrage der
+geteilten Dokumente lief unsortiert über alle 1.141 Drucksachen – es fehlten zufällige 141, und
+geprüft fehlten tatsächlich die neuesten (DB: DS10/3729 um 14:13 Uhr als neuestes, das Tool lieferte
+Dokumente von früher am Tag). Für einen Scan nach Neuem wäre das der schlimmste Fall gewesen.
+Dasselbe in `ladeSitzungen()`: 1.344 Sitzungsverknüpfungen, also konnte auch der Archivstatus
+einzelner Dokumente falsch sein. Behoben mit `alleZeilen()` (seitenweise, stabil sortiert nach
+`erstellt_am, id`, gibt Fehler zurück statt zu werfen – `index.ts` fängt keine Exceptions, das wäre
+HTTP 500) und `inStuecken()` für lange `.in()`-Listen. Ladefehler brechen jetzt mit einer Meldung ab,
+statt eine unvollständige Liste als vollständig auszugeben. Gibt es mehr Treffer als `limit`, nennt
+die letzte Zeile die Gesamtzahl.
+
+Außerdem lädt `list_documents` den Text nicht mehr mit: Er wurde nie angezeigt, waren aber rund
+10 MB je Aufruf.
+
+Geprüft: `deno check`; `seitAlsIso` mit 8 Fällen (Sommer-/Winterzeit, beide Umstellungstage, volle
+Zeitstempel, ungültige Eingaben); `alleZeilen` mit 0/5/999/1.000/1.001/2.500 simulierten Zeilen und
+einem Fehler auf Seite 2.
+
+**Offen, nicht Teil dieser Änderung:** Die Web-UI hat dieselbe Grenze – `Dokumente.tsx` und
+`Archiv.tsx` laden den Hub in einer Abfrage und zeigen nur die neuesten 1.000 Dokumente.
