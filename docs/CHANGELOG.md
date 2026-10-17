@@ -3170,3 +3170,39 @@ leeren Tabellen `todo_comments`/`antrag_comments` (bricht ab, falls doch etwas d
 Schema `backup` mit der Sicherung der am 17.10. von Hand bereinigten Notizen – laut Nutzer nicht
 mehr benötigt. `scripts/wartung-notizen.mjs` entfällt (lief einmal, liest die Kommentar-Tabellen),
 ebenso die Typen `TodoComment`/`AntragComment`.
+
+### Feste Board-Spalten, Altlasten entfernt, Actions aktualisiert (2026-10-17)
+
+**Entscheidungen (Nutzer):** Die ToDo-Spalten sind nicht mehr frei konfigurierbar, es gibt nur
+noch **Neu, Geplant, Ergebnis erstellt, Fertig**. Die aktive Sitzung wird **manuell** aufgerufen
+(keine automatische Auswahl, keine Markierung). **Zusammenfassungen** werden nicht mehr gebraucht.
+Die letzte Datei im alten Notiz-Speicher (Benjamin Korte) soll weg. Damit sind die offenen Fragen
+aus KONZEPT.md Abschnitt 11 entschieden.
+
+**`0060_feste_spalten_und_altlasten.sql`** (über `migrationen.yml`):
+- Je Konto die vier Spalten angelegt bzw. vorhandene in anderer Schreibweise umbenannt; Karten aus
+  anderen Spalten umgezogen – „Wartet…" nach Geplant, alles andere nach Neu (betraf eine Karte bei
+  Thorsten Kois und zwei bei Benjamin Korte aus dessen eigenen Spalten „Fraktion"/„Kreistag").
+  Generalprobe: alle 40 Karten landen in den vier Spalten. Danach die übrigen Spalten gelöscht,
+  Constraint `todo_columns_feste_spalten` und eindeutiger Name je Konto; Nutzer dürfen ihre
+  Spalten nur noch lesen (`todo_columns_select_own` statt `todo_columns_manage_own`);
+  `handle_new_user` legt die vier neuen an.
+- `summaries`: Spalten `session_id`, `event_id`, `antrag_id`, `document_id`, `datei_url`,
+  `sichtbarkeit` entfernt samt der Policies, die daran hingen; `todo_id` und `inhalt` sind jetzt
+  Pflicht, leerer Text ist ausgeschlossen. Alle 79 Notizen erfüllten das bereits.
+- `todos.zustaendig` (Freitext, in keiner Zeile befüllt) und `todos.dokument_id` (Verweis auf die
+  ungenutzte `documents`-Tabelle) entfernt.
+- Storage-Policies des Buckets `zusammenfassungen` entfernt. Datei und Bucket löscht
+  `scripts/wartung-speicher.mjs` über die Storage-API – direkte Löschungen in `storage.*` blockiert
+  Supabase per Trigger (`protect_objects_delete`/`protect_buckets_delete`).
+
+**Oberfläche/MCP:** Einstellungen zeigen die Spalten nur noch an. `create_todo`/`update_todo`
+nehmen für `spalte` nur die vier Namen (`festeSpalte()`), legen keine Spalten mehr an.
+
+**Wartung:** `wartung-dateien.yml` heißt jetzt `wartung.yml` und kennt nur noch `vorschau` und
+(einmalig) `speicher`; die erledigten Läufe für Dateien und Notizen sind samt Skripten entfernt.
+
+**Actions:** auf die aktuellen Hauptversionen gehoben (node24 statt des auslaufenden node20):
+`checkout@v7`, `setup-node@v7`, `upload-artifact@v7`, `upload-pages-artifact@v5`,
+`deploy-pages@v5`, `supabase/setup-cli@v3`. Die Breaking Changes (setup-node: Caching-Vorgaben,
+entfallenes `always-auth`) betreffen die Workflows nicht – sie setzen `cache: npm` ausdrücklich.

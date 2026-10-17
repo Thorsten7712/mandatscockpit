@@ -31,8 +31,10 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
   keinen Inhalt, weil ALLRIS zu ihnen weder Tagesordnung noch Vorlagen veröffentlicht. Ein
   Import-Filter dafür war kurzzeitig eingebaut (0047) und ist wieder entfernt (0048); die
   Entscheidung lautet: Termin ja, Inhalt nein.
-- **ToDo-Board:** Kanban-Stil mit frei definierbaren Spalten (`todo_columns`) statt fester Status,
-  Drag & Drop via `@dnd-kit/core`.
+- **ToDo-Board:** Kanban-Stil mit vier **festen** Spalten – Neu, Geplant, Ergebnis erstellt, Fertig
+  (seit `0060`; vorher frei konfigurierbar). Je Konto vier Zeilen in `todo_columns`, nur lesbar,
+  angelegt mit dem Konto (`handle_new_user`), Constraint `todo_columns_feste_spalten`. Drag & Drop
+  via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
   KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~43 Migrationen: siehe `supabase/migrations/`.
 
@@ -50,12 +52,12 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   in der eigenen Tabelle `neuigkeiten_stand`, nicht in `profiles` (dort für Kolleg*innen lesbar);
   beim ersten Besuch gilt nichts als neu. Leer = Abschnitt ausgeblendet. Optionaler „Presseschau"-Abschnitt (newspaperartige Darstellung hochgeladener
   Presseschauen, Tage-Navigation, nur sichtbar wenn `profiles.presseschau_aktiv` gesetzt ist,
-  strikt privat pro Nutzer), ToDo-Board (frei definierbare Spalten, Drag & Drop, Teilen mit Partei-/
+  strikt privat pro Nutzer), ToDo-Board (feste Spalten, Drag & Drop, Teilen mit Partei-/
   Ebenen-/Gliederungs-Kolleg*innen), „Meine Dokumente" (Anträge + ToDo-Karten mit Notizen in einer
   Liste, filterbar nach Gremium), „Nächste Termine" (eigene Termine + importierte Sitzungen
   zusammengeführt, mit Detail-Modal).
 - **Settings** (Sidebar-Navigation): Profil (Foto/Name), Kalenderquellen (eigene + gemeinsam
-  verwaltete, strikt privat pro Nutzer getrennt), Meine Gremien/Ebenen/Gliederung, ToDo-Board-Struktur,
+  verwaltete, strikt privat pro Nutzer getrennt), Meine Gremien/Ebenen/Gliederung, ToDo-Board (Anzeigeoptionen; die Spalten sind fest),
   Antrags-Fristen, MCP Connection (persönliches Bearer-Token), Benutzerverwaltung, Kontaktanfragen und Speicher-
   belegung gegen die Free-Tier-Grenzen (nur `rolle = 'admin'`).
 - **Archiv**: vergangene Sitzungen (inkl. manuell nachtragbar, z. B. für Gremien ohne ICS-Feed - nur
@@ -237,7 +239,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   Artefakte (jeder angemeldete GitHub-Nutzer kann sie herunterladen). Workflows, die mit echten
   Daten arbeiten, schreiben keine Inhalte ins Protokoll und laden Artefakte nur verschlüsselt hoch
   (`gpg --symmetric` mit dem Secret `BACKUP_PASSWORT`, siehe `backup.yml`,
-  `wartung-dateien.yml`). Ein unverschlüsseltes Artefakt aus dem ersten Wartungslauf am 17.10.
+  früher `wartung-dateien.yml`). Ein unverschlüsseltes Artefakt aus dem ersten Wartungslauf am 17.10.
   musste von Hand gelöscht werden.
 - **Deploy ist zweistufig**: Eine Migration wirkt sofort auf die Live-DB, das Frontend/die Edge
   Functions gehen aber erst mit `git push` live (separater Workflow-Trigger). Eine fertige
@@ -286,7 +288,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   `0059`). Dasselbe gilt für `DELETE` –
   auch innerhalb eines `do`-Blocks. Generalproben deshalb so bauen, dass sie ohne Löschung prüfen
   (Beispiel: `private.protokoll_herkunft()` direkt aufrufen statt eine Zeile zu löschen).
-- **Storage**: private Buckets (`zusammenfassungen`, `profilbilder`), Pfad-Muster
+- **Storage**: private Buckets (`dokumente`, `profilbilder`; `zusammenfassungen` seit 0060 entfernt), Pfad-Muster
   `<user_id>/<dateiname>`, RLS via `(storage.foldername(name))[1] = ((select auth.uid()))::text`. Signed URLs:
   60s für einmalige Downloads, 3600s für dauerhaft sichtbare Inhalte (Fotos, offene Dokumentvorschau).
 - **Bewusste Code-Duplikation**: ICS-Parsing, Hash-Helper, `createNote()`-Konfiguration etc. sind
@@ -327,9 +329,10 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   „verknüpfte Sitzung ist vorbei" steht bewusst in keiner Spalte – sie ist eine Funktion aus
   `sessions.datum` und bräuchte sonst einen täglichen Job. Folge: sie ist in PostgREST nicht
   filterbar, die Liste wird geladen und beim Rendern gefiltert (`Dokumente.tsx`, `Archiv.tsx`).
-- **Titel-basiertes Spalten-Matching**: Sonderverhalten für ToDo-Spalten wie „Neu"/„Fertig" läuft über
-  case-insensitiven Titel-Vergleich, nicht über stabile IDs – bricht, wenn der Nutzer die Spalte
-  umbenennt (bewusster Trade-off, da Spalten frei umbenennbar sind).
+- **Spalten über den Titel finden**: Sonderverhalten für ToDo-Spalten (neue und geteilte Karten nach
+  „Neu", mit Termin nach „Geplant") findet die Spalte über ihren Namen. Seit `0060` sind die Namen
+  fest und per Constraint erzwungen, das ist also verlässlich. Der MCP-Server nimmt für `spalte`
+  nur noch die vier Namen an (`festeSpalte()` in `tools/todos.ts`).
 - **ToDo-Zuweisung** (`0056_todo_zuweisung.sql`): `todos.zustaendig_user_id` statt des Freitexts
   `zustaendig` (bleibt stehen, wird nicht mehr beschrieben). Zuständig sein kann nur, wer die Karte
   angelegt hat oder auf dem Board hat – das erzwingt der Trigger `pruefe_zustaendigkeit`, und das
@@ -426,14 +429,15 @@ wieder löschen (`calendar_sources_delete_own`-Policy), auch wenn andere Mitglie
 abonniert haben – das kollidiert nicht mit RLS, ist aber UX-mäßig nicht ideal (verwaiste Subscriptions).
 Kein Blocker für den MVP, aber im Hinterkopf behalten.
 
-## Offene Design-Entscheidungen
+## Entschiedene Design-Fragen (17.10.2026)
 
-Diese Punkte sind in KONZEPT.md Abschnitt 11 aufgeführt und noch nicht entschieden. Bei Unsicherheit
-lieber nachfragen als eine der Optionen fest einzubauen:
+Die früher offenen Punkte aus KONZEPT.md Abschnitt 11 sind entschieden:
 
-- Sollen Zusammenfassungen standardmäßig privat oder teilbar sein?
-- Sollen ToDo-Boards mit Standard-Spalten vorbelegt werden?
-- Wie wird die „aktive Sitzung" bestimmt (manuell vs. automatisch anhand des Datums)?
+- **Zusammenfassungen** werden nicht mehr gebraucht – es gibt nur Notizen (Text) an ToDos und
+  Dokumenten. Den Speicherbereich `zusammenfassungen` gibt es nicht mehr.
+- **ToDo-Spalten** sind fest: Neu, Geplant, Ergebnis erstellt, Fertig.
+- **Aktive Sitzung**: wird manuell aufgerufen. Kein automatisch bestimmter Sitzungsfokus, keine
+  vom Ratsbüro gesetzte Markierung – die Sitzungen stehen im Kalender und in „Demnächst".
 
 ## Konventionen
 

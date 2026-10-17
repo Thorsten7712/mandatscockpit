@@ -37,10 +37,7 @@ export async function search(supabase: SupabaseClient, userId: string, args: Rec
   interface NoteHit {
     id: string
     inhalt: string | null
-    session_id: string | null
-    event_id: string | null
-    todo_id: string | null
-    antrag_id: string | null
+    todo_id: string
   }
   const noteById = new Map<string, NoteHit>()
   const addNotes = (rows: NoteHit[] | null) => (rows ?? []).forEach((n) => noteById.set(n.id, n))
@@ -48,7 +45,7 @@ export async function search(supabase: SupabaseClient, userId: string, args: Rec
     (
       await supabase
         .from('summaries')
-        .select('id, inhalt, session_id, event_id, todo_id, antrag_id')
+        .select('id, inhalt, todo_id')
         .eq('user_id', userId)
         .ilike('inhalt', like)
         .limit(limit)
@@ -59,7 +56,7 @@ export async function search(supabase: SupabaseClient, userId: string, args: Rec
       (
         await supabase
           .from('summaries')
-          .select('id, inhalt, session_id, event_id, todo_id, antrag_id')
+          .select('id, inhalt, todo_id')
           .in('todo_id', placedTodoIds)
           .ilike('inhalt', like)
           .limit(limit)
@@ -77,7 +74,7 @@ export async function search(supabase: SupabaseClient, userId: string, args: Rec
   if (noteById.size > 0) {
     abschnitte.push(
       `Notizen:\n${Array.from(noteById.values())
-        .map((n) => `- ${truncate(n.inhalt ?? '', 200)} — id des Ziels: ${n.session_id ?? n.event_id ?? n.todo_id ?? n.antrag_id}`)
+        .map((n) => `- ${truncate(n.inhalt ?? '', 200)} — ToDo-id: ${n.todo_id}`)
         .join('\n')}`,
     )
   }

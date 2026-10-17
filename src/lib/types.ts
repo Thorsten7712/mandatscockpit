@@ -209,17 +209,12 @@ export interface DocumentRow {
   created_at: string
 }
 
+/** Notiz an einer ToDo-Karte - seit 0060 nur noch Text an genau einer Karte. */
 export interface SummaryRow {
   id: string
   user_id: string
-  document_id: string | null
-  session_id: string | null
-  event_id: string | null
-  todo_id: string | null
-  antrag_id: string | null
-  inhalt: string | null
-  datei_url: string | null
-  sichtbarkeit: Sichtbarkeit
+  todo_id: string
+  inhalt: string
   erstellt_am: string
 }
 
@@ -254,14 +249,11 @@ export interface TodoRow {
   user_id: string
   titel: string
   beschreibung: string | null
-  /** Altes Freitextfeld, seit 0056 nicht mehr beschrieben. */
-  zustaendig: string | null
   /** Zuständige Person (0056) - hat die Karte immer auf ihrem Board oder hat sie angelegt. */
   zustaendig_user_id: string | null
   /** Seit wann die Person zuständig ist (0057, für die Neuigkeiten). */
   zustaendig_seit: string | null
   faellig_am: string | null
-  dokument_id: string | null
   session_id: string | null
   event_id: string | null
   erledigt: boolean

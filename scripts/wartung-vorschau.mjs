@@ -3,7 +3,7 @@
 // (Web-Oberfläche und MCP-Server, beide über vorschau() aus
 // supabase/functions/_shared/vorlageMarkdown.ts - dieselbe Datei wie hier).
 //
-// Läuft über .github/workflows/wartung-dateien.yml (skript=vorschau). Ändert
+// Läuft über .github/workflows/wartung.yml (skript=vorschau). Ändert
 // nur die Spalte vorschau, schreibt keine Inhalte ins Protokoll (das Repo ist
 // öffentlich). MODUS=probe zählt nur. Mehrfaches Ausführen ist unschädlich.
 
