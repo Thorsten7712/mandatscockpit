@@ -6,6 +6,7 @@ import { CalendarView } from '../components/CalendarView'
 import { TodoBoard } from '../components/TodoBoard'
 import { AntraegeSection } from '../components/AntraegeSection'
 import { PresseschauSection } from '../components/PresseschauSection'
+import { NeuigkeitenSection } from '../components/NeuigkeitenSection'
 import { logoUrl, themeById } from '../lib/themes'
 import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
 
@@ -180,6 +181,7 @@ export default function Dashboard() {
       </header>
       <main className="mx-auto max-w-7xl px-6 py-8">
         {presseschauAktiv && <PresseschauSection />}
+        <NeuigkeitenSection />
         <section className="mb-8">
           <h2 className="mb-3 text-base font-semibold text-slate-900">ToDo-Board</h2>
           <TodoBoard />
