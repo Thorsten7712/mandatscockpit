@@ -248,7 +248,7 @@ export default function ZahlenUndFakten() {
     // Bewusst umbrechend statt abgeschnitten: eine halbe Drucksachennummer
     // nützt beim Zitieren nichts.
     return (
-      <span className="break-words">
+      <span className="wrap-break-word">
         {f.quelle}
         {f.quelle && f.stand ? ' · ' : ''}
         {f.stand ? `Stand ${formatDate(f.stand)}` : ''}
@@ -269,7 +269,7 @@ export default function ZahlenUndFakten() {
               onClick={() => oeffneBearbeiten(f)}
               aria-label="Bearbeiten"
               title="Bearbeiten"
-              className="mc-btn-ghost !p-1.5"
+              className="mc-btn-ghost p-1.5!"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
@@ -279,7 +279,7 @@ export default function ZahlenUndFakten() {
                 setLoeschenVerstanden(false)
                 setLoeschKandidat(f)
               }}
-              className="mc-btn-danger !px-2 !py-1 !text-xs"
+              className="mc-btn-danger px-2! py-1! text-xs!"
             >
               Löschen
             </button>
@@ -293,7 +293,7 @@ export default function ZahlenUndFakten() {
     return (
       <>
         <span
-          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[f.ebene].chip}`}
+          className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[f.ebene].chip}`}
         >
           {EBENE_LABEL[f.ebene]}
           {f.gliederung ? ` · ${f.gliederung}` : ''}
@@ -310,7 +310,7 @@ export default function ZahlenUndFakten() {
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="h-1.5 bg-topbar" aria-hidden="true" />
-      <header className="bg-gradient-to-r from-primary to-primary-hover text-white shadow-md">
+      <header className="bg-linear-to-r from-primary to-primary-hover text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <h1 className="text-lg font-bold">Zahlen &amp; Fakten</h1>
           <Link to="/" className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">
@@ -455,7 +455,7 @@ export default function ZahlenUndFakten() {
                 placeholder="Quelle (Behörde, Studie, Drucksache, URL)"
                 value={form.quelle}
                 onChange={(e) => setForm({ ...form, quelle: e.target.value })}
-                className="mc-input min-w-[14rem] flex-1"
+                className="mc-input min-w-56 flex-1"
               />
               <label className="flex items-center gap-2 text-sm text-slate-500">
                 Stand
@@ -463,7 +463,7 @@ export default function ZahlenUndFakten() {
                   type="date"
                   value={form.stand}
                   onChange={(e) => setForm({ ...form, stand: e.target.value })}
-                  className="mc-input !w-auto"
+                  className="mc-input w-auto!"
                 />
               </label>
             </div>
@@ -479,7 +479,7 @@ export default function ZahlenUndFakten() {
                 id="fakt-ebene"
                 value={form.ebene}
                 onChange={(e) => setForm({ ...form, ebene: e.target.value as Ebene })}
-                className="mc-input !w-auto !text-sm"
+                className="mc-input w-auto! text-sm!"
                 required
               >
                 <option value="">Bitte wählen...</option>

@@ -34,7 +34,7 @@ export function DetailModalShell({
           <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-slate-900">{title}</h1>
           <div className="flex shrink-0 items-center gap-2">
             {headerActions && <div className="flex items-center gap-1.5 border-r border-slate-200 pr-2">{headerActions}</div>}
-            <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost !p-2">
+            <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost p-2!">
               <X size={18} />
             </button>
           </div>

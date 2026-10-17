@@ -56,7 +56,7 @@ export function LoeschDialog({
 
   return (
     <div
-      className="mc-animate-fade fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4"
+      className="mc-animate-fade fixed inset-0 z-60 flex items-center justify-center bg-slate-900/40 p-4"
       onClick={onAbbrechen}
     >
       <div
@@ -71,7 +71,7 @@ export function LoeschDialog({
           </span>
           <div className="min-w-0">
             <h2 className="text-base font-bold text-slate-900">{geteilt ? 'Wirklich für alle löschen?' : 'Bist du sicher?'}</h2>
-            <p className="mt-0.5 break-words text-sm text-slate-500">„{titel}"</p>
+            <p className="mt-0.5 wrap-break-word text-sm text-slate-500">„{titel}"</p>
           </div>
         </div>
 
@@ -136,6 +136,9 @@ export interface LoeschAnfrage {
  * mehreren Löschzielen (Karte, Kommentar, Dokument ...) nicht je Ziel eigene
  * States braucht: `fragen({...})` am Knopf, `dialog` einmal ins JSX.
  */
+// Hook und Dialog gehören zusammen (der Hook rendert genau diesen Dialog),
+// deshalb bewusst in einer Datei - Fast Refresh lädt sie dafür komplett neu.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useLoeschDialog(): { fragen: (anfrage: LoeschAnfrage) => void; dialog: ReactNode } {
   const [anfrage, setAnfrage] = useState<LoeschAnfrage | null>(null)
   const [bestaetigt, setBestaetigt] = useState(false)

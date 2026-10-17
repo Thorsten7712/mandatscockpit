@@ -52,7 +52,7 @@ export function KontaktAnfragenListe() {
         {anfragen.map((a) => (
           <li
             key={a.id}
-            className={`rounded-xl border p-3 shadow-sm ${a.gelesen ? 'border-slate-200 bg-white' : 'border-primary/30 bg-primary/5'}`}
+            className={`rounded-xl border p-3 shadow-xs ${a.gelesen ? 'border-slate-200 bg-white' : 'border-primary/30 bg-primary/5'}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -69,7 +69,7 @@ export function KontaktAnfragenListe() {
                 <button
                   type="button"
                   onClick={() => toggleGelesen(a)}
-                  className="mc-btn-ghost !px-2 !py-1 !text-xs"
+                  className="mc-btn-ghost px-2! py-1! text-xs!"
                 >
                   {a.gelesen ? 'Ungelesen' : 'Gelesen'}
                 </button>
@@ -82,7 +82,7 @@ export function KontaktAnfragenListe() {
                       ausfuehren: () => handleDelete(a.id),
                     })
                   }
-                  className="mc-btn-danger !px-2 !py-1 !text-xs"
+                  className="mc-btn-danger px-2! py-1! text-xs!"
                 >
                   Löschen
                 </button>

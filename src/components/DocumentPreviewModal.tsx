@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { fileExtension, IMAGE_EXTENSIONS } from '../lib/dateien'
 
 // Vorschau für hochgeladene Dokumente (Bucket "zusammenfassungen", privat -
 // daher signierte URL statt öffentlichem Link). Bilder werden inline
@@ -9,24 +10,6 @@ import { supabase } from '../lib/supabaseClient'
 // Browser, dafür ein "Datei öffnen"-Link. 3600s Gültigkeit statt der
 // sonst üblichen 60s bei Downloads, weil das Dokument während des Lesens
 // länger geöffnet bleiben kann (gleiche Überlegung wie bei Profilfotos).
-export const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'])
-
-export function fileExtension(path: string): string {
-  return path.split('.').pop()?.toLowerCase() ?? ''
-}
-
-/** Dateiname aus dem Storage-Pfad ("<user_id>/<dateiname>") extrahieren.
- * Uploads werden als "<Date.now()>-<originalname>" gespeichert, um
- * Namenskollisionen im Bucket zu vermeiden (siehe z. B. handleUploadDocument
- * in TodoDetailModal.tsx/AntragDetailModal.tsx) - dieser Zeitstempel-Präfix
- * ist für Anzeigezwecke reines Rauschen und wird hier ausgeblendet, ohne den
- * tatsächlichen Storage-Pfad (und damit bestehende datei_url-Referenzen) zu
- * verändern. */
-export function fileNameFromPath(path: string): string {
-  const name = path.split('/').pop() ?? path
-  return name.replace(/^\d+-/, '')
-}
-
 export function DocumentPreviewModal({
   path,
   fileName,
@@ -76,11 +59,11 @@ export function DocumentPreviewModal({
           <h2 className="truncate text-sm font-medium text-slate-900">{fileName}</h2>
           <div className="flex shrink-0 items-center gap-2">
             {url && (
-              <a href={url} target="_blank" rel="noreferrer" className="mc-btn-ghost !px-2 !py-1 !text-xs">
+              <a href={url} target="_blank" rel="noreferrer" className="mc-btn-ghost px-2! py-1! text-xs!">
                 Herunterladen
               </a>
             )}
-            <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost !p-1.5">
+            <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost p-1.5!">
               <X size={16} />
             </button>
           </div>

@@ -13,7 +13,8 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
 
 ## Kurzfassung der Architektur
 
-- **Frontend:** React + Vite + TypeScript + Tailwind, komplett statisch, gehostet auf GitHub Pages.
+- **Frontend:** React 18 + Vite 8 + TypeScript + Tailwind 4 + React Router 7, komplett statisch,
+  gehostet auf GitHub Pages.
 - **Backend:** Supabase (Postgres + Auth + Storage, Free-Tier, EU-Region). Kein eigener Server.
 - **Keine KI-API-Integration im System.** Mitglieder nutzen ihre eigene (meist kostenlose) KI komplett
   außerhalb des Dashboards und laden nur das fertige Ergebnis als Datei/Text hoch. Das ist eine bewusste
@@ -269,8 +270,18 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   **werfen** jetzt bei Fehlern, statt sie in einen eigenen State zu schreiben – der Dialog zeigt sie
   an und bleibt offen, sonst sähe ein Fehlschlag wie ein Erfolg aus.
 - **Login-Tests**: Passwort-Eingabe im Browser ist tabu (Sicherheitsregel), daher keine echten
-  Login-Rundgänge – Verifikation läuft über `tsc -b`/`vite build` + statische Test-Harnesses. Nur
+  Login-Rundgänge – Verifikation läuft über `npm run lint` + `npm run build` (`tsc -b`/`vite build`)
+  + statische Test-Harnesses. Beide laufen ohne eine einzige Meldung durch; neue Warnungen beheben
+  statt sie stehen zu lassen. Nur
   Seiten ohne Login (Impressum/Datenschutz) lassen sich echt im Browser testen.
+- **Tailwind 4 hat keine `tailwind.config.js` mehr**: Theme-Tokens (Schrift, Partei-Farben) stehen
+  im `@theme`-Block von `src/index.css`, die `mc-*`-Bausteine als `@utility`. Dort steht auch ein
+  Kompatibilitätsblock, der drei v3-Standards zurückholt (Rahmenfarbe gray-200, Placeholder gray-400,
+  Hand-Cursor auf Buttons) – ohne ihn sähe jedes `border` ohne Farbklasse dunkel aus. Klassennamen
+  haben sich verschoben: v3-`shadow-sm` heißt jetzt `shadow-xs`, `rounded` heißt `rounded-sm`, das
+  `!important` steht hinten (`px-2!`).
+- **Seiten hinter dem Login werden per `React.lazy` nachgeladen** (`App.tsx`): als ein einziges
+  Bundle lag die App über Vites 500-kB-Warnschwelle. Neue geschützte Seiten ebenso einbinden.
 - **GitHub Pages SPA-Routing**: Deploy-Workflow kopiert `dist/index.html` nach `dist/404.html`, sonst
   404 bei Reload/Direktaufruf einer Unterroute.
 - **ICS-Import**: läuft auf Node 22 (nicht 20, wegen supabase-js Realtime-Client). URLs mit

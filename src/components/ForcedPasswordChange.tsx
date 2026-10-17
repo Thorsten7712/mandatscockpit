@@ -75,13 +75,13 @@ export function ForcedPasswordChange({ userId, onDone }: { userId: string; onDon
           required
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="submit" disabled={saving} className="mc-btn-primary w-full !py-2.5">
+        <button type="submit" disabled={saving} className="mc-btn-primary w-full py-2.5!">
           {saving ? 'Speichern...' : 'Passwort setzen'}
         </button>
         <button
           type="button"
           onClick={() => supabase.auth.signOut()}
-          className="mc-btn-ghost w-full !py-1.5 text-xs text-slate-400"
+          className="mc-btn-ghost w-full py-1.5! text-xs text-slate-400"
         >
           Abmelden
         </button>

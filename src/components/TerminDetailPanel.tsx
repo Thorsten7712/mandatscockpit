@@ -5,7 +5,8 @@ import type { AntragRow, CalendarSource, DokumentRow, Ebene, EventRow, SessionRo
 import { TodoDetailModal } from './TodoDetailModal'
 import { AntragDetailModal } from './AntragDetailModal'
 import { DokumentDetailModal } from './DokumentDetailModal'
-import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
+import { DocumentPreviewModal } from './DocumentPreviewModal'
+import { fileNameFromPath } from '../lib/dateien'
 import { useLoeschDialog } from './LoeschDialog'
 import { formatDateTime } from '../lib/format'
 import { antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
@@ -383,14 +384,14 @@ export function TerminDetailPanel({
               )}
               {(event || canManageSession) && (
                 <div className="flex gap-2 pt-2">
-                  <button type="button" onClick={startEdit} className="mc-btn-ghost !px-2 !py-1 !text-xs">
+                  <button type="button" onClick={startEdit} className="mc-btn-ghost px-2! py-1! text-xs!">
                     Bearbeiten
                   </button>
                   {event && (
                     <button
                       type="button"
                       onClick={handleToggleAbsage}
-                      className="mc-btn-ghost !px-2 !py-1 !text-xs"
+                      className="mc-btn-ghost px-2! py-1! text-xs!"
                     >
                       {event.status === 'abgesagt' ? 'Reaktivieren' : 'Absagen'}
                     </button>
@@ -417,7 +418,7 @@ export function TerminDetailPanel({
                         ausfuehren: handleDelete,
                       })
                     }
-                    className="mc-btn-danger !px-2 !py-1 !text-xs"
+                    className="mc-btn-danger px-2! py-1! text-xs!"
                   >
                     Löschen
                   </button>
@@ -536,7 +537,7 @@ export function TerminDetailPanel({
             <button
               type="button"
               onClick={() => setOpenTodoId(t.id)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-800 shadow-sm transition-shadow duration-150 hover:shadow-md"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-800 shadow-xs transition-shadow duration-150 hover:shadow-md"
             >
               {t.titel}
             </button>
@@ -556,10 +557,10 @@ export function TerminDetailPanel({
                 <button
                   type="button"
                   onClick={() => setOpenAntragId(a.id)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                  className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
                 >
                   <span
-                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
+                    className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
                   >
                     {antragStatusLabel(a.status, a.ergebnis)}
                   </span>
@@ -595,7 +596,7 @@ export function TerminDetailPanel({
                   )}
                   <span className="min-w-0 flex-1 truncate">{t.top_titel || t.titel || '(ohne Titel)'}</span>
                   {t.ergebnis && (
-                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                    <span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
                       {t.ergebnis}
                     </span>
                   )}
@@ -607,7 +608,7 @@ export function TerminDetailPanel({
                     <button
                       type="button"
                       onClick={() => setOpenDokument(dok)}
-                      className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-800 shadow-sm transition-shadow duration-150 hover:shadow-md"
+                      className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-800 shadow-xs transition-shadow duration-150 hover:shadow-md"
                     >
                       {inhalt}
                     </button>
@@ -634,13 +635,13 @@ export function TerminDetailPanel({
       <h3 className="mb-2 text-sm font-semibold text-slate-900">Notizen &amp; Dokumente</h3>
       <ul className="mb-3 space-y-2">
         {summaries.map((s) => (
-          <li key={s.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <li key={s.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
             {s.inhalt && <p className="text-sm whitespace-pre-wrap">{s.inhalt}</p>}
             {s.datei_url && (
               <button
                 type="button"
                 onClick={() => setPreviewDoc({ path: s.datei_url!, name: fileNameFromPath(s.datei_url!) })}
-                className="mc-btn-ghost !px-2 !py-1 !text-xs"
+                className="mc-btn-ghost px-2! py-1! text-xs!"
               >
                 📎 {fileNameFromPath(s.datei_url)}
               </button>
@@ -664,7 +665,7 @@ export function TerminDetailPanel({
                       ausfuehren: () => handleDeleteSummary(s.id),
                     })
                   }
-                  className="mc-btn-danger !px-2 !py-1 !text-xs"
+                  className="mc-btn-danger px-2! py-1! text-xs!"
                 >
                   Löschen
                 </button>
@@ -791,7 +792,7 @@ export function TerminDetailPanel({
               onClick={onCloseAll}
               aria-label="Schließen"
               title="Schließen"
-              className="mc-btn-ghost shrink-0 !p-2"
+              className="mc-btn-ghost shrink-0 p-2!"
             >
               <X size={18} />
             </button>

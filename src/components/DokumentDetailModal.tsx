@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate, formatDateTime, startOfTodayIso } from '../lib/format'
-import { DocumentPreviewModal, fileNameFromPath } from './DocumentPreviewModal'
+import { DocumentPreviewModal } from './DocumentPreviewModal'
+import { fileNameFromPath } from '../lib/dateien'
 import { useLoeschDialog } from './LoeschDialog'
 import { VorlageAnsicht } from './VorlageAnsicht'
 import { TagEditor } from './TagEditor'
@@ -284,9 +285,9 @@ export function DokumentDetailModal({
     await loadLinkedTodos()
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadLinkedSessions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [document.id])
 
   useEffect(() => {
@@ -385,7 +386,7 @@ export function DokumentDetailModal({
       setShareNamesByChild(new Map())
       setShareIdsByChild(new Map())
     }
-  }, [children, userId])
+  }, [children, userId, document.id, document.sichtbarkeit])
 
   // Kandidaten für "Einzelne Personen": gleiche Partei, mindestens eine
   // gemeinsame Ebene - profiles_select_same_partei_ebene (0020) begrenzt die
@@ -611,7 +612,7 @@ export function DokumentDetailModal({
   // Eigene Variable, weil der Übersichts-Modus alle Dokument-Aktionen
   // ausblendet, das Schließen aber bleiben muss.
   const schliessenKnopf = (
-    <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost !p-2">
+    <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost p-2!">
       <X size={18} />
     </button>
   )
@@ -627,7 +628,7 @@ export function DokumentDetailModal({
             aria-pressed={variante === wert}
             title={titel}
             className={`rounded-md p-1.5 transition-colors ${
-              variante === wert ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              variante === wert ? 'bg-white text-primary shadow-xs' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <Icon size={15} />
@@ -638,7 +639,7 @@ export function DokumentDetailModal({
         <button
           type="button"
           onClick={() => setNotizenOffen((v) => !v)}
-          className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs"
+          className="mc-btn-ghost gap-1.5! px-2.5! py-1.5! text-xs!"
         >
           {notizenOffen ? 'Notizen ausblenden' : 'Notizen'}
         </button>
@@ -648,7 +649,7 @@ export function DokumentDetailModal({
           type="button"
           onClick={() => setPreviewDoc({ path: document.datei_url!, name: fileNameFromPath(document.datei_url!) })}
           title={`Original-PDF öffnen: ${fileNameFromPath(document.datei_url)}`}
-          className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs !text-primary"
+          className="mc-btn-ghost gap-1.5! px-2.5! py-1.5! text-xs! text-primary!"
         >
           <FileText size={14} />
           <span className="hidden sm:inline">Original-PDF</span>
@@ -668,7 +669,7 @@ export function DokumentDetailModal({
                 ? 'Liegt wegen der vergangenen Sitzung bereits im Archiv - zusätzlich dauerhaft archivieren'
                 : 'Ins Archiv legen'
           }
-          className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs"
+          className="mc-btn-ghost gap-1.5! px-2.5! py-1.5! text-xs!"
         >
           {archiviertAm ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           <span className="hidden sm:inline">{archiviertAm ? 'Im Archiv' : 'Archivieren'}</span>
@@ -679,7 +680,7 @@ export function DokumentDetailModal({
         onClick={toggleGelesen}
         aria-label={istGelesen ? 'Als ungelesen markieren' : 'Als gelesen markieren'}
         title={istGelesen ? 'Als ungelesen markieren' : 'Als gelesen markieren'}
-        className="mc-btn-ghost !gap-1.5 !px-2.5 !py-1.5 !text-xs"
+        className="mc-btn-ghost gap-1.5! px-2.5! py-1.5! text-xs!"
       >
         <span className={`h-2 w-2 rounded-full ${istGelesen ? 'bg-slate-300' : 'bg-primary'}`} />
         <span className="hidden sm:inline">{istGelesen ? 'Gelesen' : 'Ungelesen'}</span>
@@ -712,7 +713,7 @@ export function DokumentDetailModal({
           }
           aria-label="Löschen"
           title="Löschen"
-          className="mc-btn-ghost !p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+          className="mc-btn-ghost p-2! text-slate-500 hover:bg-red-50 hover:text-red-600"
         >
           <Trash2 size={17} />
         </button>
@@ -726,7 +727,7 @@ export function DokumentDetailModal({
       <h2 className="mb-2 font-semibold">Meine Notizen &amp; Dokumente</h2>
       <ul className="mb-4 space-y-2">
         {children.map((c) => (
-              <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+              <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
                 <div className="mb-1 flex flex-wrap items-center gap-1.5">
                   {c.user_id === userId ? (
                     <button
@@ -758,10 +759,10 @@ export function DokumentDetailModal({
                     />
                     {editShareError && <p className="mt-1.5 text-xs text-red-600">{editShareError}</p>}
                     <div className="mt-2 flex gap-1.5">
-                      <button type="button" onClick={() => saveEditSharing(c)} disabled={editSaving} className="mc-btn-primary !px-2.5 !py-1 !text-xs">
+                      <button type="button" onClick={() => saveEditSharing(c)} disabled={editSaving} className="mc-btn-primary px-2.5! py-1! text-xs!">
                         {editSaving ? 'Speichern...' : 'Speichern'}
                       </button>
-                      <button type="button" onClick={() => setEditingChildId(null)} className="mc-btn-ghost !px-2.5 !py-1 !text-xs">
+                      <button type="button" onClick={() => setEditingChildId(null)} className="mc-btn-ghost px-2.5! py-1! text-xs!">
                         Abbrechen
                       </button>
                     </div>
@@ -780,7 +781,7 @@ export function DokumentDetailModal({
                   <button
                     type="button"
                     onClick={() => setPreviewDoc({ path: c.datei_url!, name: fileNameFromPath(c.datei_url!) })}
-                    className="mc-btn-ghost !mt-1 !px-2 !py-1 !text-xs"
+                    className="mc-btn-ghost mt-1! px-2! py-1! text-xs!"
                   >
                     📎 {fileNameFromPath(c.datei_url)}
                   </button>
@@ -802,7 +803,7 @@ export function DokumentDetailModal({
                           ausfuehren: () => handleDeleteChild(c),
                         })
                       }
-                      className="mc-btn-danger !px-2 !py-1 !text-xs"
+                      className="mc-btn-danger px-2! py-1! text-xs!"
                     >
                       Löschen
                     </button>
@@ -978,7 +979,7 @@ export function DokumentDetailModal({
             <div className={`mt-2 flex-wrap items-center gap-1.5 ${zeigeUebersicht ? 'hidden' : 'flex'}`}>
               {document.ebene && (
                 <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[document.ebene].chip}`}
+                  className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[document.ebene].chip}`}
                 >
                   {EBENE_LABEL[document.ebene]}
                   {document.gliederung ? ` · ${document.gliederung}` : ''}
@@ -1077,7 +1078,7 @@ export function DokumentDetailModal({
                             type="button"
                             onClick={() => handleUnlinkSession(si.id)}
                             disabled={savingSession}
-                            className="mc-btn-ghost !shrink-0 !px-2 !py-0.5 !text-[11px]"
+                            className="mc-btn-ghost shrink-0! px-2! py-0.5! text-[11px]!"
                           >
                             Lösen
                           </button>
@@ -1091,7 +1092,7 @@ export function DokumentDetailModal({
                       value=""
                       onChange={(e) => handleLinkSession(e.target.value)}
                       disabled={savingSession}
-                      className="mc-input w-full !text-sm"
+                      className="mc-input w-full text-sm!"
                     >
                       <option value="">Sitzung hinzufügen...</option>
                       {ownSessions
@@ -1117,7 +1118,7 @@ export function DokumentDetailModal({
                         <button
                           type="button"
                           onClick={() => handleUnlinkTodo(t.id)}
-                          className="mc-btn-ghost !shrink-0 !px-2 !py-0.5 !text-[11px]"
+                          className="mc-btn-ghost shrink-0! px-2! py-0.5! text-[11px]!"
                         >
                           Lösen
                         </button>
@@ -1133,7 +1134,7 @@ export function DokumentDetailModal({
                       onChange={(e) => handleSearchTodos(e.target.value)}
                       onFocus={() => setTodoDropdownOpen(true)}
                       onBlur={() => setTimeout(() => setTodoDropdownOpen(false), 150)}
-                      className="mc-input w-full !text-sm"
+                      className="mc-input w-full text-sm!"
                     />
                     {todoDropdownOpen && todoSearch.trim() && (
                       <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">

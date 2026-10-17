@@ -51,7 +51,7 @@ export function VorlageAnsicht({ inhalt, zentriert = false }: { inhalt: string |
       {abschnitte.length > 0 && (
         <nav
           aria-label="Abschnitte"
-          className="sticky top-0 z-10 flex shrink-0 gap-1.5 overflow-x-auto border-b border-slate-100 bg-white/95 px-5 py-2 backdrop-blur"
+          className="sticky top-0 z-10 flex shrink-0 gap-1.5 overflow-x-auto border-b border-slate-100 bg-white/95 px-5 py-2 backdrop-blur-sm"
         >
           {beschlussvorschlag && (
             <button

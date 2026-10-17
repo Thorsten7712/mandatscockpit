@@ -7,7 +7,8 @@ import { TerminDetailModal } from '../components/TerminDetailModal'
 import { TodoDetailModal } from '../components/TodoDetailModal'
 import { AntragDetailModal } from '../components/AntragDetailModal'
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
-import { DocumentPreviewModal, fileNameFromPath } from '../components/DocumentPreviewModal'
+import { DocumentPreviewModal } from '../components/DocumentPreviewModal'
+import { fileNameFromPath } from '../lib/dateien'
 import { formatDate, formatDateTime, formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
 import { EBENE_COLOR, EBENE_LABEL, sourceColorById, tagColor } from '../lib/sourceColors'
 import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
@@ -286,7 +287,7 @@ export default function Archiv() {
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="h-1.5 bg-topbar" aria-hidden="true" />
-      <header className="bg-gradient-to-r from-primary to-primary-hover text-white shadow-md">
+      <header className="bg-linear-to-r from-primary to-primary-hover text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <h1 className="text-lg font-bold">Archiv</h1>
           <Link to="/" className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">
@@ -333,7 +334,7 @@ export default function Archiv() {
               <button
                 type="button"
                 onClick={() => setShowNewSession((v) => !v)}
-                className="mc-btn-ghost !text-xs"
+                className="mc-btn-ghost text-xs!"
               >
                 <Plus size={14} /> Sitzung nachtragen
               </button>
@@ -422,7 +423,7 @@ export default function Archiv() {
                 </div>
               </form>
             )}
-            <ul className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+            <ul className="max-h-128 space-y-2 overflow-y-auto pr-1">
               {sessions.map((s) => {
                 const { day, month } = formatDayMonth(s.datum)
                 const source = s.source_id ? sourceById.get(s.source_id) : undefined
@@ -433,7 +434,7 @@ export default function Archiv() {
                     <button
                       type="button"
                       onClick={() => setSelectedSession(s.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md ${abgesagt ? 'opacity-60' : ''}`}
+                      className={`flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md ${abgesagt ? 'opacity-60' : ''}`}
                     >
                       <span
                         className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg ${abgesagt ? 'bg-red-50 text-red-400' : farbe.chip}`}
@@ -452,12 +453,12 @@ export default function Archiv() {
                             </span>
                           )}
                           <span
-                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
+                            className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
                           >
                             {EBENE_LABEL[source?.ebene ?? s.ebene ?? ''] ?? 'Sitzung'}
                           </span>
                           {abgesagt && (
-                            <span className="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-500 no-underline">
+                            <span className="shrink-0 rounded-sm bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-500 no-underline">
                               Abgesagt
                             </span>
                           )}
@@ -501,7 +502,7 @@ export default function Archiv() {
                   <button
                     type="button"
                     onClick={() => setOpenTodoId(t.id)}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-slate-400 line-through">
@@ -509,7 +510,7 @@ export default function Archiv() {
                       </span>
                       <span className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-slate-500">
                         {t.zustaendig && (
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5">👤 {t.zustaendig}</span>
+                          <span className="rounded-sm bg-slate-100 px-1.5 py-0.5">👤 {t.zustaendig}</span>
                         )}
                         {t.erledigt_am && <span>Erledigt am {formatDate(t.erledigt_am)}</span>}
                         <span>Erstellt am {formatDate(t.created_at)}</span>
@@ -539,7 +540,7 @@ export default function Archiv() {
                       onClick={() =>
                         setPreviewDoc({ path: eintrag.row.datei_url!, name: fileNameFromPath(eintrag.row.datei_url!) })
                       }
-                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
                     >
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium text-slate-900">
@@ -547,7 +548,7 @@ export default function Archiv() {
                         </span>
                         <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                           {docLabels.get(eintrag.id) && (
-                            <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                            <span className="truncate rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
                               {docLabels.get(eintrag.id)}
                             </span>
                           )}
@@ -561,14 +562,14 @@ export default function Archiv() {
                     <button
                       type="button"
                       onClick={() => setOpenHubDoc(eintrag.row)}
-                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
                     >
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span className="truncate text-sm font-medium text-slate-900">{eintrag.row.titel}</span>
                           {eintrag.row.ebene && (
                             <span
-                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[eintrag.row.ebene].chip}`}
+                              className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[eintrag.row.ebene].chip}`}
                             >
                               {EBENE_LABEL[eintrag.row.ebene]}
                             </span>
@@ -583,7 +584,7 @@ export default function Archiv() {
                           ))}
                         </span>
                         <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-medium">
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-slate-100 px-1.5 py-0.5 font-medium">
                             <Archive className="h-3 w-3" />
                             {eintrag.grund === 'sitzung'
                               ? (hubSitzungen.get(eintrag.row.id) ?? [])
@@ -620,10 +621,10 @@ export default function Archiv() {
                   <li key={a.id}>
                     <div
                       onClick={() => setOpenAntragId(a.id)}
-                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow duration-150 hover:shadow-md"
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
                     >
                       <span
-                        className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
+                        className={`shrink-0 rounded-sm px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
                       >
                         {antragStatusLabel(a.status, a.ergebnis)}
                       </span>
@@ -631,7 +632,7 @@ export default function Archiv() {
                         <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>
                         <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                           {a.ausschuss && (
-                            <span className="truncate rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                            <span className="truncate rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
                               {a.ausschuss}
                             </span>
                           )}
@@ -642,7 +643,7 @@ export default function Archiv() {
                                 e.stopPropagation()
                                 setPreviewDoc({ path: doc.datei_url!, name: fileNameFromPath(doc.datei_url!) })
                               }}
-                              className="mc-btn-ghost !px-1.5 !py-0.5 !text-xs"
+                              className="mc-btn-ghost px-1.5! py-0.5! text-xs!"
                             >
                               📎 {fileNameFromPath(doc.datei_url)}
                             </button>

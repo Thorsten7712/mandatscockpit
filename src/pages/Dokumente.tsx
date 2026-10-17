@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, Ebene, Profile } from '../lib/types'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
-import { fileExtension, fileNameFromPath, IMAGE_EXTENSIONS } from '../components/DocumentPreviewModal'
+import { fileExtension, fileNameFromPath, IMAGE_EXTENSIONS } from '../lib/dateien'
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { TagEditor } from '../components/TagEditor'
 import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
@@ -345,12 +345,12 @@ export default function Dokumente() {
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="h-1.5 bg-topbar" aria-hidden="true" />
-      <header className="bg-gradient-to-r from-primary to-primary-hover text-white shadow-md">
+      <header className="bg-linear-to-r from-primary to-primary-hover text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold">Dokumente</h1>
             {unreadCount > 0 && (
-              <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">
+              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">
                 {unreadCount}
               </span>
             )}
@@ -567,7 +567,7 @@ export default function Dokumente() {
                     </span>
                     {d.ebene && (
                       <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[d.ebene].chip}`}
+                        className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[d.ebene].chip}`}
                       >
                         {EBENE_LABEL[d.ebene]}
                         {d.gliederung ? ` · ${d.gliederung}` : ''}
@@ -619,7 +619,7 @@ export default function Dokumente() {
               <select
                 value={proSeite}
                 onChange={(e) => handleProSeite(Number(e.target.value))}
-                className="mc-input !w-auto !py-1 !text-sm"
+                className="mc-input w-auto! py-1! text-sm!"
               >
                 {SEITENGROESSEN.map((g) => (
                   <option key={g} value={g}>
@@ -641,7 +641,7 @@ export default function Dokumente() {
                     onClick={() => setSeite(aktuelleSeite - 1)}
                     disabled={aktuelleSeite <= 1}
                     aria-label="Vorherige Seite"
-                    className="mc-btn-ghost !p-1.5"
+                    className="mc-btn-ghost p-1.5!"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
@@ -653,7 +653,7 @@ export default function Dokumente() {
                     onClick={() => setSeite(aktuelleSeite + 1)}
                     disabled={aktuelleSeite >= seitenAnzahl}
                     aria-label="Nächste Seite"
-                    className="mc-btn-ghost !p-1.5"
+                    className="mc-btn-ghost p-1.5!"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>

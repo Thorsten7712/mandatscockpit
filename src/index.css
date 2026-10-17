@@ -1,6 +1,226 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Partei-Theme-Tokens, Werte kommen aus den [data-theme=...]-Blöcken unten.
+ * RGB-Tripel-Syntax, damit Tailwind-Alpha (z. B. bg-primary/10) funktioniert. */
+@theme {
+  --font-sans:
+    'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-primary: rgb(var(--mc-primary));
+  --color-primary-hover: rgb(var(--mc-primary-hover));
+  --color-accent: rgb(var(--mc-accent));
+  --color-topbar: rgb(var(--mc-topbar));
+}
+
+/* Kompatibilität zu Tailwind v3: v4 hat Rahmenfarbe (jetzt currentcolor),
+ * Placeholder-Farbe und Button-Cursor (jetzt default) geändert. Ohne diese
+ * Regeln sähe jedes `border` ohne Farbklasse dunkel aus und Buttons hätten
+ * keinen Hand-Cursor mehr. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Kleines gemeinsames Komponenten-Vokabular (bewusst zentral statt pro
+ * Komponente, damit Buttons/Inputs/Cards überall identisch aussehen und
+ * sich identisch anfühlen - gleiche Radien, gleiches Press-Feedback,
+ * gleiche Fokusringe). Layout bleibt Utility-Klassen im JSX. */
+
+@utility mc-card {
+  @apply rounded-xl border border-slate-200 bg-white shadow-xs;
+}
+
+@utility mc-input {
+  @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-xs placeholder:text-slate-400;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+@utility mc-btn {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg font-medium select-none;
+  transition:
+    transform 160ms var(--mc-ease-out),
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+  &:active {
+    transform: scale(0.97);
+  }
+  &:disabled {
+    @apply pointer-events-none opacity-50;
+  }
+}
+
+@utility mc-btn-primary {
+  @apply mc-btn bg-primary px-3.5 py-2 text-sm text-white shadow-xs hover:bg-primary-hover;
+}
+
+@utility mc-btn-ghost {
+  @apply mc-btn px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-900/5 hover:text-slate-900;
+}
+
+@utility mc-btn-danger {
+  @apply mc-btn px-2.5 py-1.5 text-sm text-red-600 hover:bg-red-50;
+}
+
+/* Markdown-Darstellung der ALLRIS-Vorlagen im Dokumenten-Hub. Bewusst eigenes
+ * Register statt mc-presseschau-content: die Presseschau ist Serif und
+ * zweispaltig wie eine Zeitung, eine Sitzungsvorlage wird am Stück gelesen
+ * und enthält Tabellen und Formularblöcke. */
+@utility mc-dokument-content {
+  @apply text-[15px] leading-relaxed text-slate-700;
+
+  & h2 {
+    @apply mb-2 mt-7 border-b border-slate-200 pb-1.5 text-xs font-bold uppercase tracking-wide text-slate-900;
+  }
+
+  & h2:first-child {
+    @apply mt-0;
+  }
+
+  & h3 {
+    @apply mb-1.5 mt-5 text-sm font-semibold text-slate-900;
+  }
+
+  & p {
+    @apply mb-3;
+  }
+
+  & ul {
+    @apply mb-3 list-disc pl-5;
+  }
+
+  & ol {
+    @apply mb-3 list-decimal pl-5;
+  }
+
+  & li {
+    @apply mb-1;
+  }
+
+  & strong {
+    @apply font-semibold text-slate-900;
+  }
+
+  & a {
+    @apply text-primary underline underline-offset-2;
+  }
+
+  & table {
+    @apply w-full border-collapse text-[13px];
+  }
+
+  & th,
+  & td {
+    @apply border border-slate-200 px-2.5 py-1.5 text-left align-top;
+  }
+
+  & th {
+    @apply bg-slate-50 font-semibold text-slate-900;
+  }
+
+  /* Beim PDF-Auszug zerfallene Formularblöcke ("Finanzielle Auswirkungen",
+   * "Prüfung von Beteiligungsrechten"): Spaltenausrichtung bleibt erhalten,
+   * optisch zurückgenommen, damit sie als Rohausgabe erkennbar sind statt nach
+   * kaputtem Fließtext auszusehen. whitespace-pre statt pre-wrap: ein
+   * Umbruch risse die Spalten einer Formularzeile auseinander, breite Zeilen
+   * scrollen stattdessen horizontal.
+   *
+   * Scroll-Schatten: iPadOS blendet Scrollbalken aus, ein abgeschnittener
+   * Betrag am rechten Rand fiele in der Sitzung nicht auf. Die beiden
+   * "local"-Verläufe scrollen mit dem Inhalt und decken den Schatten an dem
+   * Rand ab, an dem nichts mehr verborgen ist; die "scroll"-Schatten bleiben
+   * am Rand stehen. Reines CSS, funktioniert in Safari. */
+  & pre {
+    @apply mb-3 overflow-x-auto whitespace-pre rounded-lg border border-slate-100 border-l-[3px] border-l-slate-300 px-3 py-2 font-mono text-[11px] leading-snug text-slate-500;
+    background:
+      linear-gradient(to right, var(--color-slate-50) 30%, rgb(248 250 252 / 0))
+        left center / 2.5rem 100% no-repeat,
+      linear-gradient(to left, var(--color-slate-50) 30%, rgb(248 250 252 / 0))
+        right center / 2.5rem 100% no-repeat,
+      radial-gradient(
+          farthest-side at 0 50%,
+          rgb(15 23 42 / 0.18),
+          rgb(15 23 42 / 0)
+        )
+        left center / 0.9rem 100% no-repeat,
+      radial-gradient(
+          farthest-side at 100% 50%,
+          rgb(15 23 42 / 0.18),
+          rgb(15 23 42 / 0)
+        )
+        right center / 0.9rem 100% no-repeat,
+      var(--color-slate-50);
+    background-attachment: local, local, scroll, scroll;
+  }
+
+  & code {
+    @apply font-mono text-[13px];
+  }
+}
+
+@utility mc-tabellenrahmen {
+  @apply mb-3 overflow-x-auto;
+}
+
+/* Minimales Markdown-Styling für die Presseschau (PresseschauSection.tsx) -
+ * kein @tailwindcss/typography, da nur eine Handvoll Elemente vorkommen
+ * (Überschriften, Absätze, Listen, Fett/Kursiv, Trennlinie). */
+@utility mc-presseschau-content {
+  & :where(h1, h2, h3) {
+    @apply mb-2 mt-4 break-inside-avoid font-serif font-bold text-slate-900 first:mt-0;
+  }
+  & h1 {
+    @apply text-lg;
+  }
+  & h2 {
+    @apply border-b border-slate-300 pb-1 text-base;
+  }
+  & h3 {
+    @apply text-sm uppercase tracking-wide text-slate-600;
+  }
+  & p {
+    @apply mb-3 break-inside-avoid-column;
+  }
+  & ul,
+  & ol {
+    @apply mb-3 ml-4 list-outside space-y-1;
+  }
+  & ul {
+    @apply list-disc;
+  }
+  & ol {
+    @apply list-decimal;
+  }
+  & strong {
+    @apply font-semibold text-slate-900;
+  }
+  & em {
+    @apply text-slate-600;
+  }
+  & hr {
+    @apply my-4 border-slate-300;
+  }
+  & a {
+    @apply text-primary underline;
+  }
+}
 
 /* Formularelemente global im Partei-Theme: Fokus-Ring und Checkbox/Radio-
  * Akzentfarbe folgen --mc-primary, ohne dass jede Komponente eigene
@@ -36,177 +256,6 @@
   input[type='checkbox'],
   input[type='radio'] {
     accent-color: rgb(var(--mc-primary));
-  }
-}
-
-/* Kleines gemeinsames Komponenten-Vokabular (bewusst zentral statt pro
- * Komponente, damit Buttons/Inputs/Cards überall identisch aussehen und
- * sich identisch anfühlen - gleiche Radien, gleiches Press-Feedback,
- * gleiche Fokusringe). Layout bleibt Utility-Klassen im JSX. */
-@layer components {
-  .mc-card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
-  }
-
-  .mc-input {
-    @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400;
-    transition: border-color 150ms ease, box-shadow 150ms ease;
-  }
-
-  .mc-btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg font-medium select-none;
-    transition:
-      transform 160ms var(--mc-ease-out),
-      background-color 150ms ease,
-      color 150ms ease,
-      box-shadow 150ms ease;
-  }
-  .mc-btn:active {
-    transform: scale(0.97);
-  }
-  .mc-btn:disabled {
-    @apply pointer-events-none opacity-50;
-  }
-
-  .mc-btn-primary {
-    @apply mc-btn bg-primary px-3.5 py-2 text-sm text-white shadow-sm hover:bg-primary-hover;
-  }
-
-  .mc-btn-ghost {
-    @apply mc-btn px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-900/5 hover:text-slate-900;
-  }
-
-  .mc-btn-danger {
-    @apply mc-btn px-2.5 py-1.5 text-sm text-red-600 hover:bg-red-50;
-  }
-
-  /* Minimales Markdown-Styling für die Presseschau (PresseschauSection.tsx) -
-   * kein @tailwindcss/typography, da nur eine Handvoll Elemente vorkommen
-   * (Überschriften, Absätze, Listen, Fett/Kursiv, Trennlinie). */
-  /* Markdown-Darstellung der ALLRIS-Vorlagen im Dokumenten-Hub. Bewusst eigenes
-   * Register statt mc-presseschau-content: die Presseschau ist Serif und
-   * zweispaltig wie eine Zeitung, eine Sitzungsvorlage wird am Stück gelesen
-   * und enthält Tabellen und Formularblöcke. */
-  .mc-dokument-content {
-    @apply text-[15px] leading-relaxed text-slate-700;
-  }
-
-  .mc-dokument-content h2 {
-    @apply mb-2 mt-7 border-b border-slate-200 pb-1.5 text-xs font-bold uppercase tracking-wide text-slate-900;
-  }
-
-  .mc-dokument-content h2:first-child {
-    @apply mt-0;
-  }
-
-  .mc-dokument-content h3 {
-    @apply mb-1.5 mt-5 text-sm font-semibold text-slate-900;
-  }
-
-  .mc-dokument-content p {
-    @apply mb-3;
-  }
-
-  .mc-dokument-content ul {
-    @apply mb-3 list-disc pl-5;
-  }
-
-  .mc-dokument-content ol {
-    @apply mb-3 list-decimal pl-5;
-  }
-
-  .mc-dokument-content li {
-    @apply mb-1;
-  }
-
-  .mc-dokument-content strong {
-    @apply font-semibold text-slate-900;
-  }
-
-  .mc-dokument-content a {
-    @apply text-primary underline underline-offset-2;
-  }
-
-  .mc-dokument-content table {
-    @apply w-full border-collapse text-[13px];
-  }
-
-  .mc-dokument-content th,
-  .mc-dokument-content td {
-    @apply border border-slate-200 px-2.5 py-1.5 text-left align-top;
-  }
-
-  .mc-dokument-content th {
-    @apply bg-slate-50 font-semibold text-slate-900;
-  }
-
-  /* Beim PDF-Auszug zerfallene Formularblöcke ("Finanzielle Auswirkungen",
-   * "Prüfung von Beteiligungsrechten"): Spaltenausrichtung bleibt erhalten,
-   * optisch zurückgenommen, damit sie als Rohausgabe erkennbar sind statt nach
-   * kaputtem Fließtext auszusehen. whitespace-pre statt pre-wrap: ein
-   * Umbruch risse die Spalten einer Formularzeile auseinander, breite Zeilen
-   * scrollen stattdessen horizontal.
-   *
-   * Scroll-Schatten: iPadOS blendet Scrollbalken aus, ein abgeschnittener
-   * Betrag am rechten Rand fiele in der Sitzung nicht auf. Die beiden
-   * "local"-Verläufe scrollen mit dem Inhalt und decken den Schatten an dem
-   * Rand ab, an dem nichts mehr verborgen ist; die "scroll"-Schatten bleiben
-   * am Rand stehen. Reines CSS, funktioniert in Safari. */
-  .mc-dokument-content pre {
-    @apply mb-3 overflow-x-auto whitespace-pre rounded-lg border border-slate-100 border-l-[3px] border-l-slate-300 px-3 py-2 font-mono text-[11px] leading-snug text-slate-500;
-    background:
-      linear-gradient(to right, theme('colors.slate.50') 30%, rgb(248 250 252 / 0)) left center / 2.5rem 100% no-repeat,
-      linear-gradient(to left, theme('colors.slate.50') 30%, rgb(248 250 252 / 0)) right center / 2.5rem 100% no-repeat,
-      radial-gradient(farthest-side at 0 50%, rgb(15 23 42 / 0.18), rgb(15 23 42 / 0)) left center / 0.9rem 100% no-repeat,
-      radial-gradient(farthest-side at 100% 50%, rgb(15 23 42 / 0.18), rgb(15 23 42 / 0)) right center / 0.9rem 100% no-repeat,
-      theme('colors.slate.50');
-    background-attachment: local, local, scroll, scroll;
-  }
-
-  .mc-dokument-content code {
-    @apply font-mono text-[13px];
-  }
-
-  .mc-tabellenrahmen {
-    @apply mb-3 overflow-x-auto;
-  }
-
-  .mc-presseschau-content :where(h1, h2, h3) {
-    @apply mb-2 mt-4 break-inside-avoid font-serif font-bold text-slate-900 first:mt-0;
-  }
-  .mc-presseschau-content h1 {
-    @apply text-lg;
-  }
-  .mc-presseschau-content h2 {
-    @apply border-b border-slate-300 pb-1 text-base;
-  }
-  .mc-presseschau-content h3 {
-    @apply text-sm uppercase tracking-wide text-slate-600;
-  }
-  .mc-presseschau-content p {
-    @apply mb-3 break-inside-avoid-column;
-  }
-  .mc-presseschau-content ul,
-  .mc-presseschau-content ol {
-    @apply mb-3 ml-4 list-outside space-y-1;
-  }
-  .mc-presseschau-content ul {
-    @apply list-disc;
-  }
-  .mc-presseschau-content ol {
-    @apply list-decimal;
-  }
-  .mc-presseschau-content strong {
-    @apply font-semibold text-slate-900;
-  }
-  .mc-presseschau-content em {
-    @apply text-slate-600;
-  }
-  .mc-presseschau-content hr {
-    @apply my-4 border-slate-300;
-  }
-  .mc-presseschau-content a {
-    @apply text-primary underline;
   }
 }
 
@@ -249,8 +298,8 @@
 }
 
 /*
- * Partei-Themes: Farb-Tokens als RGB-Tripel (für Tailwind-Alpha via
- * rgb(var(--x) / <alpha-value>), siehe tailwind.config.js).
+ * Partei-Themes: Farb-Tokens als RGB-Tripel (für Tailwind-Alpha, siehe
+ * @theme oben).
  *
  * --mc-primary       Primärfarbe (Buttons, aktive Zustände, Selektion)
  * --mc-primary-hover dunklere Hover-Variante

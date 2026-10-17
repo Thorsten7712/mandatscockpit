@@ -100,6 +100,7 @@ function UserForm({
         />
         <input
           type="email"
+          autoComplete="off"
           placeholder="E-Mail"
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -379,7 +380,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
             )
           }
           return (
-            <li key={u.id} className="mc-card flex items-center gap-3 p-3 !rounded-lg">
+            <li key={u.id} className="mc-card flex items-center gap-3 p-3 rounded-lg!">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                 {u.name.charAt(0).toUpperCase() || '?'}
               </span>
@@ -387,25 +388,25 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
                 <span className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate text-sm font-medium text-slate-900">{u.name}</span>
                   <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${rolleBadgeClass(u.rolle)}`}
+                    className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${rolleBadgeClass(u.rolle)}`}
                   >
                     {rolleLabel(u.rolle)}
                   </span>
                   {u.partei && (
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                    <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
                       {themeById(u.partei).label}
                     </span>
                   )}
                   {u.technisch && (
                     <span
                       title="Automatik-Konto - erscheint nicht in den Teilen-Listen"
-                      className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                      className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
                     >
                       Technisch
                     </span>
                   )}
                   {isSelf && (
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                       Du
                     </span>
                   )}
@@ -421,7 +422,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
                 <button
                   type="button"
                   onClick={() => startEdit(u)}
-                  className="mc-btn-ghost !px-2 !py-2"
+                  className="mc-btn-ghost px-2! py-2!"
                   title="Bearbeiten"
                 >
                   <Pencil size={15} />
@@ -430,7 +431,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
                   type="button"
                   onClick={() => loeschRueckfrage(loeschAnfrageFuer(u))}
                   disabled={isSelf}
-                  className="mc-btn-danger !px-2 !py-2"
+                  className="mc-btn-danger px-2! py-2!"
                   title={isSelf ? 'Du kannst dich nicht selbst löschen' : 'Löschen'}
                 >
                   <Trash2 size={15} />

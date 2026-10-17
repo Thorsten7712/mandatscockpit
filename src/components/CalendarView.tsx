@@ -258,7 +258,7 @@ export function CalendarView() {
         </form>
       )}
 
-      <ul className="max-h-[26rem] space-y-2 overflow-y-auto pr-1">
+      <ul className="max-h-104 space-y-2 overflow-y-auto pr-1">
         {filtered.map((item) => {
           const { day, month } = formatDayMonth(item.start)
           const isSelected = selected?.id === item.id
@@ -273,7 +273,7 @@ export function CalendarView() {
               <button
                 type="button"
                 onClick={() => setSelected({ kind: item.kind, id: item.id })}
-                className={`flex w-full items-center gap-3 rounded-xl border bg-white p-3 text-left shadow-sm transition-[box-shadow,border-color] duration-150 hover:shadow-md ${item.abgesagt ? 'opacity-60' : ''} ${isSelected ? 'border-transparent ring-2 ring-primary' : 'border-slate-200'}`}
+                className={`flex w-full items-center gap-3 rounded-xl border bg-white p-3 text-left shadow-xs transition-[box-shadow,border-color] duration-150 hover:shadow-md ${item.abgesagt ? 'opacity-60' : ''} ${isSelected ? 'border-transparent ring-2 ring-primary' : 'border-slate-200'}`}
               >
                 <span
                   className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg ${item.abgesagt ? 'bg-red-50 text-red-400' : farbe.chip}`}
@@ -293,13 +293,13 @@ export function CalendarView() {
                     )}
                     {badgeText && (
                       <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
+                        className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
                       >
                         {badgeText}
                       </span>
                     )}
                     {item.abgesagt && (
-                      <span className="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-500 no-underline">
+                      <span className="shrink-0 rounded-sm bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-500 no-underline">
                         Abgesagt
                       </span>
                     )}
