@@ -2753,3 +2753,64 @@ einen Zeitstempel statt der Dateinummer ein, die bisher lückenlose Historie (`0
 die Dateinamen) käme aus dem Takt, und der nächste `supabase db push` vom Mac bräche ab. So bleiben
 Mac und Cloud austauschbar. Festgehalten in `docs/UEBERGABE-CLOUD.md`, CLAUDE.md und im Skill
 `supabase-migration`.
+
+### RLS-Umbau: Helfer nach `private`, `auth.uid()` einmal pro Abfrage, nur `authenticated` (2026-10-17)
+
+Die vier offenen Datenbank-Befunde des Linters, auf Nutzerwunsch in einem Rutsch inklusive des
+größeren Umbaus (Helfer in ein eigenes Schema). Zwei Migrationen, beide über den Supabase-Connector
+eingespielt.
+
+**`0050_rls_helfer_privat.sql`** fasst drei Befunde zusammen, weil alle dieselben 84 Policies anfassen:
+
+- **Helfer per REST erreichbar.** Vorher von außen geprüft: `POST /rest/v1/rpc/current_user_partei`
+  mit dem öffentlichen anon-Key → HTTP 200. Die elf SECURITY-DEFINER-Funktionen liegen jetzt im
+  Schema `private`, das PostgREST nicht ausliefert (danach 404). `alter function ... set schema`
+  genügt, weil Policies und Trigger Funktionen über ihre OID speichern; die Funktionskörper
+  sprechen ihre Tabellen bereits qualifiziert an und rufen sich nicht gegenseitig auf (geprüft über
+  `pg_proc.prosrc`). Kein RPC-Aufruf aus App, Edge Functions oder Skripten, kein pg_graphql – also
+  niemand, der die Funktionen per REST gebraucht hätte. `authenticated` behält EXECUTE (Policies
+  laufen mit den Rechten des Aufrufers), `anon` nicht mehr.
+- **`auth.uid()` pro Zeile** in 79 Policies → `(select auth.uid())`; ebenso die drei Helfer ohne
+  Argumente. Ausnahme `ebene = ANY (current_user_ebenen())`: Mit `(select ...)` liest Postgres
+  ANY als Vergleich gegen eine Ergebnismenge (`text = text[]`) – gefunden von der Generalprobe.
+- **71 Policies ohne Rollenangabe** → `to authenticated`. Ein echtes latentes Leck darunter:
+  `summaries_select_shared` prüfte nur `sichtbarkeit = 'geteilt'` und galt auch für anon. Zum
+  Zeitpunkt 0 betroffene Einträge, nichts abgeflossen.
+
+Die Policy-Texte sind aus `pg_policies` erzeugt, nicht von Hand geschrieben. Absicherung in drei
+Schichten:
+
+1. **Sichtbarkeits-Momentaufnahme**: pro Konto (6) und anon die über RLS sichtbaren Zeilen in jeder
+   der 29 Tabellen (inkl. `storage.objects`), als Fingerabdruck. Eine `pg_temp`-Funktion schaltet
+   per `set_config('role', 'authenticated', true)` und `request.jwt.claims` auf jeden Nutzer um.
+   Plausibilisiert: die Konten sehen unterschiedlich viel (1.182 bis 5.594 Zeilen), anon 0.
+2. **Policy-Text-Vergleich**: nach dem Umbau die drei Ersetzungen zurückgerechnet → derselbe
+   Fingerabdruck wie vorher. Beweist, dass sich außer den beabsichtigten Ersetzungen kein Zeichen
+   geändert hat.
+3. **Generalprobe**: Messung vorher, Migration, Messung nachher in *einem* `execute_sql`-Aufruf, der
+   absichtlich mit `raise exception` endet. Ein Aufruf ist eine Transaktion (vorher mit einer
+   Probetabelle geprüft), der Abbruch rollt alles zurück und transportiert das Ergebnis in der
+   Fehlermeldung. Die Generalprobe liest ihren eigenen Text über `current_query()` mit und meldet
+   die Prüfsumme des Migrationsteils – so ist belegt, dass exakt die Datei im Repo geprobt wurde.
+   Beim echten Einspielen bricht derselbe Prüfsummenvergleich vor dem `commit` ab, falls der Text
+   abweicht.
+
+Erster Anlauf der Generalprobe scheiterte am `ANY`-Fall oben; der zweite: 0 Abweichungen,
+Fingerabdrücke vorher = nachher (`7be402df…` Sichtbarkeit, `b680f489…` Policy-Texte). Nach dem echten
+Einspielen dieselben Werte. MCP-Server (Service-Role) danach geprüft, funktioniert.
+
+Ein Sicherheitsnetz am Ende von 0050 bricht künftig ab, wenn eine SECURITY-DEFINER-Funktion in
+`public` liegt, eine in `public`/`private` keinen Suchpfad hat oder eine Policy `auth.uid()` ohne
+`select` enthält.
+
+**`0051_fremdschluessel_indizes.sql`**: 34 Indizes für Fremdschlüssel ohne passenden Index, aus
+`pg_constraint` erzeugt. `create index if not exists` prüft nur den Namen; ein Sicherheitsnetz zählt
+deshalb am Ende nach, ob noch ein Fremdschlüssel ohne Index übrig ist.
+
+Linter danach: Security nur noch Leaked-Password-Protection (Dashboard-Schalter, nicht per Migration).
+Performance nur noch „unused index" für die gerade angelegten Indizes und „multiple permissive
+policies" (bewusst so gelassen, siehe `docs/UEBERGABE-CLOUD.md`).
+
+Nebenbei: `supabase/functions/share-todo/` hatte als einzige Function kein eigenes `deno.json`, `deno
+check` schlug dort fehl (CLAUDE.md-Fallstrick zur Modulauflösung). Nachgezogen; alle vier Functions
+prüfen sauber.

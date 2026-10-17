@@ -21,13 +21,22 @@ bestehenden Policies stehen in `docs/CHANGELOG.md`, falls eine Design-Entscheidu
    Tabelle per Subquery abfragt (z. B. eine `profiles`-Policy, die wieder `profiles` abfragt), wirft
    „infinite recursion detected in policy" (Postgres 42P17). Stattdessen eine `SECURITY DEFINER`-
    Helper-Funktion schreiben, die die Tabelle direkt abfragt und RLS damit umgeht (Beispiele im Repo:
-   `current_user_fraktion()`, `antrag_gehoert_nutzer()`, `antrag_ist_geteilt_mit()`).
+   `current_user_fraktion()`, `antrag_gehoert_nutzer()`, `antrag_ist_geteilt_mit()`). Neue Helfer
+   **immer im Schema `private`** anlegen (`create function private.<name>(...) ... security definer
+   set search_path = public, pg_temp`) und in Policies als `private.<name>(...)` aufrufen – in
+   `public` wären sie per `/rest/v1/rpc` für jeden erreichbar. `authenticated` braucht EXECUTE
+   (`grant execute on function private.<name>(...) to authenticated`), weil Policies mit den
+   Rechten des Aufrufers laufen.
 5. **Reihenfolge bei `language sql`-Funktionen beachten**: Solche Funktionen werden beim
    `CREATE FUNCTION` sofort gegen das Schema geparst, nicht erst beim ersten Aufruf. Jede Tabelle, die
    die Funktion referenziert, muss also **vorher** in derselben Migration angelegt sein – sonst bricht
    die komplette Migration transaktional ab (`relation "..." does not exist`).
 6. **Policy-Muster wählen**:
-   - Rein privat: `user_id = auth.uid()` (Beispiel: `todos_manage_own`).
+   - Jede Policy bekommt **`to authenticated`** (außer sie ist bewusst für nicht angemeldete
+     Aufrufer, wie `kontakt_anfragen_insert_all`) und nutzt **`(select auth.uid())`** statt
+     `auth.uid()` – einmal pro Abfrage statt pro Zeile. Ausnahme: in `x = ANY (...)` kein
+     `select` (sonst `text = text[]`-Fehler).
+   - Rein privat: `user_id = (select auth.uid())` (Beispiel: `todos_manage_own`).
    - Gemeinsam lesbar, privat schreibbar: separate SELECT/INSERT/UPDATE/DELETE-Policies.
    - Geteilt mit ausgewählten Kolleg*innen (Partei/Ebene/Gliederung): siehe `antrag_shares`/
      `todo_placements` als Vorlage, inkl. der SECURITY DEFINER-Helper aus Punkt 4.
@@ -44,4 +53,7 @@ bestehenden Policies stehen in `docs/CHANGELOG.md`, falls eine Design-Entscheidu
      aus dem Takt. Ohne anschließenden `git commit` + `git push`
    bleibt Frontend/Edge-Function-Code auf dem alten Stand, auch wenn die DB schon aktuell ist.
 8. **Verifizieren**: kurzer REST-Smoke-Test (Select/Insert gegen die neue Tabelle/Policy) und/oder
-   `tsc -b`/`vite build`, falls sich `src/lib/types.ts` ändert.
+   `tsc -b`/`vite build`, falls sich `src/lib/types.ts` ändert. Bei Änderungen an bestehenden
+   Policies: Sichtbarkeits-Momentaufnahme vorher/nachher und Generalprobe in einer
+   zurückgerollten Transaktion (Vorlage im CHANGELOG-Eintrag zu `0050`).
+9. **Linter**: nach dem Einspielen `get_advisors` (security + performance) laufen lassen.

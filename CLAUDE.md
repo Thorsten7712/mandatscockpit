@@ -199,9 +199,25 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 - **RLS-Rekursion**: Eine Policy, die in ihrer eigenen USING-Klausel dieselbe Tabelle per Subquery
   abfragt (z. B. `profiles`-Policy fragt `profiles` ab), verursacht „infinite recursion detected in
   policy" (Postgres 42P17). Fix: SECURITY DEFINER-Helper-Funktion, die die Tabelle direkt abfragt
-  (Beispiele: `current_user_fraktion()`, `antrag_gehoert_nutzer()`). `language sql`-Funktionen werden
+  (Beispiele: `private.current_user_fraktion()`, `private.antrag_gehoert_nutzer()`). `language sql`-Funktionen werden
   beim `CREATE FUNCTION` sofort gegen das Schema geparst (nicht erst beim Aufruf) – referenzierte
   Tabellen müssen in derselben Migration also **vorher** angelegt sein.
+- **Muster für neue Policies und RLS-Helfer** (seit `0050_rls_helfer_privat.sql`, sonst kommen
+  drei Linter-Befunde zurück): (1) Helfer gehören ins Schema **`private`**, nicht nach `public` –
+  alles in `public` liefert PostgREST als `/rest/v1/rpc/<name>` aus, auch an nicht angemeldete
+  Aufrufer. Aufruf in Policies als `private.<name>(...)`. **Nicht** `revoke execute` als Ersatz:
+  Policies laufen mit den Rechten des Aufrufers, `authenticated` braucht EXECUTE. (2) **`(select
+  auth.uid())`** statt `auth.uid()`, ebenso `(select private.current_user_partei())` für Helfer
+  ohne Argumente – sonst wird pro Zeile statt pro Abfrage ausgewertet. Ausnahme `x = ANY (...)`:
+  dort *kein* `select`, Postgres liest es sonst als Ergebnismenge (`text = text[]`-Fehler). (3)
+  **`to authenticated`** an jede Policy, die nicht ausdrücklich für anon gedacht ist – ohne
+  Rollenangabe gilt sie auch für Aufrufer mit dem öffentlichen anon-Key.
+- **RLS-Änderungen vorher und nachher mit einer Sichtbarkeits-Momentaufnahme prüfen**: für jedes
+  Konto und anon die über RLS sichtbaren Zeilen je Tabelle zählen (`set_config('role', ...)` +
+  `request.jwt.claims` in einer `pg_temp`-Funktion) und den Fingerabdruck vergleichen. Die ganze
+  Migration samt Messung vorher läuft als Generalprobe in einem `execute_sql`-Aufruf, der am Ende
+  absichtlich abbricht – ein Aufruf ist eine Transaktion, es bleibt nichts zurück. Vorlage und
+  Ablauf im CHANGELOG-Eintrag zu 0050.
 - **Deploy ist zweistufig**: Eine Migration wirkt sofort auf die Live-DB, das Frontend/die Edge
   Functions gehen aber erst mit `git push` live (separater Workflow-Trigger). Eine fertige
   DB-Migration ohne Push zeigt sich also noch nicht auf der Produktivseite.
@@ -223,7 +239,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   Non-200-Status besonders reagieren (z. B. OAuth-Discovery bei jedem 401), immer HTTP 200 mit dem
   Fehler im JSON-Body zurückgeben statt echter HTTP-Fehlercodes.
 - **Storage**: private Buckets (`zusammenfassungen`, `profilbilder`), Pfad-Muster
-  `<user_id>/<dateiname>`, RLS via `(storage.foldername(name))[1] = auth.uid()::text`. Signed URLs:
+  `<user_id>/<dateiname>`, RLS via `(storage.foldername(name))[1] = ((select auth.uid()))::text`. Signed URLs:
   60s für einmalige Downloads, 3600s für dauerhaft sichtbare Inhalte (Fotos, offene Dokumentvorschau).
 - **Bewusste Code-Duplikation**: ICS-Parsing, Hash-Helper, `createNote()`-Konfiguration etc. sind
   zwischen Deno (Edge Functions) und Node (Scripts) bzw. zwischen ähnlichen Entitäten (Todo/Antrag)

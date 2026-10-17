@@ -79,32 +79,23 @@ Test, auf den es ankommt. Erledigt ist bereits:
   Funktionen in `public` haben jetzt `public, pg_temp`; die Migration bricht ab, falls später eine
   ohne Suchpfad dazukommt.
 
-Offen, in der Reihenfolge des Nutzens:
+Am 17.10.2026 nachmittags erledigt (Details im CHANGELOG):
 
-**1. `auth.uid()` wird in 70 Policies pro Zeile ausgewertet** statt einmal (`auth_rls_initplan`).
-Der Fix ist mechanisch – `auth.uid()` → `(select auth.uid())`, semantisch identisch – und betrifft
-jede größere Abfrage im Projekt. Das ist der Befund mit dem besten Verhältnis von Aufwand zu
-Wirkung, aber er schreibt die **einzige Zugriffskontrolle** des Projekts um. Mit dem
-Supabase-Connector lässt sich das jetzt absichern: vorher und nachher dieselbe Abfrage als
-betroffener Nutzer laufen lassen und vergleichen, dass genau dieselben Zeilen sichtbar sind.
+- ✅ **`auth.uid()` einmal pro Abfrage** statt pro Zeile, in allen 79 betroffenen Policies
+  (`0050_rls_helfer_privat.sql`).
+- ✅ **`to authenticated`** an allen 71 Policies, denen die Rolle fehlte (`0050`). Dabei aufgefallen:
+  `summaries_select_shared` hätte als „geteilt" markierte Zusammenfassungen für nicht angemeldete
+  Aufrufer lesbar gemacht – zu dem Zeitpunkt 0 betroffene Einträge.
+- ✅ **SECURITY-DEFINER-Helfer aus der REST-API genommen**: alle elf liegen im nicht ausgelieferten
+  Schema `private` (`0050`). Vorher HTTP 200 ohne Anmeldung, nachher 404.
+- ✅ **34 Fremdschlüssel-Indizes** (`0051_fremdschluessel_indizes.sql`). Der Linter meldet sie
+  danach als „unused index" – sie waren in dem Moment schlicht neu. Nicht löschen.
 
-**2. Einigen Policies fehlt `to authenticated`.** Aufgefallen daran, dass
-`multiple_permissive_policies` Befunde für die Rolle `anon` meldet – diese Policies werden also
-auch für nicht angemeldete Aufrufer ausgewertet. Ein Loch ist das nicht (`auth.uid()` ist dort
-null, es kommt keine Zeile zurück), aber unsauber und unnötige Arbeit für die Datenbank.
+Bewusst offen gelassen: **„Multiple Permissive Policies"** (5 Tabellen mit mehreren Lesewegen,
+z. B. eigenes / Ebene-weit geteilt / mit mir geteilt). Zusammengelegt würde daraus eine schwer
+prüfbare Policy; bei der Datenmenge ohne messbaren Nutzen.
 
-**3. Die SECURITY-DEFINER-Helfer sind als REST-Endpunkte erreichbar**
-(`/rest/v1/rpc/dokument_ist_geteilt_mit` & Co., für `anon` wie `authenticated`). **Achtung:
-`revoke execute` ist der falsche Fix** – Policy-Ausdrücke laufen mit den Rechten der aufrufenden
-Rolle, ohne EXECUTE schlägt jede Abfrage fehl. Der saubere Weg wäre ein eigenes, nicht exponiertes
-Schema für die Helfer, und das heißt: jede Policy anfassen, die sie referenziert. Die reale
-Angriffsfläche ist gering – die meisten Funktionen liefern Daten des Aufrufers selbst, für `anon`
-also nichts; `dokument_ist_geteilt_mit`/`antrag_ist_geteilt_mit` verraten bei bekannten UUIDs, ob
-ein Dokument mit einer Person geteilt ist. Bewusste Entscheidung nötig, keine schnelle Aufgabe.
-
-**4. 34 Fremdschlüssel ohne Index** (`unindexed_foreign_keys`, nur INFO). Spürbar beim Löschen in
-der Elterntabelle, weil jede gelöschte Zeile die Kindtabellen durchsucht. Bei 799 Sitzungen
-irrelevant – die 20 Löschungen in `0047` liefen in Millisekunden. Im Hinterkopf behalten.
+Offen:
 
 **5. Leaked-Password-Protection ist aus.** Ein Schalter im Supabase-Dashboard (Auth-Einstellungen),
 der Passwörter gegen HaveIBeenPwned prüft. Passt zum Projekt, das bereits erzwungenen
@@ -256,12 +247,10 @@ Auswertungen Stichproben.
 1. Die 33 verbliebenen Tagesordnungs-PDFs im Dokumenten-Hub aufräumen, sobald die jeweilige
    Tagesordnung strukturiert vorliegt (`delete_document`; der Hub-Bestand gehört dem Konto
    „ALLRIS-Import", Admins dürfen dessen Dokumente löschen).
-2. **`auth.uid()` → `(select auth.uid())` in den 70 betroffenen Policies.** Mechanisch, aber es
-   schreibt die einzige Zugriffskontrolle des Projekts um: vorher und nachher mit `execute_sql`
-   prüfen, dass als derselbe Nutzer genau dieselben Zeilen sichtbar sind. Dabei gleich die
-   fehlenden `to authenticated`-Klauseln ergänzen. Details im Abschnitt „Befunde des
-   Supabase-Linters" in `docs/UEBERGABE-CLOUD.md` – dort steht auch, warum `revoke execute` bei
-   den RPC-erreichbaren Helfern der **falsche** Fix wäre.
+2. ~~`auth.uid()` → `(select auth.uid())`, `to authenticated`, Helfer nach `private`~~ –
+   erledigt am 17.10.2026 (`0050`, `0051`). Neue Policies und Helfer folgen dem Muster in
+   CLAUDE.md („Muster für neue Policies und RLS-Helfer"). Offen bleibt nur der
+   Leaked-Password-Schalter im Dashboard.
 3. Danach die Punkte unter „Geplante nächste Schritte" in `CLAUDE.md`.
 
 **Zwei Dinge, die dich sonst Zeit kosten:**
