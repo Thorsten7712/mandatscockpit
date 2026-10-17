@@ -54,9 +54,9 @@ Erledigtes wird hier abgehakt, die Begründungen stehen ausführlich im CHANGELO
 
 - [x] Plan ablegen, PR-Prüfung
 - [x] Uploads sperren, Bucket-Grenzen (0052) – Dateien umziehen/aufräumen per Wartungs-Workflow
-- [ ] Speicheranzeige für Admins
+- [x] Speicheranzeige für Admins (0054)
 - [x] Löschprotokoll (0053)
-- [ ] Backup
+- [x] Backup (Secrets `SUPABASE_DB_PASSWORD`, `BACKUP_PASSWORT` nötig)
 - [ ] Notizen konsolidieren, Kommentare und Sitzungs-Notizen entfernen
 - [ ] ToDo-Zuweisung
 - [ ] Neuigkeiten im Cockpit

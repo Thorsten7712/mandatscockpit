@@ -2974,3 +2974,39 @@ eines `do`-Blocks. Statt die Erkennung zu umgehen, liegt die Zuordnung in einer 
 Web mit gefälschtem `x-mc-user` eines anderen Mitglieds (bleibt beim echten Konto); MCP; Wartung;
 kaputter Header; nicht angemeldet. Alle 16 Trigger angelegt. Der Trigger selbst wird mit dem
 ersten echten Wartungslauf bestätigt.
+
+### Nächtliches Backup (2026-10-17)
+
+**Entscheidung (Nutzer):** Backup ja, aber ohne eigenes Repository „Mandatscockpit backup". Ein
+Dump enthält personenbezogene Daten, und was einmal in einer Git-Historie liegt, bekommt man dort
+nicht mehr heraus.
+
+**`.github/workflows/backup.yml`:** jede Nacht 01:17 UTC (und von Hand) drei Dumps über die
+Supabase-CLI – Rollen, Schema, Daten –, verschlüsselt mit `gpg --symmetric` (AES256) und als
+Workflow-Artefakt 14 Tage aufbewahrt. Nur die Datenbank: Seit der Upload-Sperre stehen
+Nutzerinhalte als Text darin, die Drucksachen-PDFs lassen sich aus ALLRIS neu holen. Ein Teil-Dump
+ohne die Kerntabellen (`dokumente`, `todos`, `sessions`, `profiles`) bricht den Lauf ab, statt ein
+scheinbar gutes Artefakt zu hinterlassen.
+
+**Braucht zwei neue Repository-Secrets:** `SUPABASE_DB_PASSWORD` und `BACKUP_PASSWORT` (frei
+gewählt, getrennt aufbewahren – ohne es ist das Backup wertlos). Fehlen sie, scheitert der Lauf
+mit einem klaren Hinweis. Wiederherstellen: siehe Kopf der Workflow-Datei.
+
+### Speicheranzeige für Admins (2026-10-17)
+
+**Entscheidung (Nutzer):** statt einer Quota pro Nutzer eine Anzeige der Belegung. Neuer
+Einstellungs-Reiter „Speicher" (nur Admins, `SpeicherBelegung.tsx`): Dateien gegen 1 GB,
+Datenbank gegen 500 MB, darunter je Bucket die Belegung pro Person.
+
+**`0054_speicherbelegung.sql`:** `public.speicherbelegung()` fasst `storage.objects` je Bucket und
+Ordner (= Konto) zusammen und liefert `pg_database_size`. Sie liegt in `public`, weil der
+Service-Role-Client sie nur so per `rpc` erreicht, ist aber für `anon`/`authenticated` gesperrt –
+die Belegung je Person verrät, wer was hochgeladen hat. Aufgerufen über die neue Aktion
+`speicher` der Edge Function `admin-users`, die vorher die Admin-Rolle prüft.
+
+**Nebenbei behoben:** `admin-users` (`list`) gab `technisch` nicht zurück. Das Bearbeiten-Formular
+zeigte die Checkbox deshalb immer leer, und ein Speichern hätte dem ALLRIS-Konto still die
+Markierung genommen – seit 0052 hängt daran das Recht, Drucksachen abzulegen.
+
+**Stand nach dem Wartungslauf** (17.10.): 1.139 Drucksachen-Dateien (87 MB) beim ALLRIS-Konto, zwei
+Profilbilder, eine Datei von Benjamin Korte; Datenbank 29 MB.

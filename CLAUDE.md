@@ -50,8 +50,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   zusammengeführt, mit Detail-Modal).
 - **Settings** (Sidebar-Navigation): Profil (Foto/Name), Kalenderquellen (eigene + gemeinsam
   verwaltete, strikt privat pro Nutzer getrennt), Meine Gremien/Ebenen/Gliederung, ToDo-Board-Struktur,
-  Antrags-Fristen, MCP Connection (persönliches Bearer-Token), Benutzerverwaltung + Kontaktanfragen
-  (nur `rolle = 'admin'`).
+  Antrags-Fristen, MCP Connection (persönliches Bearer-Token), Benutzerverwaltung, Kontaktanfragen und Speicher-
+  belegung gegen die Free-Tier-Grenzen (nur `rolle = 'admin'`).
 - **Archiv**: vergangene Sitzungen (inkl. manuell nachtragbar, z. B. für Gremien ohne ICS-Feed - nur
   der erstellende Nutzer darf seine eigene nachgetragene Sitzung bearbeiten/löschen), erledigte
   Aufgaben, hochgeladene Dokumente, entschiedene Anträge.
@@ -184,7 +184,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **GitHub-Actions-Workflows**: Deploy nach GitHub Pages (inkl. `404.html`-Kopie fürs SPA-Routing),
   Supabase-Keep-Alive, täglicher ICS-Import (`import-ics.yml`, 04:00 UTC), Edge-Function-Deploy
   (`deploy-edge-functions.yml`, deployt bei jeder Änderung unter `supabase/functions/**` alle
-  Functions).
+  Functions), Prüfung jedes PRs (`pruefung.yml`), nächtliches verschlüsseltes DB-Backup als
+  Artefakt (`backup.yml`, 14 Tage, Secrets `SUPABASE_DB_PASSWORD`/`BACKUP_PASSWORT`).
 
 Volle Details zu jedem Punkt (Datenmodell, Komponenten-Props, exakte RLS-Policy-Namen) stehen im Code
 selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGELOG.md`](./docs/CHANGELOG.md).
