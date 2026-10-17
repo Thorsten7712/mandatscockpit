@@ -43,7 +43,7 @@ import { createEvent, listEvents } from './tools/events.ts'
 import { listSessions } from './tools/sessions.ts'
 import { listSessionAgenda, setSessionAgenda } from './tools/tagesordnung.ts'
 import { createAntrag, listAntraege, updateAntragStatus, listAntragFristen } from './tools/antraege.ts'
-import { listNotes, createSessionNote, createEventNote, createTodoNote, createAntragNote } from './tools/notes.ts'
+import { listNotes, createTodoNote } from './tools/notes.ts'
 import { uploadPresseschau } from './tools/presseschau.ts'
 import { startFileUpload, appendFileChunk, finishFileUpload } from './tools/uploads.ts'
 import {
@@ -197,12 +197,6 @@ Deno.serve(async (req) => {
         case 'list_notes':
           result = await listNotes(db, user.id, args)
           break
-        case 'create_session_note':
-          result = await createSessionNote(db, user.id, args)
-          break
-        case 'create_event_note':
-          result = await createEventNote(db, user.id, args)
-          break
         case 'create_todo_note':
           result = await createTodoNote(db, user.id, args)
           break
@@ -220,9 +214,6 @@ Deno.serve(async (req) => {
           break
         case 'update_antrag_status':
           result = await updateAntragStatus(db, user.id, args)
-          break
-        case 'create_antrag_note':
-          result = await createAntragNote(db, user.id, args)
           break
         case 'list_antrag_fristen':
           result = await listAntragFristen(db, user.id)

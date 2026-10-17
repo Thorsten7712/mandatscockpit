@@ -123,7 +123,7 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 36 Tools:
+`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 33 Tools:
 
 **Anlegen:**
 - `create_todo(titel, spalte, faellig_am?, session_id?)` – Spalte wird angelegt, falls sie noch nicht existiert.
@@ -138,7 +138,7 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 - `list_events(zeitraum?, limit?)` – eigene Termine, gleiche `zeitraum`-Semantik.
 - `list_antraege(status?, ausschuss?, session_id?, limit?)` – eigene + geteilte; `status` Standard `aktiv` (entwurf/gestellt/in_beratung/vertagt).
 - `list_antrag_fristen()` – errechnet Einreichungsfristen (Sitzungsdatum minus die unter Einstellungen → Antrags-Fristen konfigurierte Vorlaufzeit je Ebene) für aktive eigene Anträge mit Sitzungsbezug.
-- `list_notes(session_id?, event_id?, todo_id?, limit?)` – liest zurück, was die `create_*_note`-Tools gespeichert haben; ohne Filter die zuletzt gespeicherten Einträge, mit genau einem `*_id`-Filter alle Einträge zu diesem Objekt. Datei-Anhänge werden nur mit Dateinamen genannt, der Inhalt selbst ist über MCP nicht herunterladbar.
+- `list_notes(session_id?, event_id?, todo_id?, limit?)` – liest die Notizen an ToDo-Karten (eigene und geteilte); mit `session_id`/`event_id` die der mit dieser Sitzung bzw. diesem Termin verknüpften Karten, mit `todo_id` die einer Karte, ohne Filter die zuletzt geschriebenen. Notizen an Hub-Dokumenten liefert `get_document`.
 - `list_documents(parent_id?, sichtbarkeit?, ebene?, tag?, titel?, session_id?, archiv?, seit?, limit?)` – ohne `parent_id` nur Top-Level-Dokumente (z. B. Sitzungsvorlagen), mit `parent_id` die daran angehängten Notizen/Analysen. Eigene sowie sichtbare geteilte/individuell freigegebene Dokumente anderer Mitglieder – der MCP-Server läuft über den Service-Role-Client (RLS greift dort nicht), die Sichtbarkeitsprüfung passiert deshalb explizit im Tool-Code, nicht per RLS. Die Ausgabe nennt zusätzlich über `link_todo_document` verknüpfte ToDo-Karten. `archiv` steuert den Umgang mit archivierten Dokumenten (`ohne` = Standard wie in der Web-UI, `alle`, `nur`); archivierte Treffer sind in der Ausgabe mit `ARCHIV` markiert. Als archiviert gilt ein Dokument, dessen verknüpfte Sitzung vorbei ist **oder** das per `update_document_archiv` von Hand archiviert wurde. `seit` (Datum = ab Mitternacht deutscher Zeit, oder voller Zeitstempel) liefert nur seitdem hochgeladene Dokumente – für den täglichen Scan nach neuen Drucksachen, dann mit `archiv="alle"`. Gibt es mehr Treffer als `limit`, nennt die letzte Zeile die Gesamtzahl. Den Text der Dokumente liefert die Liste bewusst nicht.
 - `get_document(dokument_id, ab_zeichen?, max_zeichen?)` – ein Dokument mit seinem gespeicherten Markdown-Text (bei Drucksachen die ganze Vorlage) und Kopfdaten: Sichtbarkeit, Ersteller*in, Tags, Sitzungen mit TOP-Nummer, Archivstatus, Datei, Zahl der sichtbaren Notizen. Gleiche Sichtbarkeitsprüfung wie `list_documents`; ein nicht sichtbares Dokument wird wie ein nicht vorhandenes gemeldet. Lange Texte kommen in Abschnitten von höchstens 20.000 Zeichen, die Antwort nennt das nächste `ab_zeichen`.
 - `search(query, limit?)` – Volltextsuche über Titel/Beschreibung von ToDos, Titel/Inhalt von Anträgen und Notiz-Texten (eigene + geteilte). Durchsucht **nicht** den Dokumenten-Hub, dafür `list_documents` mit Filtern verwenden – und ebenso wenig die „Zahlen & Fakten"-Seite (`/fakten`, Tabelle `fakten`), für die es bislang keine MCP-Tools gibt.
@@ -157,7 +157,7 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 - `update_document_tags(dokument_id, tags)` – ersetzt die Tags eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub komplett (leeres Array entfernt alle Tags). Nur der/die Ersteller\*in darf das.
 - `update_document_sharing(dokument_id, sichtbarkeit, teilen_mit_namen?)` – ändert nachträglich die Sichtbarkeit/Freigabe eines eigenen Dokuments/einer eigenen Notiz, ersetzt bestehende Freigaben komplett. Bei `sichtbarkeit="geteilt"` für eine per `parent_id` angehängte Notiz wird `ebene`/`gliederung` automatisch vom übergeordneten Dokument übernommen (das muss selbst Ebene-weit geteilt sein); für ein Top-Level-Dokument bleibt die bisherige Ebene/Gliederung erhalten. Nur der/die Ersteller\*in darf das.
 
-**Notizen/Dokumente** (`create_session_note`/`create_event_note`/`create_todo_note`/`create_antrag_note`, jeweils `*_id`, `inhalt?`, `dateiname?`, `datei_base64?`, `datei_pfad?`): speichern Freitext (z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten Sammeldokuments), einen Datei-Anhang als Base64, oder beides zusammen – mindestens eins von beidem ist Pflicht. Erscheinen danach in der Termindetailsicht bzw. im ToDo-Karten-/Antrags-Detail-Modal wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument. `create_event_note`/`create_todo_note`/`create_antrag_note` erlauben das für Objekte, die dem Nutzer gehören **oder** mit ihm geteilt sind (`todo_placements`/`antrag_shares`); `create_session_note` prüft keine Ownership, da Sitzungen keinem einzelnen Nutzer gehören (Sichtbarkeit hängt an der Kalenderquelle, siehe `list_sessions`). Der Datei-Anhang läuft über denselben privaten Storage-Bucket `zusammenfassungen` wie Uploads aus der Web-UI.
+**Notizen** (`create_todo_note(todo_id, inhalt)`): reiner Text an einer eigenen oder geteilten ToDo-Karte; sichtbar für alle, auf deren Board die Karte liegt, und in der Sitzungsansicht, wenn die Karte mit einer Sitzung verknüpft ist. Seit `0055_notizen_nur_todo.sql` gibt es Notizen nur noch an ToDo-Karten und an Hub-Dokumenten (`create_document` mit `parent_id`) – die früheren Tools `create_session_note`/`create_event_note`/`create_antrag_note` sind entfallen. Eine Sitzungsvorbereitung gehört an die passende Karte oder als persönliches Dokument per `link_document_session` an die Sitzung.
 
 ⚠️ **Größenlimit bei `dateiname`+`datei_base64`:** Base64-Tool-Argumente über ca. 18.000–20.000
 Zeichen (≈ 13 KB Originaldatei) werden vom aufrufenden MCP-Client (Claude) beim Erzeugen des
@@ -165,10 +165,9 @@ Tool-Aufrufs selbst abgeschnitten – eine Grenze der Tool-Aufruf-Generierung, n
 54,6-KB-PDF ergibt bereits 72.792 Base64-Zeichen und schlägt fehl). Für größere Dateien stattdessen
 `start_file_upload(dateiname)` → mehrfach `append_file_chunk(upload_id, chunk_index, chunk_base64)`
 in Häppchen von je höchstens ca. 8000 Zeichen (lückenlos ab 0 nummeriert) → `finish_file_upload
-(upload_id, ziel?)` verwenden; letzteres liefert einen `datei_pfad`, der bei den vier
-`create_*_note`-Tools bzw. bei `create_document` statt `dateiname`+`datei_base64` angegeben wird.
-`ziel="notiz"` (Standard) legt die Datei im Bucket der Notiz-Anhänge ab, `ziel="dokument"` im Bucket
-des Dokumenten-Hubs. Angefangene, nie abgeschlossene Uploads werden nach 1 Stunde automatisch
+(upload_id, ziel?)` verwenden; letzteres liefert einen `datei_pfad`, der bei `create_document`
+statt `dateiname`+`datei_base64` angegeben wird. `ziel` kennt nur noch `"dokument"` (Standard).
+Dateien hochladen darf nur das technische Konto (ALLRIS-Import). Angefangene, nie abgeschlossene Uploads werden nach 1 Stunde automatisch
 aufgeräumt.
 
 **Auth-Modell:** Kein OAuth, sondern ein **persönliches Token pro Mitglied** – jeder Nutzer erzeugt es

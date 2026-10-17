@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type {
-  AntragComment,
   AntragDeadlineSetting,
   AntragErgebnis,
   AntragRow,
@@ -12,15 +11,12 @@ import type {
   Ebene,
   Profile,
   SessionRow,
-  SummaryRow,
 } from '../lib/types'
 import { ANTRAG_STATUS_ORDER, antragStatusLabel } from '../lib/antragStatus'
 import { computeAntragDeadline } from '../lib/antragDeadline'
 import { formatDate, formatDateTime } from '../lib/format'
 import { EBENE_LABEL } from '../lib/sourceColors'
 import { gleicheGliederung } from '../lib/gliederung'
-import { DocumentPreviewModal } from './DocumentPreviewModal'
-import { fileNameFromPath } from '../lib/dateien'
 import { DetailModalShell } from './DetailModalShell'
 import { useLoeschDialog } from './LoeschDialog'
 
@@ -66,13 +62,6 @@ export function AntragDetailModal({
   const [shareSearch, setShareSearch] = useState('')
   const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
 
-  const [comments, setComments] = useState<AntragComment[]>([])
-  const [commentAuthorNames, setCommentAuthorNames] = useState<Map<string, string>>(new Map())
-  const [newComment, setNewComment] = useState('')
-  const [savingComment, setSavingComment] = useState(false)
-
-  const [documents, setDocuments] = useState<SummaryRow[]>([])
-  const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
   const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
 
@@ -96,23 +85,6 @@ export function AntragDetailModal({
       const { data: se } = await supabase.from('sessions').select('*').eq('id', data.session_id).single()
       if (se) setLinkedSession(se)
     }
-  }
-
-  async function loadComments() {
-    const { data } = await supabase.from('antrag_comments').select('*').eq('antrag_id', id).order('erstellt_am')
-    setComments(data ?? [])
-    const ids = Array.from(new Set((data ?? []).map((c) => c.user_id)))
-    if (ids.length === 0) {
-      setCommentAuthorNames(new Map())
-      return
-    }
-    const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
-    setCommentAuthorNames(new Map((profs ?? []).map((p) => [p.id, p.name])))
-  }
-
-  async function loadDocuments() {
-    const { data } = await supabase.from('summaries').select('*').eq('antrag_id', id).order('erstellt_am')
-    setDocuments(data ?? [])
   }
 
   // Volle Freigabeliste (alle Kolleg*innen, für die dieser Antrag freigegeben
@@ -153,8 +125,6 @@ export function AntragDetailModal({
 
   useEffect(() => {
     loadAntrag()
-    loadComments()
-    loadDocuments()
     loadSharing()
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
@@ -209,10 +179,6 @@ export function AntragDetailModal({
     if (!antrag) return
     setEditError(null)
 
-    if (editStatus === 'gestellt' && documents.length === 0) {
-      setEditError('Vor dem Status "Gestellt" muss mindestens ein Dokument hochgeladen sein.')
-      return
-    }
     if (editStatus === 'abgestimmt' && !editErgebnis) {
       setEditError('Bitte ein Ergebnis (Positiv/Negativ) wählen.')
       return
@@ -265,15 +231,6 @@ export function AntragDetailModal({
   /** Mit wem der Antrag außer mir freigegeben ist (antrag_shares). */
   const andereNamen = shares.filter((sh) => sh.user_id !== userId).map((sh) => shareNames.get(sh.user_id) ?? 'Unbekannt')
 
-  /** Kommentare und Dokumente an einem geteilten Antrag sehen alle Freigegebenen. */
-  function geteilteAntragFolgen(was: string): string[] | undefined {
-    if (andereNamen.length === 0) return undefined
-    return [
-      `${was} an diesem Antrag ist auch für ${andereNamen.join(', ')} sichtbar und verschwindet dort ebenfalls.`,
-      'Das lässt sich nicht rückgängig machen.',
-    ]
-  }
-
   async function handleToggleShare(targetUserId: string, aktuellGeteilt: boolean) {
     setShareError(null)
     const { error } = aktuellGeteilt
@@ -285,34 +242,6 @@ export function AntragDetailModal({
     }
     await loadSharing()
     onChanged()
-  }
-
-  async function handleAddComment(e: FormEvent) {
-    e.preventDefault()
-    if (!userId || !newComment.trim()) return
-    setSavingComment(true)
-    const { error } = await supabase
-      .from('antrag_comments')
-      .insert({ antrag_id: id, user_id: userId, inhalt: newComment.trim() })
-    if (!error) {
-      setNewComment('')
-      await loadComments()
-    }
-    setSavingComment(false)
-  }
-
-  async function handleDeleteComment(commentId: string) {
-    await supabase.from('antrag_comments').delete().eq('id', commentId)
-    await loadComments()
-  }
-
-  async function handleDeleteDocument(documentId: string) {
-    const dok = documents.find((d) => d.id === documentId)
-    const { error } = await supabase.from('summaries').delete().eq('id', documentId)
-    if (error) throw new Error(error.message)
-    // Die Datei mit entfernen - vorher blieb sie verwaist im Bucket liegen.
-    if (dok?.datei_url) await supabase.storage.from('zusammenfassungen').remove([dok.datei_url])
-    await loadDocuments()
   }
 
   const geteilteFreigaben = shares.filter((s) => s.user_id !== userId)
@@ -471,9 +400,6 @@ export function AntragDetailModal({
                   className="mc-input flex-1"
                 />
               </div>
-              {documents.length === 0 && editStatus !== 'gestellt' && (
-                <p className="text-xs text-slate-400">Für den Status "Gestellt" wird ein Dokument benötigt.</p>
-              )}
               {editStatus === 'abgestimmt' && (
                 <div className="flex items-center gap-4 text-sm">
                   <label className="flex items-center gap-1.5">
@@ -577,94 +503,12 @@ export function AntragDetailModal({
     </>
   )
 
+  // Seit 0055 gibt es Notizen nur an Aufgaben und Dokumenten - Kommentare
+  // und Notizen am Antrag sind entfallen (es gab keine).
   const rightColumn = (
-    <>
-      {/* Nur noch Altbestand: neue Dateien lassen sich seit 0052_uploads_sperren.sql
-          nicht mehr hochladen, Notizen sind Text. */}
-      {documents.length > 0 && (
-        <>
-          <h2 className="font-semibold mb-2">Dateien</h2>
-          <ul className="space-y-2 mb-3">
-            {documents.map((d) => (
-              <li key={d.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
-                {d.inhalt && <p className="text-sm whitespace-pre-wrap">{d.inhalt}</p>}
-                {d.datei_url && (
-                  <button
-                    type="button"
-                    onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
-                    className="mc-btn-ghost px-2! py-1! text-xs!"
-                  >
-                    📎 {fileNameFromPath(d.datei_url)}
-                  </button>
-                )}
-                <div className="mt-1 flex items-center justify-between">
-                  <span className="text-xs text-slate-400">{formatDateTime(d.erstellt_am)}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      loeschRueckfrage({
-                        titel: fileNameFromPath(d.datei_url ?? ''),
-                        was: 'Das Dokument',
-                        folgen: geteilteAntragFolgen('Das Dokument'),
-                        ausfuehren: () => handleDeleteDocument(d.id),
-                      })
-                    }
-                    className="mc-btn-danger px-2! py-1! text-xs!"
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      <h2 className="font-semibold mb-2">Kommentare</h2>
-      <ul className="space-y-2 mb-3">
-        {comments.map((c) => (
-          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
-            <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs text-slate-400">
-                {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
-                {formatDateTime(c.erstellt_am)}
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  loeschRueckfrage({
-                    titel: c.inhalt.length > 70 ? `${c.inhalt.slice(0, 70)}…` : c.inhalt,
-                    was: 'Der Kommentar',
-                    folgen: geteilteAntragFolgen('Der Kommentar'),
-                    ausfuehren: () => handleDeleteComment(c.id),
-                  })
-                }
-                className="mc-btn-danger px-2! py-1! text-xs!"
-              >
-                Löschen
-              </button>
-            </div>
-          </li>
-        ))}
-        {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
-      </ul>
-      <form
-        onSubmit={handleAddComment}
-        className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
-      >
-        <textarea
-          placeholder="Kommentar hinzufügen"
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          className="mc-input w-full"
-          rows={2}
-        />
-        <button type="submit" disabled={savingComment || !newComment.trim()} className="mc-btn-primary">
-          {savingComment ? 'Speichern...' : 'Kommentieren'}
-        </button>
-      </form>
-    </>
+    <p className="text-sm text-slate-500">
+      Notizen zu einem Antrag gehören an die zugehörige Aufgabe oder an das Dokument im Dokumenten-Hub.
+    </p>
   )
 
   return (
@@ -677,9 +521,6 @@ export function AntragDetailModal({
         right={rightColumn}
       />
       {loeschDialog}
-      {previewDoc && (
-        <DocumentPreviewModal path={previewDoc.path} fileName={previewDoc.name} onClose={() => setPreviewDoc(null)} />
-      )}
     </>
   )
 }

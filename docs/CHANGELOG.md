@@ -3010,3 +3010,45 @@ Markierung genommen – seit 0052 hängt daran das Recht, Drucksachen abzulegen.
 
 **Stand nach dem Wartungslauf** (17.10.): 1.139 Drucksachen-Dateien (87 MB) beim ALLRIS-Konto, zwei
 Profilbilder, eine Datei von Benjamin Korte; Datenbank 29 MB.
+
+### Ein Notiz-System: nur an ToDos und Dokumenten (2026-10-17)
+
+**Entscheidung (Nutzer):** Notizen gibt es nur noch an ToDo-Karten und an Dokumenten im Hub.
+Kommentare entfallen, bestehende ToDo-Kommentare werden zu Notizen. Sitzungen und Termine haben
+weder Notizen noch Kommentare; die Sitzungsansicht zeigt Notizen nur indirekt über verknüpfte
+Karten und Dokumente. Bestehende Sitzungs-/Termin-Notizen werden gesichert und gelöscht, fremde
+vorher vorgelegt.
+
+**`0055_notizen_nur_todo.sql`** sperrt nur die alten Wege: `summaries_manage_own` verlangt beim
+Schreiben eine Karte (`todo_id`), keine anderen Bezüge, keine Datei und eine für den Aufrufer
+sichtbare Karte (Unterabfrage auf `todos` mit seinen Rechten – eigene oder platzierte). Erledigte
+eigene Karten haben oft keine Platzierung mehr, deshalb reicht die Platzierung allein nicht.
+`summaries_select_shared` (aus 0001, gab „geteilte" Notizen an *alle* Angemeldeten frei; keine
+Zeile betroffen) liefert nichts mehr. Kommentar-Inserts sind gesperrt. Generalprobe als Thorsten
+Kois: Notiz an eigener Karte ok; an fremder Karte, an einer Sitzung und als Kommentar 42501.
+DROP der leeren Kommentar-Tabellen kommt mit dem nächsten `db push` vom Mac (über den Connector
+hängen destruktive Anweisungen).
+
+**Altdaten** räumt `scripts/wartung-notizen.mjs` ab (Workflow `wartung-dateien.yml`, jetzt mit
+Auswahl `skript`): der eine ToDo-Kommentar wird Notiz an derselben Karte, Sitzungs-/Termin-Notizen
+von Thorsten Kois werden als Markdown gesichert und gelöscht; die eine Notiz von Fabian Tigges
+bleibt, bis sie vorgelegt ist (`auch_von`).
+
+**Oberfläche:** ToDo-Detail mit einer Liste „Notizen" (Autor, Datum, Löschen nur eigener) statt
+„Dateien" + „Kommentare". Sitzungsansicht: „Notizen" aus verknüpften Karten und Dokumenten, ein
+Klick öffnet die Quelle. Antrags-Detail ohne Notizen/Kommentare; dabei die seit 0052 unerfüllbare
+Bedingung entfernt, dass für „Gestellt" ein Dokument hochgeladen sein muss. „Meine Dokumente" ohne
+Sitzungs-Notizen, ToDo-Zeilen mit Notizzahl. Kalender und Archiv markieren Sitzungen/Termine mit 📝,
+wenn eine verknüpfte Karte Notizen hat (`src/lib/notizFlags.ts`). Archiv ohne die alten
+Datei-Uploads.
+
+**MCP-Server:** `create_session_note`, `create_event_note`, `create_antrag_note` entfallen (33 statt
+36 Tools); `create_todo_note` nur noch Text; `list_notes` liest mit `session_id`/`event_id` die
+Notizen der verknüpften Karten. `finish_file_upload` kennt nur noch `ziel="dokument"`. Neue Tools
+erst in einem neuen Chat sichtbar (Tool-Liste ist pro Unterhaltung eingefroren).
+
+**Öffentliches Repository:** Beim Bau fiel auf, dass das Repo öffentlich ist – Protokolle und
+Artefakte der Actions-Läufe sind für jeden angemeldeten GitHub-Nutzer lesbar. Das unverschlüsselte
+Artefakt `geloeschte-dateien` des Datei-Wartungslaufs musste deshalb gelöscht werden. Wartungsläufe
+verschlüsseln ihre Sicherung seither mit `BACKUP_PASSWORT` und brechen ohne das Secret vor jeder
+Änderung ab; das Notiz-Skript schreibt nur Längen, keine Inhalte ins Protokoll.

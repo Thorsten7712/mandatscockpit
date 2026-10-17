@@ -46,7 +46,7 @@ export const TOOLS = [
   {
     name: 'list_sessions',
     description:
-      'Listet Sitzungstermine (importiert aus den Kalenderquellen oder manuell nachgetragen) auf - wahlweise zukünftige, vergangene oder alle. Für Rückblicke ("worüber wurde im letzten Verkehrsausschuss gesprochen") zeitraum="vergangenheit" verwenden. Liefert je Sitzung auch die id, die für create_session_note gebraucht wird. Je Sitzung werden id, Gremium, Datum mit Uhrzeit und - falls vorhanden - quelle_url ausgegeben. Hinweis: bei ALLRIS-Feeds ist quelle_url meist nur die Tagesansicht und damit für mehrere Sitzungen desselben Tages identisch; eindeutig ist erst Gremium + Datum samt Uhrzeit.',
+      'Listet Sitzungstermine (importiert aus den Kalenderquellen oder manuell nachgetragen) auf - wahlweise zukünftige, vergangene oder alle. Für Rückblicke ("worüber wurde im letzten Verkehrsausschuss gesprochen") zeitraum="vergangenheit" verwenden. Liefert je Sitzung auch die id, z. B. für list_notes, link_document_session oder set_session_agenda. Je Sitzung werden id, Gremium, Datum mit Uhrzeit und - falls vorhanden - quelle_url ausgegeben. Hinweis: bei ALLRIS-Feeds ist quelle_url meist nur die Tagesansicht und damit für mehrere Sitzungen desselben Tages identisch; eindeutig ist erst Gremium + Datum samt Uhrzeit.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -75,7 +75,7 @@ export const TOOLS = [
   {
     name: 'list_events',
     description:
-      'Listet die eigenen Termine des angemeldeten Nutzers (persönlicher Kalender, keine Gremiensitzungen) auf - wahlweise zukünftige, vergangene oder alle. Liefert je Termin auch die id, die für create_event_note gebraucht wird.',
+      'Listet die eigenen Termine des angemeldeten Nutzers (persönlicher Kalender, keine Gremiensitzungen) auf - wahlweise zukünftige, vergangene oder alle. Liefert je Termin auch die id, z. B. für list_notes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -123,12 +123,12 @@ export const TOOLS = [
   {
     name: 'list_notes',
     description:
-      'Liest gespeicherte Notizen und hochgeladene Dokumente wieder aus (das Gegenstück zu create_session_note/create_event_note/create_todo_note). Ohne Filter kommen die zuletzt gespeicherten Einträge über alle Sitzungen/Termine/ToDos hinweg; mit genau einem der *_id-Filter alle Einträge zu diesem einen Objekt. Für Fragen wie "was habe ich zur letzten Ratssitzung notiert". Bei Datei-Anhängen wird nur der Dateiname genannt - der Dateiinhalt selbst kann über MCP nicht heruntergeladen werden.',
+      'Liest die Notizen an ToDo-Karten (eigene und geteilte) wieder aus - das Gegenstück zu create_todo_note. Notizen gibt es nur an ToDo-Karten und an Dokumenten im Hub; Sitzungen und Termine haben keine eigenen. Mit session_id bzw. event_id kommen die Notizen der mit dieser Sitzung/diesem Termin verknüpften Karten, mit todo_id die einer Karte, ohne Filter die zuletzt geschriebenen. Notizen an Hub-Dokumenten liefert get_document. Für Fragen wie "was habe ich zur letzten Ratssitzung notiert".',
     inputSchema: {
       type: 'object',
       properties: {
-        session_id: { type: 'string', description: 'Nur Notizen zu dieser Sitzung (optional).' },
-        event_id: { type: 'string', description: 'Nur Notizen zu diesem eigenen Termin (optional).' },
+        session_id: { type: 'string', description: 'Nur Notizen der mit dieser Sitzung verknüpften Karten (optional).' },
+        event_id: { type: 'string', description: 'Nur Notizen der mit diesem eigenen Termin verknüpften Karten (optional).' },
         todo_id: { type: 'string', description: 'Nur Notizen zu dieser ToDo-Karte (optional).' },
         limit: {
           type: 'number',
@@ -138,71 +138,9 @@ export const TOOLS = [
     },
   },
   {
-    name: 'create_session_note',
-    description:
-      'Speichert eine Notiz zu einer bestimmten Sitzung im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort in der Termindetailsicht der Sitzung, wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument). Unterstützt Freitext (z. B. eine im Chat erstellte Analyse/Zusammenfassung eines eingefügten Sammeldokuments), einen Datei-Anhang (Base64-kodiert, z. B. das Sammeldokument selbst) oder beides zusammen. Mindestens eins von beidem ist erforderlich. Datei-Anhänge über ca. 13 KB (= ca. 18.000 Base64-Zeichen) NICHT über dateiname+datei_base64 versuchen - das scheitert an einer Zeichenlimit-Grenze des eigenen Tool-Aufrufs, nicht am Server. Für größere Dateien stattdessen start_file_upload/append_file_chunk/finish_file_upload verwenden und den daraus resultierenden datei_pfad hier statt dateiname+datei_base64 angeben.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        session_id: {
-          type: 'string',
-          description: 'UUID der Sitzung (z. B. aus list_next_sessions), zu der die Notiz gehört.',
-        },
-        inhalt: {
-          type: 'string',
-          description: 'Freitext-Notiz, z. B. eine im Chat erstellte Analyse/Zusammenfassung (optional).',
-        },
-        dateiname: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Dateiname inkl. Endung für einen kleinen Datei-Anhang, z. B. "sammeldokument.pdf" (optional, nur zusammen mit datei_base64, nur für Dateien bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
-        },
-        datei_base64: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur für Dateien bis ca. 13 KB).',
-        },
-        datei_pfad: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
-        },
-      },
-      required: ['session_id'],
-    },
-  },
-  {
-    name: 'create_event_note',
-    description:
-      'Speichert eine Notiz zu einem bestimmten eigenen Termin (nicht Sitzung) im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort in der Termindetailsicht, wie eine manuell eingetragene Notiz/ein manuell hochgeladenes Dokument). Nur für Termine, die dem angemeldeten Nutzer gehören. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich. Datei-Anhänge über ca. 13 KB NICHT über dateiname+datei_base64 versuchen (Zeichenlimit des eigenen Tool-Aufrufs) - stattdessen start_file_upload/append_file_chunk/finish_file_upload verwenden und datei_pfad angeben.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        event_id: {
-          type: 'string',
-          description: 'UUID des eigenen Termins, zu dem die Notiz gehört.',
-        },
-        inhalt: {
-          type: 'string',
-          description: 'Freitext-Notiz (optional).',
-        },
-        dateiname: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
-        },
-        datei_base64: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
-        },
-        datei_pfad: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
-        },
-      },
-      required: ['event_id'],
-    },
-  },
-  {
     name: 'create_todo_note',
     description:
-      'Speichert eine Notiz zu einer bestimmten ToDo-Karte im MandatsCockpit-Account des angemeldeten Nutzers (erscheint dort im Karten-Detail-Modal, wie ein manuell hochgeladenes Dokument - reiner Freitext ohne Datei landet ebenfalls dort, auch wenn die Web-UI für Karten primär Datei-Uploads zeigt). Nur für ToDo-Karten, die dem Nutzer gehören oder mit ihm geteilt sind. Unterstützt Freitext, einen Datei-Anhang (Base64-kodiert) oder beides zusammen. Mindestens eins von beidem ist erforderlich. Datei-Anhänge über ca. 13 KB NICHT über dateiname+datei_base64 versuchen (Zeichenlimit des eigenen Tool-Aufrufs) - stattdessen start_file_upload/append_file_chunk/finish_file_upload verwenden und datei_pfad angeben.',
+      'Speichert eine Text-Notiz an einer ToDo-Karte (erscheint im Karten-Detail unter "Notizen" und in der Sitzungsansicht, wenn die Karte mit einer Sitzung verknüpft ist). Für Karten, die dem Nutzer gehören oder mit ihm geteilt sind; Kolleg*innen, auf deren Board die Karte liegt, sehen die Notiz ebenfalls. Notizen sind reiner Text (Markdown möglich), Dateien lassen sich nicht anhängen. Sitzungen und Termine haben keine eigenen Notizen: eine Sitzungsvorbereitung gehört an die passende Karte oder als persönliches Dokument (create_document, sichtbarkeit="persoenlich") per link_document_session an die Sitzung.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -212,22 +150,10 @@ export const TOOLS = [
         },
         inhalt: {
           type: 'string',
-          description: 'Freitext-Notiz (optional).',
-        },
-        dateiname: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
-        },
-        datei_base64: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
-        },
-        datei_pfad: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
+          description: 'Text der Notiz.',
         },
       },
-      required: ['todo_id'],
+      required: ['todo_id', 'inhalt'],
     },
   },
   {
@@ -297,7 +223,7 @@ export const TOOLS = [
   {
     name: 'list_antraege',
     description:
-      'Listet Anträge auf - eigene und mit dem Nutzer geteilte. Liefert je Antrag auch die id, die für update_antrag_status und create_antrag_note gebraucht wird.',
+      'Listet Anträge auf - eigene und mit dem Nutzer geteilte. Liefert je Antrag auch die id, die für update_antrag_status gebraucht wird.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -353,31 +279,6 @@ export const TOOLS = [
     },
   },
   {
-    name: 'create_antrag_note',
-    description:
-      'Speichert eine Notiz zu einem bestimmten Antrag (Freitext, ein Datei-Anhang als Base64, oder beides). Für Anträge, die dem Nutzer gehören oder mit ihm geteilt sind. Mindestens eins von Text oder Datei ist erforderlich. Datei-Anhänge über ca. 13 KB NICHT über dateiname+datei_base64 versuchen (Zeichenlimit des eigenen Tool-Aufrufs) - stattdessen start_file_upload/append_file_chunk/finish_file_upload verwenden und datei_pfad angeben.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        antrag_id: { type: 'string', description: 'UUID des Antrags, zu dem die Notiz gehört.' },
-        inhalt: { type: 'string', description: 'Freitext-Notiz (optional).' },
-        dateiname: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
-        },
-        datei_base64: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
-        },
-        datei_pfad: {
-          type: 'string',
-          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
-        },
-      },
-      required: ['antrag_id'],
-    },
-  },
-  {
     name: 'list_antrag_fristen',
     description:
       'Berechnet die Einreichungsfristen (Sitzungsdatum minus die für die Ebene konfigurierte Vorlaufzeit aus Einstellungen -> Antrags-Fristen) für die eigenen aktiven Anträge mit verknüpfter Sitzung, sortiert nach Frist. Nur berechenbar, wenn Antrag, verknüpfte Sitzung UND eine Fristen-Einstellung für die jeweilige Ebene vorhanden sind.',
@@ -405,7 +306,7 @@ export const TOOLS = [
   {
     name: 'start_file_upload',
     description:
-      'Nur für das technische Konto (ALLRIS-Import) - andere Konten können keine Dateien hochladen und legen Notizen als Text an. Startet einen mehrteiligen Upload für eine größere Datei (z. B. PDF), die nicht in einem einzigen dateiname+datei_base64-Aufruf übertragen werden kann - Base64-Tool-Argumente über ca. 18.000 Zeichen (= ca. 13 KB Originaldatei) werden vom aufrufenden Client selbst abgeschnitten, nicht vom Server abgelehnt. Liefert eine upload_id, mit der anschließend append_file_chunk (mehrfach, mit dem Base64-Inhalt in Häppchen von je höchstens ca. 8000 Zeichen) und danach genau einmal finish_file_upload aufgerufen wird. Der finish_file_upload-Aufruf liefert einen datei_pfad, der bei create_session_note/create_event_note/create_todo_note/create_antrag_note statt dateiname+datei_base64 angegeben wird.',
+      'Nur für das technische Konto (ALLRIS-Import) - andere Konten können keine Dateien hochladen und legen Notizen als Text an (create_todo_note, create_document). Startet einen mehrteiligen Upload für eine größere Datei (z. B. PDF), die nicht in einem einzigen dateiname+datei_base64-Aufruf übertragen werden kann - Base64-Tool-Argumente über ca. 18.000 Zeichen (= ca. 13 KB Originaldatei) werden vom aufrufenden Client selbst abgeschnitten, nicht vom Server abgelehnt. Liefert eine upload_id, mit der anschließend append_file_chunk (mehrfach, mit dem Base64-Inhalt in Häppchen von je höchstens ca. 8000 Zeichen) und danach genau einmal finish_file_upload aufgerufen wird. Der finish_file_upload-Aufruf liefert einen datei_pfad, der bei create_document statt dateiname+datei_base64 angegeben wird.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -431,16 +332,15 @@ export const TOOLS = [
   {
     name: 'finish_file_upload',
     description:
-      'Schließt einen per start_file_upload begonnenen, mehrteiligen Upload ab: setzt alle per append_file_chunk übertragenen Häppchen lückenlos zusammen, dekodiert das Ergebnis und legt die Datei im Storage ab. Liefert einen datei_pfad, der anschließend bei create_session_note/create_event_note/create_todo_note/create_antrag_note bzw. create_document statt dateiname+datei_base64 angegeben wird.',
+      'Schließt einen per start_file_upload begonnenen, mehrteiligen Upload ab: setzt alle per append_file_chunk übertragenen Häppchen lückenlos zusammen, dekodiert das Ergebnis und legt die Datei im Storage ab. Liefert einen datei_pfad, der anschließend bei create_document statt dateiname+datei_base64 angegeben wird.',
     inputSchema: {
       type: 'object',
       properties: {
         upload_id: { type: 'string', description: 'upload_id aus start_file_upload.' },
         ziel: {
           type: 'string',
-          enum: ['notiz', 'dokument'],
-          description:
-            'Wofür die Datei bestimmt ist: "notiz" (Standard, für create_session_note/create_event_note/create_todo_note/create_antrag_note) oder "dokument" (für create_document im Dokumenten-Hub) - bestimmt den Ziel-Speicherort.',
+          enum: ['dokument'],
+          description: 'Nur noch "dokument" (Standard, für create_document im Dokumenten-Hub) - Notizen sind reiner Text.',
         },
       },
       required: ['upload_id'],

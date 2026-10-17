@@ -1,7 +1,14 @@
 ---
 name: document-feature
-description: Pattern for adding notes/file-upload capability to a new entity in MandatsCockpit (mirrors sessions, events, todos, antraege). Use whenever a task needs to attach notes or documents to something new.
+description: Pattern for adding notes/file-upload capability to a new entity in MandatsCockpit. SUPERSEDED since 0055 - notes exist only on ToDos and Hub documents; read the warning at the top before using.
 ---
+
+> **Überholt seit `0055_notizen_nur_todo.sql` (17.10.2026).** Entscheidung des Nutzers: Notizen gibt
+> es nur noch an ToDo-Karten (`summaries.todo_id`) und an Dokumenten im Hub (`dokumente.parent_id`),
+> Datei-Uploads durch Nutzer gar nicht mehr (0052). Eine neue Entität bekommt **keine** eigenen
+> Notizen – sie zeigt die Notizen ihrer verknüpften Karten/Dokumente an (Vorbild:
+> `TerminDetailPanel.tsx`, Abschnitt „Notizen"). Vor einer Abweichung den Nutzer fragen. Der Rest
+> dieser Datei beschreibt das alte Muster und bleibt nur als Hintergrund stehen.
 
 # Notizen/Datei-Upload an einer neuen Entität (MandatsCockpit)
 

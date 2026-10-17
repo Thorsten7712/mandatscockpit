@@ -58,7 +58,7 @@ function Card({
     >
       <p className={`text-sm font-medium ${todo.erledigt ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
         {todo.ebene && <span title="Für Kolleg*innen freigebbar/geteilt">🔗 </span>}
-        {hatDokument && <span title="Enthält Dokumente">📎 </span>}
+        {hatDokument && <span title="Enthält Notizen">📝 </span>}
         {todo.titel}
       </p>
       {(zeigeTermin || zeigeZustaendig) && (
@@ -224,7 +224,7 @@ export function TodoBoard() {
         .then(({ data }) => setSessionById(new Map((data ?? []).map((s) => [s.id, s]))))
     }
 
-    // 📎-Flag fürs "Enthält Dokumente" (siehe TodoDetailModal.tsx "Dokumente")
+    // 📝-Flag fürs "Enthält Notizen" (siehe TodoDetailModal.tsx "Notizen")
     // - nur für die aktuell sichtbaren Karten nachladen, kein Volltabellen-Join.
     const todoIds = todos.map((t) => t.id)
     if (todoIds.length === 0) {

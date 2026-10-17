@@ -9,7 +9,6 @@ import type {
   Profile,
   SessionRow,
   SummaryRow,
-  TodoComment,
   TodoColumn,
   TodoPlacement,
   TodoRow,
@@ -17,8 +16,6 @@ import type {
 import { formatDate, formatDateTime } from '../lib/format'
 import { EBENE_LABEL } from '../lib/sourceColors'
 import { gleicheGliederung } from '../lib/gliederung'
-import { DocumentPreviewModal } from './DocumentPreviewModal'
-import { fileNameFromPath } from '../lib/dateien'
 import { DetailModalShell } from './DetailModalShell'
 import { useLoeschDialog } from './LoeschDialog'
 
@@ -65,17 +62,18 @@ export function TodoDetailModal({
   const [shareSearch, setShareSearch] = useState('')
   const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
 
-  const [comments, setComments] = useState<TodoComment[]>([])
-  const [commentAuthorNames, setCommentAuthorNames] = useState<Map<string, string>>(new Map())
-  const [newComment, setNewComment] = useState('')
-  const [savingComment, setSavingComment] = useState(false)
-
-  const [documents, setDocuments] = useState<SummaryRow[]>([])
-  const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
+  // Notizen an der Karte (summaries.todo_id) - seit 0055 das einzige
+  // Notiz-System an Aufgaben, die früheren Kommentare sind darin aufgegangen.
+  // Sichtbar für alle, auf deren Board die Karte liegt.
+  const [notizen, setNotizen] = useState<SummaryRow[]>([])
+  const [autorNamen, setAutorNamen] = useState<Map<string, string>>(new Map())
+  const [neueNotiz, setNeueNotiz] = useState('')
+  const [notizSpeichert, setNotizSpeichert] = useState(false)
+  const [notizFehler, setNotizFehler] = useState<string | null>(null)
 
   // Verknüpfte Dokumente aus dem Dokumenten-Hub (n:m über todo_dokumente,
   // siehe 0037_todo_dokumente.sql) - bewusst getrennt von "documents" oben
-  // (das sind Datei-Uploads direkt an der Karte, summaries-Tabelle).
+  // (das sind die Notizen direkt an der Karte, summaries-Tabelle).
   const [linkedDokumente, setLinkedDokumente] = useState<DokumentRow[]>([])
   const [dokumentSearch, setDokumentSearch] = useState('')
   const [dokumentSearchResults, setDokumentSearchResults] = useState<DokumentRow[]>([])
@@ -119,21 +117,14 @@ export function TodoDetailModal({
     }
   }
 
-  async function loadComments() {
-    const { data } = await supabase.from('todo_comments').select('*').eq('todo_id', id).order('erstellt_am')
-    setComments(data ?? [])
-    const ids = Array.from(new Set((data ?? []).map((c) => c.user_id)))
-    if (ids.length === 0) {
-      setCommentAuthorNames(new Map())
-      return
-    }
-    const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
-    setCommentAuthorNames(new Map((profs ?? []).map((p) => [p.id, p.name])))
-  }
-
-  async function loadDocuments() {
+  async function loadNotizen() {
     const { data } = await supabase.from('summaries').select('*').eq('todo_id', id).order('erstellt_am')
-    setDocuments(data ?? [])
+    const ids = Array.from(new Set((data ?? []).map((n) => n.user_id)))
+    const { data: profs } =
+      ids.length > 0 ? await supabase.from('profiles').select('id, name').in('id', ids) : { data: [] }
+    // Beide nach demselben await setzen (siehe CLAUDE.md).
+    setAutorNamen(new Map((profs ?? []).map((p) => [p.id, p.name])))
+    setNotizen(data ?? [])
   }
 
   // RLS auf todo_dokumente/dokumente filtert bereits auf das für den Nutzer
@@ -220,8 +211,7 @@ export function TodoDetailModal({
 
   useEffect(() => {
     loadTodo()
-    loadComments()
-    loadDocuments()
+    loadNotizen()
     loadLinkedDokumente()
     loadSharing()
     supabase.auth.getUser().then(async ({ data }) => {
@@ -335,7 +325,7 @@ export function TodoDetailModal({
   const andereBoards = placements.filter((pl) => pl.user_id !== userId)
   const andereNamen = andereBoards.map((pl) => placementNames.get(pl.user_id) ?? 'Unbekannt')
 
-  /** Kommentare und Dokumente an einer geteilten Karte sehen alle Platzierten. */
+  /** Notizen an einer geteilten Karte sehen alle Platzierten. */
   function geteilteKartenFolgen(was: string): string[] | undefined {
     if (andereNamen.length === 0) return undefined
     return [
@@ -384,32 +374,27 @@ export function TodoDetailModal({
     onChanged()
   }
 
-  async function handleAddComment(e: FormEvent) {
+  async function handleAddNotiz(e: FormEvent) {
     e.preventDefault()
-    if (!userId || !newComment.trim()) return
-    setSavingComment(true)
+    if (!userId || !neueNotiz.trim()) return
+    setNotizSpeichert(true)
+    setNotizFehler(null)
     const { error } = await supabase
-      .from('todo_comments')
-      .insert({ todo_id: id, user_id: userId, inhalt: newComment.trim() })
-    if (!error) {
-      setNewComment('')
-      await loadComments()
+      .from('summaries')
+      .insert({ todo_id: id, user_id: userId, inhalt: neueNotiz.trim() })
+    if (error) {
+      setNotizFehler(error.message)
+    } else {
+      setNeueNotiz('')
+      await loadNotizen()
     }
-    setSavingComment(false)
+    setNotizSpeichert(false)
   }
 
-  async function handleDeleteComment(commentId: string) {
-    await supabase.from('todo_comments').delete().eq('id', commentId)
-    await loadComments()
-  }
-
-  async function handleDeleteDocument(documentId: string) {
-    const dok = documents.find((d) => d.id === documentId)
-    const { error } = await supabase.from('summaries').delete().eq('id', documentId)
+  async function handleDeleteNotiz(notizId: string) {
+    const { error } = await supabase.from('summaries').delete().eq('id', notizId)
     if (error) throw new Error(error.message)
-    // Die Datei mit entfernen - vorher blieb sie verwaist im Bucket liegen.
-    if (dok?.datei_url) await supabase.storage.from('zusammenfassungen').remove([dok.datei_url])
-    await loadDocuments()
+    await loadNotizen()
   }
 
   // Bereits geteilt = tatsächliche todo_placements-Zeilen (unabhängig von der
@@ -749,7 +734,7 @@ export function TodoDetailModal({
                     andereNamen.length > 0
                       ? [
                           `Die Karte liegt auch auf dem Board von ${andereNamen.join(', ')} und verschwindet dort ebenfalls.`,
-                          'Kommentare und Dokumente an der Karte gehen mit verloren.',
+                          'Die Notizen an der Karte gehen mit verloren.',
                           'Das lässt sich nicht rückgängig machen.',
                         ]
                       : undefined,
@@ -777,90 +762,49 @@ export function TodoDetailModal({
 
   const rightColumn = (
     <>
-      {/* Nur noch Altbestand: neue Dateien lassen sich seit 0052_uploads_sperren.sql
-          nicht mehr hochladen, Notizen sind Text. */}
-      {documents.length > 0 && (
-        <>
-          <h2 className="font-semibold mb-2">Dateien</h2>
-          <ul className="space-y-2 mb-3">
-            {documents.map((d) => (
-              <li key={d.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
-                {d.inhalt && <p className="text-sm whitespace-pre-wrap">{d.inhalt}</p>}
-                {d.datei_url && (
-                  <button
-                    type="button"
-                    onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
-                    className="mc-btn-ghost px-2! py-1! text-xs!"
-                  >
-                    📎 {fileNameFromPath(d.datei_url)}
-                  </button>
-                )}
-                <div className="mt-1 flex items-center justify-between">
-                  <span className="text-xs text-slate-400">{formatDateTime(d.erstellt_am)}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      loeschRueckfrage({
-                        titel: fileNameFromPath(d.datei_url ?? ''),
-                        was: 'Das Dokument',
-                        folgen: geteilteKartenFolgen('Das Dokument'),
-                        ausfuehren: () => handleDeleteDocument(d.id),
-                      })
-                    }
-                    className="mc-btn-danger px-2! py-1! text-xs!"
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      <h2 className="font-semibold mb-2">Kommentare</h2>
+      <h2 className="font-semibold mb-2">Notizen</h2>
       <ul className="space-y-2 mb-3">
-        {comments.map((c) => (
-          <li key={c.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
-            <p className="text-sm whitespace-pre-wrap">{c.inhalt}</p>
+        {notizen.map((n) => (
+          <li key={n.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
+            <p className="text-sm whitespace-pre-wrap">{n.inhalt}</p>
             <div className="flex items-center justify-between mt-1">
               <span className="text-xs text-slate-400">
-                {c.user_id === userId ? 'Du' : commentAuthorNames.get(c.user_id) ?? 'Unbekannt'} ·{' '}
-                {formatDateTime(c.erstellt_am)}
+                {n.user_id === userId ? 'Du' : autorNamen.get(n.user_id) ?? 'Unbekannt'} ·{' '}
+                {formatDateTime(n.erstellt_am)}
               </span>
-              <button
-                type="button"
-                onClick={() =>
-                  loeschRueckfrage({
-                    titel: c.inhalt.length > 70 ? `${c.inhalt.slice(0, 70)}…` : c.inhalt,
-                    was: 'Der Kommentar',
-                    folgen: geteilteKartenFolgen('Der Kommentar'),
-                    ausfuehren: () => handleDeleteComment(c.id),
-                  })
-                }
-                className="mc-btn-danger px-2! py-1! text-xs!"
-              >
-                Löschen
-              </button>
+              {n.user_id === userId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = n.inhalt ?? ''
+                    loeschRueckfrage({
+                      titel: text.length > 70 ? `${text.slice(0, 70)}…` : text,
+                      was: 'Die Notiz',
+                      folgen: geteilteKartenFolgen('Die Notiz'),
+                      ausfuehren: () => handleDeleteNotiz(n.id),
+                    })
+                  }}
+                  className="mc-btn-danger px-2! py-1! text-xs!"
+                >
+                  Löschen
+                </button>
+              )}
             </div>
           </li>
         ))}
-        {comments.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kommentare.</li>}
+        {notizen.length === 0 && <li className="text-slate-400 text-sm">Noch keine Notizen.</li>}
       </ul>
-      <form onSubmit={handleAddComment} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <form onSubmit={handleAddNotiz} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <textarea
-          placeholder="Kommentar hinzufügen"
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
+          placeholder="Notiz hinzufügen"
+          value={neueNotiz}
+          onChange={(e) => setNeueNotiz(e.target.value)}
           className="mc-input w-full"
-          rows={2}
+          rows={3}
         />
-        <button
-          type="submit"
-          disabled={savingComment || !newComment.trim()}
-          className="mc-btn-primary"
-        >
-          {savingComment ? 'Speichern...' : 'Kommentieren'}
+        {notizFehler && <p className="text-red-600 text-sm">{notizFehler}</p>}
+        <button type="submit" disabled={notizSpeichert || !neueNotiz.trim()} className="mc-btn-primary">
+          {notizSpeichert ? 'Speichern...' : 'Hinzufügen'}
         </button>
       </form>
     </>
@@ -876,13 +820,6 @@ export function TodoDetailModal({
         right={rightColumn}
       />
       {loeschDialog}
-      {previewDoc && (
-        <DocumentPreviewModal
-          path={previewDoc.path}
-          fileName={previewDoc.name}
-          onClose={() => setPreviewDoc(null)}
-        />
-      )}
     </>
   )
 }
