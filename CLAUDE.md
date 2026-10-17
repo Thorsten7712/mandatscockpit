@@ -42,7 +42,13 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 
 - **Login/Auth**: Supabase Auth, Redirect-Schutz (`ProtectedRoute`), erzwungener Passwortwechsel beim
   ersten Login bzw. nach Admin-Reset (`ForcedPasswordChange`).
-- **Dashboard**: optionaler „Presseschau"-Abschnitt (newspaperartige Darstellung hochgeladener
+- **Dashboard**: „Neuigkeiten" statt Mails (`NeuigkeitenSection.tsx`, Logik in
+  `src/lib/neuigkeiten.ts`, `0057_neuigkeiten.sql`): links „Neu für dich" seit dem letzten „Alles
+  gesehen" (Zuweisungen, mit mir geteilte Karten, Notizen anderer an meinen Karten, neue
+  Tagesordnungspunkte kommender Sitzungen meiner Gremien), rechts „Demnächst" (Sitzungen meiner
+  Gremien in 7 Tagen, Aufgaben fällig in 3 Tagen oder überfällig, Antragsfristen). Der Stand liegt
+  in der eigenen Tabelle `neuigkeiten_stand`, nicht in `profiles` (dort für Kolleg*innen lesbar);
+  beim ersten Besuch gilt nichts als neu. Leer = Abschnitt ausgeblendet. Optionaler „Presseschau"-Abschnitt (newspaperartige Darstellung hochgeladener
   Presseschauen, Tage-Navigation, nur sichtbar wenn `profiles.presseschau_aktiv` gesetzt ist,
   strikt privat pro Nutzer), ToDo-Board (frei definierbare Spalten, Drag & Drop, Teilen mit Partei-/
   Ebenen-/Gliederungs-Kolleg*innen), „Meine Dokumente" (Anträge + ToDo-Karten mit Notizen in einer

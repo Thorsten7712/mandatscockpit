@@ -3076,3 +3076,28 @@ Karte schon haben; `list_todos` nennt den Namen.
 **Backup, Nachtrag:** Der erste Lauf (9,4 MB Daten, verschlüsselt 2,5 MB) lief durch; pg_dump
 warnt wegen der Selbstreferenz `dokumente.parent_id`. Die Wiederherstellungsanleitung im Kopf von
 `backup.yml` nennt jetzt `session_replication_role = replica`.
+
+### Neuigkeiten im Cockpit statt Mails (2026-10-17)
+
+**Entscheidung (Nutzer):** vorerst keine Mails; das Cockpit zeigt selbst, was passiert ist.
+
+**Dashboard, oberhalb des Boards** (`NeuigkeitenSection.tsx`, Logik `src/lib/neuigkeiten.ts`):
+- *Neu für dich* seit dem letzten „Alles gesehen": Zuweisungen an mich, mit mir geteilte Karten,
+  Notizen anderer an meinen Karten (je Karte eine Zeile), neue Tagesordnungspunkte für kommende
+  Sitzungen meiner Gremien („Tagesordnung ist da" bzw. „n neue Punkte").
+- *Demnächst*, unabhängig vom letzten Besuch: Sitzungen meiner Gremien in den nächsten 7 Tagen
+  (mit TOP-Zahl oder „noch keine Tagesordnung"), Aufgaben auf meinem Board, die in 3 Tagen fällig
+  oder überfällig sind, Fristen eigener Antragsentwürfe in 7 Tagen. Heute/überfällig amber.
+- Ein Klick öffnet Karte, Sitzung oder Antrag. Sind beide Listen leer, bleibt der Abschnitt weg.
+
+**`0057_neuigkeiten.sql`:** `neuigkeiten_stand` (je Nutzer `gesehen_am`, Policy nur für sich) –
+bewusst nicht in `profiles`, weil Kolleg*innen das Profil lesen dürfen und der letzte Besuch sie
+nichts angeht. `todo_placements.erstellt_am` (seit wann eine Karte auf dem Board liegt; Bestand
+bekommt den Migrationszeitpunkt, unschädlich, weil der erste Besuch erst den Ausgangsstand setzt
+und davor nichts als neu gilt) und `todos.zustaendig_seit`, gesetzt im Zuständigkeits-Trigger aus
+0056. Generalprobe: Zuweisen setzt, Lösen leert `zustaendig_seit`; fremder Stand weder lesbar noch
+setzbar (42501). Alle Abfragen des Loaders gegen das Live-Schema geprüft.
+
+Berechnet wird in der Oberfläche statt in einer Datenbankfunktion: die Regeln (Fristen,
+Gremienauswahl, „überfällig" ab Tagesende) sind dieselben wie in Board, Kalender und Anträgen,
+und alles läuft mit den Rechten des Nutzers.
