@@ -253,9 +253,8 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   zufällige Dokumente, darunter die neuesten. Jede Abfrage, die potenziell den ganzen Hub oder
   alle `sitzung_dokumente` lädt, braucht eine stabile Sortierung und seitenweises Laden
   (`alleZeilen()` in `mcp-server/tools/dokumente.ts`); lange Id-Listen für `.in()` in Stücken
-  (`inStuecken()`), weil sie in der URL landen. **Offen:** `Dokumente.tsx` und `Archiv.tsx`
-  (`loadHubDokumente`) laden den Hub noch in einer Abfrage (neueste zuerst) und zeigen deshalb nur
-  die neuesten 1.000 Dokumente – die ältesten fehlen in Liste, Suche und Archiv.
+  (`inStuecken()`), weil sie in der URL landen. Im Frontend dieselben Helfer in
+  `src/lib/alleZeilen.ts` (Hub-Liste, Archiv, Sitzungen je Dokument, Notiz-Lesestatus).
 - **Zeitstempel-Vergleiche client-seitig immer numerisch**: PostgREST liefert `timestamptz` als
   `...+00:00`, `startOfTodayIso()` erzeugt `...Z` – ein String-Vergleich derselben Zeitpunkte in den
   zwei Schreibweisen ist falsch. `Date.parse(a) < Date.parse(b)` verwenden (siehe

@@ -2880,3 +2880,31 @@ einem Fehler auf Seite 2.
 
 **Offen, nicht Teil dieser Änderung:** Die Web-UI hat dieselbe Grenze – `Dokumente.tsx` und
 `Archiv.tsx` laden den Hub in einer Abfrage und zeigen nur die neuesten 1.000 Dokumente.
+
+### Web-UI: Dokumenten-Hub und Archiv ohne 1.000-Zeilen-Lücke (2026-10-17)
+
+Dieselbe Grenze wie im MCP-Server (Eintrag davor), hier mit sichtbaren Folgen für alle Mitglieder:
+
+- **Dokumente-Reiter und Archiv** luden den Hub in einer Abfrage, neueste zuerst – die ältesten rund
+  140 der 1.139 sichtbaren Drucksachen fehlten in Liste und Suche, im Archiv also gerade das, was
+  dorthin gehört.
+- **`ladeSitzungenJeDokument()`** (`src/lib/dokumenteArchiv.ts`) bekam von 2.324 Verknüpfungen nur
+  1.000. Für die übrigen Dokumente war keine Sitzung bekannt – sie galten damit als **nicht
+  archiviert** und standen in der Arbeitsliste, und der Filter „Meine Gremien" griff bei ihnen nicht.
+  Dazu stand die ganze Id-Liste (1.139 UUIDs, rund 42 KB) in einer einzigen URL.
+- Vorsorglich mit umgestellt: die vergangenen Sitzungen im Archiv (552, wachsen täglich, allein die
+  Fraktions-Terminquelle bringt über 400) und die Notizen für die Fett-Markierung ungelesener
+  Dokumente (249, wachsen mit den automatisch angelegten Notizen).
+
+Lösung wie im MCP-Server: `src/lib/alleZeilen.ts` mit `alleZeilen()` (seitenweise, stabil sortiert)
+und `inStuecken()` (lange `.in()`-Listen aufteilen) – bewusst doppelt zur Deno-Fassung, kein
+gemeinsames Build-Tooling. Bricht das Laden der Dokumente ab, zeigt der Dokumente-Reiter jetzt
+einen eigenen Hinweis, statt eine halbe Liste wie eine vollständige aussehen zu lassen.
+
+Geprüft mit einem nachgebauten Supabase-Client mit echter 1.000-Zeilen-Grenze und echten
+Größenordnungen (1.139 Dokumente, 552 Sitzungen, 2.324 Verknüpfungen): neue Fassung 2.324/2.324
+Verknüpfungen, größte `in()`-Liste 150 Ids; die alte Fassung aus `main` im selben Test 1.000/2.324.
+Lint und Build ohne Meldungen. Die Seiten selbst sind hinter dem Login und nicht im Browser geprüft.
+
+Unverändert: Der Dokumente-Reiter lädt weiterhin den vollen Text aller Drucksachen (rund 10 MB),
+weil Suche und Vorschau ihn brauchen.

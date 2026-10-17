@@ -12,6 +12,7 @@ import { fileNameFromPath } from '../lib/dateien'
 import { formatDate, formatDateTime, formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
 import { EBENE_COLOR, EBENE_LABEL, sourceColorById, tagColor } from '../lib/sourceColors'
 import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
+import { alleZeilen } from '../lib/alleZeilen'
 import { ANTRAG_STATUS_ABGESCHLOSSEN, antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 
 type Tab = 'sitzungen' | 'aufgaben' | 'dokumente' | 'antraege'
@@ -106,16 +107,23 @@ export default function Archiv() {
     setMeineGremien(gremien)
     const terminSourceIds = currentSources.filter((s) => s.art === 'termin').map((s) => s.id)
 
+    // Seitenweise (src/lib/alleZeilen.ts): vergangene Sitzungen wachsen jeden
+    // Tag, allein die Fraktions-Terminquelle bringt über 400 Einträge mit.
+    const stichtag = startOfTodayIso()
     const [byGremium, byTerminSource] = await Promise.all([
       gremien.length > 0
-        ? supabase.from('sessions').select('*').in('gremium', gremien).lt('datum', startOfTodayIso())
-        : Promise.resolve({ data: [] as SessionRow[] }),
+        ? alleZeilen<SessionRow>((von, bis) =>
+            supabase.from('sessions').select('*').in('gremium', gremien).lt('datum', stichtag).order('id').range(von, bis),
+          )
+        : Promise.resolve({ zeilen: [] as SessionRow[] }),
       terminSourceIds.length > 0
-        ? supabase.from('sessions').select('*').in('source_id', terminSourceIds).lt('datum', startOfTodayIso())
-        : Promise.resolve({ data: [] as SessionRow[] }),
+        ? alleZeilen<SessionRow>((von, bis) =>
+            supabase.from('sessions').select('*').in('source_id', terminSourceIds).lt('datum', stichtag).order('id').range(von, bis),
+          )
+        : Promise.resolve({ zeilen: [] as SessionRow[] }),
     ])
     const byId = new Map<string, SessionRow>()
-    ;[...(byGremium.data ?? []), ...(byTerminSource.data ?? [])].forEach((s) => byId.set(s.id, s))
+    ;[...byGremium.zeilen, ...byTerminSource.zeilen].forEach((s) => byId.set(s.id, s))
     setSessions(Array.from(byId.values()).sort((a, b) => b.datum.localeCompare(a.datum)))
   }
 
@@ -234,12 +242,17 @@ export default function Archiv() {
   // Spalte von dokumente, und ist in PostgREST nicht in einer Abfrage
   // ausdrückbar.
   async function loadHubDokumente() {
-    const { data } = await supabase
-      .from('dokumente')
-      .select('*')
-      .is('parent_id', null)
-      .order('erstellt_am', { ascending: false })
-    const rows = data ?? []
+    // Seitenweise, siehe src/lib/alleZeilen.ts - sonst fehlten ab 1.000
+    // Dokumenten die ältesten, also gerade das, was ins Archiv gehört.
+    const { zeilen: rows } = await alleZeilen<DokumentRow>((von, bis) =>
+      supabase
+        .from('dokumente')
+        .select('*')
+        .is('parent_id', null)
+        .order('erstellt_am', { ascending: false })
+        .order('id')
+        .range(von, bis),
+    )
     const { sitzungen } = await ladeSitzungenJeDokument(supabase, rows.map((r) => r.id))
     setHubSitzungen(sitzungen)
     setHubDokumente(rows)
