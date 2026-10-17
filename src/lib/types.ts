@@ -67,7 +67,13 @@ export interface DokumentRow {
    * drin, sondern wird beim Anzeigen abgeleitet - siehe src/lib/dokumenteArchiv.ts. */
   archiviert_am: string | null
   erstellt_am: string
+  /** Zwei Zeilen reiner Text für Listen, beim Schreiben berechnet (0058). */
+  vorschau: string | null
 }
+
+/** Ein Dokument, wie es Listen laden: ohne den vollen Text (rund 5 KB je
+ *  Drucksache). Zum Öffnen erst ladeDokument() aus src/lib/dokumentSpalten.ts. */
+export type DokumentListenZeile = Omit<DokumentRow, 'inhalt'>
 
 /** Individuelle Gelesen-Markierung pro Nutzer, immer auf ein Top-Level-Dokument
  * bezogen (siehe src/lib/dokumenteGelesen.ts für die Ungelesen-Berechnung). */

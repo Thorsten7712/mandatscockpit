@@ -2,8 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { DOKUMENT_LISTEN_SPALTEN } from '../lib/dokumentSpalten'
 import type {
-  DokumentRow,
+  DokumentListenZeile,
   Ebene,
   EventRow,
   Profile,
@@ -74,9 +75,9 @@ export function TodoDetailModal({
   // Verknüpfte Dokumente aus dem Dokumenten-Hub (n:m über todo_dokumente,
   // siehe 0037_todo_dokumente.sql) - bewusst getrennt von "documents" oben
   // (das sind die Notizen direkt an der Karte, summaries-Tabelle).
-  const [linkedDokumente, setLinkedDokumente] = useState<DokumentRow[]>([])
+  const [linkedDokumente, setLinkedDokumente] = useState<DokumentListenZeile[]>([])
   const [dokumentSearch, setDokumentSearch] = useState('')
-  const [dokumentSearchResults, setDokumentSearchResults] = useState<DokumentRow[]>([])
+  const [dokumentSearchResults, setDokumentSearchResults] = useState<DokumentListenZeile[]>([])
   const [dokumentDropdownOpen, setDokumentDropdownOpen] = useState(false)
   const [linkDokumentError, setLinkDokumentError] = useState<string | null>(null)
 
@@ -136,7 +137,7 @@ export function TodoDetailModal({
       setLinkedDokumente([])
       return
     }
-    const { data } = await supabase.from('dokumente').select('*').in('id', ids).order('erstellt_am', { ascending: false })
+    const { data } = await supabase.from('dokumente').select(DOKUMENT_LISTEN_SPALTEN).in('id', ids).order('erstellt_am', { ascending: false })
     setLinkedDokumente(data ?? [])
   }
 
@@ -146,7 +147,7 @@ export function TodoDetailModal({
       setDokumentSearchResults([])
       return
     }
-    const { data } = await supabase.from('dokumente').select('*').ilike('titel', `%${query.trim()}%`).limit(8)
+    const { data } = await supabase.from('dokumente').select(DOKUMENT_LISTEN_SPALTEN).ilike('titel', `%${query.trim()}%`).limit(8)
     setDokumentSearchResults((data ?? []).filter((d) => !linkedDokumente.some((ld) => ld.id === d.id)))
   }
 

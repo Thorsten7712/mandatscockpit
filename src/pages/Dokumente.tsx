@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Archive, ChevronLeft, ChevronRight, File, FileImage, FileText, Search, StickyNote, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { DokumentRow, Ebene, Profile } from '../lib/types'
+import type { DokumentListenZeile, DokumentRow, Ebene, Profile } from '../lib/types'
+import { DOKUMENT_LISTEN_SPALTEN, ladeDokument, sucheDokumente } from '../lib/dokumentSpalten'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
 import { fileExtension, fileNameFromPath, IMAGE_EXTENSIONS } from '../lib/dateien'
@@ -51,23 +52,6 @@ function speichereSeitengroesse(wert: number) {
   }
 }
 
-/**
- * Vereinheitlicht Text für den Suchvergleich: Kleinschreibung und alle
- * Weißraum-Folgen auf ein einzelnes Leerzeichen.
- *
- * Nötig wegen der Blocksatz-Reste aus dem PDF-Auszug der ALLRIS-Vorlagen: 184
- * der 244 Dokumente mit Inhalt enthalten Mehrfach-Leerzeichen mitten im Satz,
- * dazu harte Zeilenumbrüche. Ohne diese Normalisierung findet die Suche nach
- * "Jugendhilfe an Schule" nichts, sobald zwischen zwei Wörtern drei
- * Leerzeichen stehen - und das ist der Normalfall, nicht die Ausnahme.
- *
- * Die saubere Lösung liegt in der Extraktion (dailyallris); das hier macht die
- * Suche unabhängig davon, ob die Pipeline sauber liefert.
- */
-function suchtext(wert: string): string {
-  return wert.toLowerCase().replace(/\s+/g, ' ')
-}
-
 /** Bund braucht keine Gliederung - es gibt nur einen Bundestag (analog src/lib/gliederung.ts). */
 function gliederungFuer(profile: Profile | null, ebene: Ebene): string | null {
   if (!profile) return null
@@ -85,7 +69,7 @@ function chipClass(active: boolean): string {
 
 /** Datei-Typ-Icon für die Listenkarte - variiert nur das Glyph, nicht die
  *  Farbe (bewusst zurückhaltend, kein neues Farbsystem). */
-function docIcon(d: DokumentRow) {
+function docIcon(d: DokumentListenZeile) {
   if (!d.datei_url) return StickyNote
   const ext = fileExtension(d.datei_url)
   if (IMAGE_EXTENSIONS.has(ext)) return FileImage
@@ -109,7 +93,7 @@ function docIcon(d: DokumentRow) {
 export default function Dokumente() {
   const [userId, setUserId] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [documents, setDocuments] = useState<DokumentRow[]>([])
+  const [documents, setDocuments] = useState<DokumentListenZeile[]>([])
   const [authorNames, setAuthorNames] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
 
@@ -141,6 +125,38 @@ export default function Dokumente() {
   const [formError, setFormError] = useState<string | null>(null)
 
   const [openDoc, setOpenDoc] = useState<DokumentRow | null>(null)
+  // Treffer der Datenbanksuche; null = noch keine Antwort auf den aktuellen Begriff.
+  const [suchTreffer, setSuchTreffer] = useState<Set<string> | null>(null)
+  const [suchFehler, setSuchFehler] = useState<string | null>(null)
+
+  // Die Liste hat den Text nicht (0058) - beim Öffnen das ganze Dokument laden.
+  async function oeffne(id: string) {
+    const voll = await ladeDokument(id)
+    if (voll) setOpenDoc(voll)
+  }
+
+  // Erst nach einer kurzen Tipppause fragen, sonst ginge pro Buchstabe eine
+  // Abfrage raus. Eine veraltete Antwort (der Begriff hat sich inzwischen
+  // geändert) wird verworfen.
+  useEffect(() => {
+    const begriff = searchQuery.trim()
+    if (!begriff) {
+      setSuchTreffer(null)
+      setSuchFehler(null)
+      return
+    }
+    let veraltet = false
+    const zeitgeber = setTimeout(async () => {
+      const { ids, fehler } = await sucheDokumente(begriff)
+      if (veraltet) return
+      setSuchTreffer(ids)
+      setSuchFehler(fehler)
+    }, 250)
+    return () => {
+      veraltet = true
+      clearTimeout(zeitgeber)
+    }
+  }, [searchQuery])
 
   const [kinderByParent, setKinderByParent] = useState<Map<string, { erstellt_am: string }[]>>(new Map())
   const [gelesenMap, setGelesenMap] = useState<Map<string, string>>(new Map())
@@ -148,10 +164,12 @@ export default function Dokumente() {
   async function loadDocuments() {
     // Seitenweise: als eine Abfrage kamen nur die neuesten 1.000 Dokumente an,
     // die ältesten fehlten in Liste und Suche (src/lib/alleZeilen.ts).
-    const { zeilen: rows, fehler: dokFehler } = await alleZeilen<DokumentRow>((von, bis) =>
+    // Ohne den vollen Text (DOKUMENT_LISTEN_SPALTEN, 0058): die Liste zeigt
+    // nur die gespeicherte Vorschau, gesucht wird in der Datenbank.
+    const { zeilen: rows, fehler: dokFehler } = await alleZeilen<DokumentListenZeile>((von, bis) =>
       supabase
         .from('dokumente')
-        .select('*')
+        .select(DOKUMENT_LISTEN_SPALTEN)
         .is('parent_id', null)
         .order('erstellt_am', { ascending: false })
         .order('id')
@@ -263,6 +281,7 @@ export default function Dokumente() {
       gliederung,
       tags: newTags,
       inhalt: newInhalt.trim() || null,
+      vorschau: vorschau(newInhalt.trim() || null),
     })
     if (error) {
       setFormError(error.message)
@@ -276,7 +295,7 @@ export default function Dokumente() {
     await loadDocuments()
   }
 
-  async function handleToggleGelesen(d: DokumentRow, ungelesen: boolean) {
+  async function handleToggleGelesen(d: DokumentListenZeile, ungelesen: boolean) {
     if (!userId) return
     if (ungelesen) await markiereGelesen(supabase, d.id, userId)
     else await markiereUngelesen(supabase, d.id, userId)
@@ -310,11 +329,12 @@ export default function Dokumente() {
     }
     if (ebeneFilter !== 'alle' && d.ebene !== ebeneFilter) return false
     if (tagFilter && !d.tags.includes(tagFilter)) return false
-    if (searchQuery.trim()) {
-      const q = suchtext(searchQuery.trim())
-      const authorName = d.user_id !== userId ? authorNames.get(d.user_id) ?? '' : ''
-      const haystack = suchtext([d.titel, d.inhalt ?? '', ...d.tags, authorName].join(' '))
-      if (!haystack.includes(q)) return false
+    if (sucheAktiv) {
+      // Titel, Tags und Text durchsucht die Datenbank (sucheDokumente); den
+      // Namen der Autorin/des Autors steht dort nicht, der bleibt hier.
+      const q = searchQuery.trim().toLowerCase().replace(/\s+/g, ' ')
+      const authorName = d.user_id !== userId ? (authorNames.get(d.user_id) ?? '').toLowerCase() : ''
+      if (!suchTreffer?.has(d.id) && !(authorName && authorName.includes(q))) return false
     }
     return true
   })
@@ -387,6 +407,11 @@ export default function Dokumente() {
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
             Die Dokumente konnten nicht vollständig geladen werden ({ladeFehler}) – die Liste ist
             unvollständig, auch die Suche findet nicht alles.
+          </p>
+        )}
+        {suchFehler && (
+          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Die Suche ist fehlgeschlagen ({suchFehler}) – die Treffer sind unvollständig.
           </p>
         )}
         {sessionFehler && (
@@ -538,11 +563,11 @@ export default function Dokumente() {
               key={d.id}
               role="button"
               tabIndex={0}
-              onClick={() => setOpenDoc(d)}
+              onClick={() => oeffne(d.id)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
-                  setOpenDoc(d)
+                  oeffne(d.id)
                 }
               }}
               style={{ animationDelay: `${Math.min(idx, 8) * 30}ms` }}
@@ -603,8 +628,8 @@ export default function Dokumente() {
                     {formatDate(d.erstellt_am)}
                     {d.datei_url && ` · 📎 ${fileNameFromPath(d.datei_url)}`}
                   </p>
-                  {vorschau(d.inhalt) && (
-                    <p className="mt-1 line-clamp-2 text-sm text-slate-600">{vorschau(d.inhalt)}</p>
+                  {d.vorschau && (
+                    <p className="mt-1 line-clamp-2 text-sm text-slate-600">{d.vorschau}</p>
                   )}
                 </div>
               </div>

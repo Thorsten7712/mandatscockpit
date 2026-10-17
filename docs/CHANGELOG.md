@@ -3101,3 +3101,31 @@ setzbar (42501). Alle Abfragen des Loaders gegen das Live-Schema geprüft.
 Berechnet wird in der Oberfläche statt in einer Datenbankfunktion: die Regeln (Fristen,
 Gremienauswahl, „überfällig" ab Tagesende) sind dieselben wie in Board, Kalender und Anträgen,
 und alles läuft mit den Rechten des Nutzers.
+
+### Dokumenten-Suche in der Datenbank, Vorschau gespeichert (2026-10-17)
+
+**Anlass (Plan „Code und Leistung"):** `/dokumente` lud bei jedem Aufruf den vollen Text aller
+1.141 Drucksachen (5,6 MB Rohtext), nur für zwei Zeilen Vorschau und eine Suche im Browser.
+
+**`0058_dokumente_suche_vorschau.sql`:** Spalte `vorschau` (beim Schreiben berechnet) und die
+generierte Spalte `suchtext` (Titel, Tags, Text; klein, Weißraum zusammengezogen – wie die alte
+`suchtext()` im Browser) mit Trigramm-Index (`pg_trgm` im Schema `extensions`). Gesucht wird per
+`ILIKE '%…%'`, also mit derselben Teilwort-Semantik wie vorher – bewusst nicht mit der
+Wortstamm-Volltextsuche, die „Schule" in „Grundschule" nicht fände. Generalprobe: Index wird
+genutzt, 1,7 ms; Treffer als Thorsten Kois mit RLS. `array_to_string` ist nur STABLE deklariert,
+deshalb steckt der Ausdruck in `private.dokument_suchtext()` (IMMUTABLE).
+
+**Eine Vorschau-Logik für beide Seiten:** `vorlageMarkdown.ts` liegt jetzt unter
+`supabase/functions/_shared/` (keine Importe, läuft in Browser und Deno gleich);
+`src/lib/vorlageMarkdown.ts` reicht sie nur durch. Der MCP-Server setzt `vorschau` bei
+`create_document` und `update_document_inhalt`, die Web-Oberfläche beim Anlegen. Den Bestand füllt
+`scripts/wartung-vorschau.mjs` (Workflow `wartung-dateien.yml`, `skript=vorschau`). Die
+PR-Prüfung überspringt `_shared` beim `deno check` (keine eigene Function).
+
+**Oberfläche:** Listen laden `DOKUMENT_LISTEN_SPALTEN` (ohne Text), geöffnet wird über
+`ladeDokument()`. Die Suche fragt nach 250 ms Tipppause die Datenbank (`sucheDokumente()`); nur der
+Name der Autorin/des Autors wird weiter im Browser verglichen. Nirgends mehr `select('*')` auf
+`dokumente`: `suchtext` ist eine zweite Kopie des Textes und käme sonst überall mit.
+
+**Nebenbei behoben:** Die Zahl ungelesener Dokumente in der Kopfleiste wurde aus höchstens 1.000
+Zeilen berechnet (PostgREST-Grenze) und war dadurch zu niedrig; jetzt seitenweise.

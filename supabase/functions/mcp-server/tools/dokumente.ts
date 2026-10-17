@@ -1,5 +1,8 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { fileNameFromPath, formatDate, parseLimit, toolTextResult, uploadBase64File } from '../shared.ts'
+// Dieselbe Vorschau wie in der Web-Oberfläche (0058, dokumente.vorschau):
+// die Liste zeigt sie, statt den ganzen Text zu laden.
+import { vorschau } from '../../_shared/vorlageMarkdown.ts'
 
 const EBENEN = ['kommune', 'kreis', 'land', 'bund']
 
@@ -368,7 +371,18 @@ export async function createDocument(supabase: SupabaseClient, userId: string, a
 
   const { data: dokument, error } = await supabase
     .from('dokumente')
-    .insert({ user_id: userId, parent_id: parentId, titel, sichtbarkeit, ebene, gliederung, tags, inhalt, datei_url: dateiUrl })
+    .insert({
+      user_id: userId,
+      parent_id: parentId,
+      titel,
+      sichtbarkeit,
+      ebene,
+      gliederung,
+      tags,
+      inhalt,
+      datei_url: dateiUrl,
+      vorschau: vorschau(inhalt ?? null),
+    })
     .select('id')
     .single()
   if (error || !dokument) return toolTextResult(`Fehler beim Anlegen des Dokuments: ${error?.message}`, true)
@@ -781,7 +795,7 @@ export async function updateDocumentInhalt(supabase: SupabaseClient, userId: str
   const neu = modus === 'anhaengen' ? bisher + args.inhalt : args.inhalt
   const wert = neu.length > 0 ? neu : null
 
-  const { error } = await supabase.from('dokumente').update({ inhalt: wert }).eq('id', dokumentId)
+  const { error } = await supabase.from('dokumente').update({ inhalt: wert, vorschau: vorschau(wert) }).eq('id', dokumentId)
   if (error) return toolTextResult(`Fehler beim Aktualisieren des Inhalts: ${error.message}`, true)
 
   if (modus === 'anhaengen') {
