@@ -232,8 +232,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   (`dokumente.parent_id`). Keine Kommentare, keine Notizen an Sitzungen, Terminen oder Anträgen –
   die Sitzungsansicht zeigt die Notizen ihrer verknüpften Karten und Dokumente nur an. Die
   RLS-Bedingung steht in `summaries_manage_own` (WITH CHECK), im MCP-Server gespiegelt in
-  `tools/notes.ts`. `todo_comments`/`antrag_comments` sind leer und ohne Schreibweg, ein DROP steht
-  für den nächsten `supabase db push` vom Mac aus.
+  `tools/notes.ts`. Die Kommentar-Tabellen sind seit `0059` gelöscht.
 - **Das Repository ist öffentlich** – damit auch die Protokolle der Actions-Läufe und ihre
   Artefakte (jeder angemeldete GitHub-Nutzer kann sie herunterladen). Workflows, die mit echten
   Daten arbeiten, schreiben keine Inhalte ins Protokoll und laden Artefakte nur verschlüsselt hoch
@@ -243,13 +242,18 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 - **Deploy ist zweistufig**: Eine Migration wirkt sofort auf die Live-DB, das Frontend/die Edge
   Functions gehen aber erst mit `git push` live (separater Workflow-Trigger). Eine fertige
   DB-Migration ohne Push zeigt sich also noch nicht auf der Produktivseite.
-- **Migrationen in der Cloud-Sitzung laufen über den Supabase-Connector, nicht `supabase db push`**:
-  Der Container darf nach außen nur HTTPS, Postgres kommt weder direkt noch durch den Proxy durch
-  (getestet). Ablauf: Datei committen, dann per `execute_sql` in einem `begin … commit` den
-  Dateiinhalt ausführen **und** `insert into supabase_migrations.schema_migrations (version, name,
-  statements)` unter der Dateinummer. **Nie `apply_migration`** – es trägt einen Zeitstempel statt
-  der Nummer ein, und der nächste `supabase db push` vom Mac bricht dann ab. Keine
-  DB-Zugangsdaten in die Cloud-Umgebung. Details: `docs/UEBERGABE-CLOUD.md`, Teil 2, Abschnitt 3.
+- **Migrationen: zwei Wege, beide ohne Mac** (gearbeitet wird ausschließlich in Claude-Code-Cloud-
+  Sitzungen). Der Container darf nach außen nur HTTPS, Postgres kommt dort nicht durch.
+  (1) **Supabase-Connector** für alles, was der Code im selben PR braucht: vor dem Merge per
+  `execute_sql` in einem `begin … commit` den Dateiinhalt ausführen **und** `insert into
+  supabase_migrations.schema_migrations (version, name, statements)` unter der Dateinummer
+  (md5-Abgleich gegen die Datei, Muster in den Einträgen ab 0054). (2) **Workflow
+  `migrationen.yml`** (`supabase db push` vom GitHub-Runner, Secret `SUPABASE_DB_PASSWORD`): im PR
+  ein Trockenlauf, nach dem Merge spielt er ein, was noch fehlt – Pflichtweg für `DROP`/`DELETE`,
+  die über den Connector hängen, und Sicherheitsnetz für vergessene Dateien. Eine über den Connector
+  eingespielte Datei sieht `db push` als erledigt an. **Nie `apply_migration`** – es trägt einen
+  Zeitstempel statt der Nummer ein, und `db push` bricht dann ab. Keine DB-Zugangsdaten in die
+  Cloud-Umgebung. Details: `docs/UEBERGABE-CLOUD.md`, Teil 2, Abschnitt 3.
 - **Edge Functions**: eigenes `deno.json` pro Funktionsordner nötig für lokales `deno check`
   (Repo-Root-`package.json` bringt sonst Denos Modulauflösung durcheinander). `SUPABASE_URL`/
   `SUPABASE_SERVICE_ROLE_KEY` werden automatisch injiziert. Default `verify_jwt = true` prüft den
@@ -278,7 +282,8 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   eine Bestätigung zurück, die in der Cloud-Sitzung nicht ankommt – der Aufruf läuft nach 60 s
   in einen Timeout, ohne dass etwas passiert (Statement-/Lock-Timeouts greifen nicht, es wartet
   nicht die Datenbank). Policies daher mit `alter policy ... with check (false)` sperren statt
-  löschen, oder das `DROP` vom Mac aus per `supabase db push` einspielen. Dasselbe gilt für `DELETE` –
+  löschen, oder das `DROP` als Migration über den Workflow `migrationen.yml` einspielen (erstmals
+  `0059`). Dasselbe gilt für `DELETE` –
   auch innerhalb eines `do`-Blocks. Generalproben deshalb so bauen, dass sie ohne Löschung prüfen
   (Beispiel: `private.protokoll_herkunft()` direkt aufrufen statt eine Zeile zu löschen).
 - **Storage**: private Buckets (`zusammenfassungen`, `profilbilder`), Pfad-Muster
@@ -357,8 +362,8 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   **werfen** jetzt bei Fehlern, statt sie in einen eigenen State zu schreiben – der Dialog zeigt sie
   an und bleibt offen, sonst sähe ein Fehlschlag wie ein Erfolg aus.
 - **Typen und Datenbank laufen nicht mehr still auseinander**: `src/lib/database.types.ts` ist aus
-  der Datenbank erzeugt (auf dem Mac `npm run typen`, in der Cloud über den Connector
-  `generate_typescript_types`), `src/lib/typenPruefung.ts` vergleicht beim Build jeden Zeilentyp aus
+  der Datenbank erzeugt (in der Cloud über den Connector `generate_typescript_types`,
+  `npm run typen` dort, wo die Supabase-CLI angemeldet ist), `src/lib/typenPruefung.ts` vergleicht beim Build jeden Zeilentyp aus
   `types.ts` damit (fehlende/erfundene Spalten, fehlendes `null`, zu weiter Typ). Nach einer
   Migration also die Typen neu erzeugen – tsc nennt dann, was in `types.ts` fehlt. Beim Einführen
   fehlten sieben Spalten (u. a. `sessions.ics_uid`, `todos.zustaendig_seit`).

@@ -1,6 +1,6 @@
 // Aus der Datenbank erzeugt (Supabase, `supabase gen types typescript` bzw.
 // generate_typescript_types über den Connector) - nicht von Hand bearbeiten,
-// sondern nach einer Migration neu erzeugen. Stand: 0058.
+// sondern nach einer Migration neu erzeugen. Stand: 0059.
 //
 // Gekürzt auf die Zeilen- und Schreibtypen der Tabellen; die Hilfstypen
 // (Tables<>, TablesInsert<> ...) der Vorlage stehen unten in vereinfachter
@@ -25,9 +25,6 @@ export type Database = {
           titel: string
           user_id: string
         }
-      }
-      antrag_comments: {
-        Row: { antrag_id: string; erstellt_am: string; id: string; inhalt: string; user_id: string }
       }
       antrag_deadline_settings: {
         Row: { ebene: string; tage_vor_sitzung: number; user_id: string }
@@ -206,9 +203,6 @@ export type Database = {
       }
       todo_columns: {
         Row: { id: string; reihenfolge: number; titel: string; user_id: string }
-      }
-      todo_comments: {
-        Row: { erstellt_am: string; id: string; inhalt: string; todo_id: string; user_id: string }
       }
       todo_dokumente: {
         Row: { dokument_id: string; erstellt_am: string; id: string; todo_id: string }
