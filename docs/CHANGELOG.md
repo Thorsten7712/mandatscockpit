@@ -2814,3 +2814,10 @@ policies" (bewusst so gelassen, siehe `docs/UEBERGABE-CLOUD.md`).
 Nebenbei: `supabase/functions/share-todo/` hatte als einzige Function kein eigenes `deno.json`, `deno
 check` schlug dort fehl (CLAUDE.md-Fallstrick zur Modulauflösung). Nachgezogen; alle vier Functions
 prüfen sauber.
+
+### Leaked-Password-Protection bleibt aus (2026-10-17)
+
+Der letzte offene Befund des Sicherheits-Linters (`auth_leaked_password_protection`) lässt sich im
+Free-Tier nicht beheben: Der Abgleich gegen HaveIBeenPwned ist eine Pro-Plan-Funktion, der Schalter
+ließ sich im Dashboard nicht speichern. Bewusst so belassen und in `docs/UEBERGABE-CLOUD.md` als
+erledigt-mit-Begründung vermerkt, damit künftige Sitzungen den WARN nicht erneut verfolgen.

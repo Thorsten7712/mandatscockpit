@@ -97,9 +97,11 @@ prüfbare Policy; bei der Datenmenge ohne messbaren Nutzen.
 
 Offen:
 
-**5. Leaked-Password-Protection ist aus.** Ein Schalter im Supabase-Dashboard (Auth-Einstellungen),
-der Passwörter gegen HaveIBeenPwned prüft. Passt zum Projekt, das bereits erzwungenen
-Passwortwechsel kennt. **Muss Thorsten selbst klicken**, das geht nicht über eine Migration.
+**5. Leaked-Password-Protection ist aus – bewusst so belassen.** Der Abgleich gegen
+HaveIBeenPwned steht nur im Supabase-**Pro-Plan** zur Verfügung, das Projekt läuft im Free-Tier
+(am 17.10.2026 im Dashboard versucht, ließ sich nicht speichern). Der Linter meldet den Punkt
+deshalb weiter als WARN; das ist kein offener Auftrag. Ersatz im Free-Tier wären Mindestlänge und
+Zeichenanforderungen für Passwörter (Authentication → Attack Protection bzw. Providers → Email).
 
 Keiner dieser Befunde stammt aus der Tagesordnungs-Arbeit – die neuen Tabellen `sitzung_dokumente`
 und `fakten` zeigen dieselben Muster wie der Bestand, weil sie denselben Konventionen folgen.
@@ -250,7 +252,8 @@ Auswertungen Stichproben.
 2. ~~`auth.uid()` → `(select auth.uid())`, `to authenticated`, Helfer nach `private`~~ –
    erledigt am 17.10.2026 (`0050`, `0051`). Neue Policies und Helfer folgen dem Muster in
    CLAUDE.md („Muster für neue Policies und RLS-Helfer"). Offen bleibt nur der
-   Leaked-Password-Schalter im Dashboard.
+   Leaked-Password-Schalter – der geht nur im Pro-Plan und bleibt deshalb aus (siehe Linter-Befunde,
+   Punkt 5).
 3. Danach die Punkte unter „Geplante nächste Schritte" in `CLAUDE.md`.
 
 **Zwei Dinge, die dich sonst Zeit kosten:**
