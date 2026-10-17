@@ -242,7 +242,10 @@ export interface TodoRow {
   user_id: string
   titel: string
   beschreibung: string | null
+  /** Altes Freitextfeld, seit 0056 nicht mehr beschrieben. */
   zustaendig: string | null
+  /** Zuständige Person (0056) - hat die Karte immer auf ihrem Board oder hat sie angelegt. */
+  zustaendig_user_id: string | null
   faellig_am: string | null
   dokument_id: string | null
   session_id: string | null

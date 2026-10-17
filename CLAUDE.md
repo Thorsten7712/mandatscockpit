@@ -312,6 +312,13 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 - **Titel-basiertes Spalten-Matching**: Sonderverhalten für ToDo-Spalten wie „Neu"/„Fertig" läuft über
   case-insensitiven Titel-Vergleich, nicht über stabile IDs – bricht, wenn der Nutzer die Spalte
   umbenennt (bewusster Trade-off, da Spalten frei umbenennbar sind).
+- **ToDo-Zuweisung** (`0056_todo_zuweisung.sql`): `todos.zustaendig_user_id` statt des Freitexts
+  `zustaendig` (bleibt stehen, wird nicht mehr beschrieben). Zuständig sein kann nur, wer die Karte
+  angelegt hat oder auf dem Board hat – das erzwingt der Trigger `pruefe_zustaendigkeit`, und das
+  Entziehen der Freigabe löst die Zuständigkeit mit. Sehen und Bearbeiten laufen dadurch über die
+  vorhandene Platzierung, Partei und Ebene prüft weiterhin nur `share-todo`. Die Oberfläche teilt
+  die Karte beim Zuweisen mit, wenn nötig (nur der Ersteller); der MCP-Server (`update_todo`,
+  `zustaendig` = Name) weist nur unter Personen zu, die die Karte schon haben.
 - **Teilen/Kandidatensuche** (ToDos, Anträge): grobe Vorfilterung per RLS
   (`profiles_select_same_partei_ebene`), exakter Abgleich (Partei + Ebene + Gliederung) läuft
   clientseitig in `loadCandidates()`. Konten mit `profiles.technisch = true` (Automatik-Konten wie
@@ -365,30 +372,26 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 
 ## Geplante nächste Schritte
 
-1. **Echte Nutzer-Zuweisung für ToDo-Zuständigkeit** statt Freitext (`todos.zustaendig`) – laut
-   Nutzerentscheidung bewusst für später zurückgestellt. Würde eine neue Spalte (z. B.
-   `zustaendig_user_id`) sowie eine RLS-Erweiterung brauchen, damit die zugewiesene Person die Karte
-   auch sieht/bearbeiten kann – das ToDo-Board ist aktuell komplett privat (`todos_manage_own`).
-2. **Fraktionsbüro-Variante der Termin-Erstellung**: eigene Termine anlegen/bearbeiten/löschen ist
+1. **Fraktionsbüro-Variante der Termin-Erstellung**: eigene Termine anlegen/bearbeiten/löschen ist
    fertig (siehe oben), es fehlt noch die Rolle „Fraktionsbüro", die ein Zielmitglied aus der eigenen
    Fraktion auswählen und für dieses einen Termin (`herkunft = 'fraktionsbuero'`) anlegen kann.
    **Entschieden (17.10.2026):** Das Fraktionsbüro darf selbst angelegte Termine jederzeit ändern
    und löschen, auch nachdem das Mitglied sie bearbeitet hat. Offen dabei: Am Termin hängen Daten des Mitglieds (Notizen, Dateien, verknüpfte ToDos/Anträge/Dokumente). Ändert oder löscht das Fraktionsbüro den Termin, dürfen die nicht stillschweigend verschwinden – wie das gelöst wird, gehört in die anstehende Grundsatzüberlegung zu Notizen/Zusammenfassungen/Verknüpfungen und Kalender.
    Die Kalender-Einbindung insgesamt will der Nutzer ebenfalls grundsätzlich neu überdenken – vor
    dem Bau dieser Rolle also erst das Ergebnis davon abwarten.
-3. **RIS-Dokumenten-Import** (Phase 2, KONZEPT.md Abschnitt 5.1): automatischer Import öffentlicher
+2. **RIS-Dokumenten-Import** (Phase 2, KONZEPT.md Abschnitt 5.1): automatischer Import öffentlicher
    Ratsinformationssystem-Dokumente (Anträge/Vorlagen) in die weiterhin ungenutzte `documents`-Tabelle
    (0001_init.sql) - nicht zu verwechseln mit dem neuen `/dokumente`-Reiter (Tabelle `dokumente`,
    0033_dokumente.sql), der geteilte/persönliche, selbst hochgeladene Dokumente verwaltet und davon
    unabhängig ist.
-4. **iCal-Export** des zusammengeführten persönlichen Kalenders.
-5. **Bilder in Vorlagen**: Markdown kann Bilder referenzieren, aber der Storage-Bucket ist privat
+3. **iCal-Export** des zusammengeführten persönlichen Kalenders.
+4. **Bilder in Vorlagen**: Markdown kann Bilder referenzieren, aber der Storage-Bucket ist privat
    und die Lese-Policy hängt an `dokumente.datei_url` – ein eingebettetes Bild wäre nur für den
    Hochladenden sichtbar. Nötig wären eine Jointabelle `dokument_anhaenge` plus ein zweiter
    `exists`-Zweig in `dokumente_storage_select_own_or_shared`. `VorlageAnsicht.tsx` rendert
    Bild-Referenzen bis dahin als Link und lädt bewusst keine fremden URLs (die würden IP und
    Zeitpunkt jedes lesenden Mitglieds an einen fremden Server melden).
-6. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
+5. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
    `list_fakten`/`create_fakt` nach dem Muster von `tools/dokumente.ts` wäre additiv – dabei die
    Sichtbarkeitsprüfung wie dort explizit im Tool-Code nachbauen, der MCP-Server umgeht RLS.
 

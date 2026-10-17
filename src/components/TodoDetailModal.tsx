@@ -40,7 +40,6 @@ export function TodoDetailModal({
 
   const [editTitel, setEditTitel] = useState('')
   const [editBeschreibung, setEditBeschreibung] = useState('')
-  const [editZustaendig, setEditZustaendig] = useState('')
   const [editErledigt, setEditErledigt] = useState(false)
   const [terminModus, setTerminModus] = useState<TerminModus>('keine')
   const [editDatum, setEditDatum] = useState('')
@@ -59,6 +58,7 @@ export function TodoDetailModal({
   const [placementNames, setPlacementNames] = useState<Map<string, string>>(new Map())
   const [candidates, setCandidates] = useState<Profile[]>([])
   const [shareError, setShareError] = useState<string | null>(null)
+  const [zustaendigFehler, setZustaendigFehler] = useState<string | null>(null)
   const [shareSearch, setShareSearch] = useState('')
   const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
 
@@ -91,7 +91,6 @@ export function TodoDetailModal({
     setTodo(data)
     setEditTitel(data.titel)
     setEditBeschreibung(data.beschreibung ?? '')
-    setEditZustaendig(data.zustaendig ?? '')
     setEditErledigt(data.erledigt)
     if (data.event_id) {
       setTerminModus('termin')
@@ -261,7 +260,6 @@ export function TodoDetailModal({
     const update: Partial<TodoRow> = {
       titel: editTitel,
       beschreibung: editBeschreibung || null,
-      zustaendig: editZustaendig || null,
       faellig_am: terminModus === 'datum' ? editDatum || null : null,
       event_id: terminModus === 'termin' ? editEventId || null : null,
       session_id: terminModus === 'sitzung' ? editSessionId || null : null,
@@ -349,6 +347,34 @@ export function TodoDetailModal({
     onChanged()
   }
 
+  // Zuweisen (0056): die Person muss die Karte auf dem Board haben. Wer sie
+  // noch nicht hat, bekommt sie vorher geteilt - das darf nur der Ersteller,
+  // und share-todo prüft dabei gleiche Partei und Ebene. Der Trigger
+  // pruefe_zustaendigkeit hält die Regel auch ohne diese Oberfläche ein.
+  async function handleSaveZustaendig(value: string) {
+    if (!todo) return
+    setZustaendigFehler(null)
+    const ziel = value || null
+    const hatKarte = !ziel || ziel === todo.user_id || placements.some((p) => p.user_id === ziel)
+    if (!hatKarte) {
+      const { error } = await supabase.functions.invoke('share-todo', {
+        body: { action: 'share', todo_id: id, target_user_id: ziel },
+      })
+      if (error) {
+        setZustaendigFehler(error.message)
+        return
+      }
+      await loadSharing()
+    }
+    const { error } = await supabase.from('todos').update({ zustaendig_user_id: ziel }).eq('id', todo.id)
+    if (error) {
+      setZustaendigFehler(error.message)
+      return
+    }
+    setTodo({ ...todo, zustaendig_user_id: ziel })
+    onChanged()
+  }
+
   async function handleToggleShare(targetUserId: string, aktuellGeteilt: boolean) {
     setShareError(null)
     if (aktuellGeteilt) {
@@ -410,6 +436,46 @@ export function TodoDetailModal({
   const ungeteilteKandidatenGefiltert = candidates
     .filter((c) => !placements.some((p) => p.user_id === c.id))
     .filter((c) => c.name.toLowerCase().includes(shareSearch.trim().toLowerCase()))
+
+  // Zur Auswahl: wer die Karte schon hat (Ersteller und Platzierte) und - nur
+  // für den Ersteller - die Kandidat*innen, denen sie dabei geteilt würde.
+  const zustaendigOptionen = todo
+    ? [
+        ...new Map(
+          [
+            { id: todo.user_id, name: placementNames.get(todo.user_id) ?? (istErsteller ? myProfile?.name : undefined) ?? 'Ersteller*in' },
+            ...placements.map((p) => ({ id: p.user_id, name: placementNames.get(p.user_id) ?? '…' })),
+            ...(istErsteller ? candidates.map((c) => ({ id: c.id, name: c.name })) : []),
+          ].map((o) => [o.id, o]),
+        ).values(),
+      ]
+    : []
+
+  const zustaendigBlock = todo && (
+    <>
+      <select
+        value={todo.zustaendig_user_id ?? ''}
+        onChange={(e) => handleSaveZustaendig(e.target.value)}
+        className="mc-input w-full"
+      >
+        <option value="">– niemand –</option>
+        {zustaendigOptionen.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.id === userId ? `${o.name} (ich)` : o.name}
+            {!placements.some((p) => p.user_id === o.id) && o.id !== todo.user_id ? ' – wird dabei geteilt' : ''}
+          </option>
+        ))}
+      </select>
+      <p className="mt-1 text-xs text-slate-400">
+        {istErsteller
+          ? todo.ebene
+            ? 'Wer zuständig ist, bekommt die Karte auf das eigene Board und kann sie bearbeiten.'
+            : 'Für Kolleg*innen unten unter „Teilen" eine Ebene wählen – zuweisen lässt sich, wer die Karte teilen kann.'
+          : 'Zuweisen lässt sich, wer die Karte schon auf dem Board hat.'}
+      </p>
+      {zustaendigFehler && <p className="text-red-600 text-sm">{zustaendigFehler}</p>}
+    </>
+  )
 
   const teilenTab = todo && (
     <>
@@ -704,6 +770,9 @@ export function TodoDetailModal({
         )}
       </div>
       {linkDokumentError && <p className="mb-4 text-sm text-red-600">{linkDokumentError}</p>}
+
+      <h2 className="font-semibold mb-2">Zuständig</h2>
+      <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">{zustaendigBlock}</div>
 
       <h2 className="font-semibold mb-2">Teilen</h2>
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{teilenTab}</div>

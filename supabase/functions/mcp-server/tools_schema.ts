@@ -183,7 +183,11 @@ export const TOOLS = [
         titel: { type: 'string', description: 'Neuer Titel (optional).' },
         beschreibung: { type: 'string', description: 'Neue Beschreibung (optional).' },
         faellig_am: { type: 'string', description: 'Neues Fälligkeitsdatum im Format YYYY-MM-DD (optional).' },
-        zustaendig: { type: 'string', description: 'Neue Zuständigkeit als Freitext (optional).' },
+        zustaendig: {
+          type: 'string',
+          description:
+            'Wer zuständig ist: Name (oder Teil davon) einer Person, die die Karte schon hat (Ersteller*in oder jemand, mit dem sie geteilt ist), "ich" für den Nutzer selbst, leerer String für niemand. Die Person sieht die Karte auf ihrem Board und kann sie bearbeiten. Mit neuen Kolleg*innen muss die Karte zuerst in der Web-Oberfläche geteilt werden (optional).',
+        },
         session_id: {
           type: 'string',
           description: 'UUID einer Sitzung, mit der die Karte nachträglich verknüpft werden soll (optional, leerer String entfernt eine bestehende Verknüpfung).',

@@ -3052,3 +3052,27 @@ Artefakte der Actions-Läufe sind für jeden angemeldeten GitHub-Nutzer lesbar. 
 Artefakt `geloeschte-dateien` des Datei-Wartungslaufs musste deshalb gelöscht werden. Wartungsläufe
 verschlüsseln ihre Sicherung seither mit `BACKUP_PASSWORT` und brechen ohne das Secret vor jeder
 Änderung ab; das Notiz-Skript schreibt nur Längen, keine Inhalte ins Protokoll.
+
+### ToDo-Zuweisung an Personen (2026-10-17)
+
+**Entscheidung (Nutzer):** statt Freitext eine Person; die zugewiesene Person sieht die Karte und
+darf sie bearbeiten; zuweisbar sind Kolleg*innen gleicher Partei und Ebene.
+
+**`0056_todo_zuweisung.sql`:** Spalte `todos.zustaendig_user_id` (FK auf `profiles`, `on delete set
+null`). Statt einer eigenen Zugriffsregel hängt alles an der vorhandenen Platzierung: wer die Karte
+auf dem Board hat, sieht und bearbeitet sie schon, und auf ein fremdes Board kommt sie nur über
+`share-todo`, das Partei und Ebene prüft. Der Trigger `pruefe_zustaendigkeit` verlangt deshalb nur,
+dass die zuständige Person die Karte angelegt hat oder platziert ist (23514 sonst); das Löschen
+einer Platzierung löst die Zuständigkeit mit (`zustaendigkeit_mit_freigabe_loesen`). Generalprobe
+als Thorsten Kois: an platzierte Person ok, an nicht platzierte 23514, an sich selbst ok. Der alte
+Freitext war in keiner Zeile befüllt (und hatte in der Oberfläche gar kein Eingabefeld mehr).
+
+**Oberfläche:** Abschnitt „Zuständig" im Karten-Detail mit Auswahl; für den Ersteller stehen auch
+noch nicht geteilte Kandidat*innen der Karten-Ebene darin („wird dabei geteilt"). Board und Archiv
+zeigen den Namen; Karten, die mir jemand anderes zugewiesen hat, sind amber hervorgehoben.
+**MCP:** `update_todo(zustaendig)` nimmt einen Namen und weist nur unter Personen zu, die die
+Karte schon haben; `list_todos` nennt den Namen.
+
+**Backup, Nachtrag:** Der erste Lauf (9,4 MB Daten, verschlüsselt 2,5 MB) lief durch; pg_dump
+warnt wegen der Selbstreferenz `dokumente.parent_id`. Die Wiederherstellungsanleitung im Kopf von
+`backup.yml` nennt jetzt `session_replication_role = replica`.

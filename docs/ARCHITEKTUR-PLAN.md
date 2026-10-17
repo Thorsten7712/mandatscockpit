@@ -58,6 +58,6 @@ Erledigtes wird hier abgehakt, die Begründungen stehen ausführlich im CHANGELO
 - [x] Löschprotokoll (0053)
 - [x] Backup (Secrets `SUPABASE_DB_PASSWORD`, `BACKUP_PASSWORT` nötig)
 - [x] Notizen konsolidieren, Kommentare und Sitzungs-Notizen entfernen (0055; Altdaten per `wartung-notizen`, DROP der Kommentar-Tabellen offen)
-- [ ] ToDo-Zuweisung
+- [x] ToDo-Zuweisung (0056)
 - [ ] Neuigkeiten im Cockpit
 - [ ] Code und Leistung
