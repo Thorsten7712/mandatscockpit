@@ -3129,3 +3129,26 @@ Name der Autorin/des Autors wird weiter im Browser verglichen. Nirgends mehr `se
 
 **Nebenbei behoben:** Die Zahl ungelesener Dokumente in der Kopfleiste wurde aus höchstens 1.000
 Zeilen berechnet (PostgREST-Grenze) und war dadurch zu niedrig; jetzt seitenweise.
+
+### Tests und erzeugte Typen (2026-10-17)
+
+**Tests:** Vitest (`npm test`), 25 Tests in `src/lib/__tests__/` für die reinen Hilfsfunktionen –
+Archiv-Regel (letzte Sitzung zählt, numerischer Zeitvergleich `+00:00` gegen `Z`), Gelesen-Status,
+Vorlagen-Aufbereitung (Vorschau bevorzugt den Beschlussvorschlag, keine Absatz-Verklebung,
+Formular-Schwelle 6 Leerzeichen), Antragsfristen, Gliederung, `inStuecken`, Dateinamen. Läuft in
+der PR-Prüfung mit.
+
+**Typen:** `src/lib/database.types.ts` ist aus der Datenbank erzeugt. Die Typen in `types.ts`
+bleiben handgeschrieben, weil die Oberfläche engere Typen braucht als die Datenbank liefert (Ebene
+als Auswahl statt `string`) – `src/lib/typenPruefung.ts` vergleicht sie aber beim Build: fehlende
+oder erfundene Spalten, fehlendes `null`, zu weite Typen. Beim Einführen fehlten sieben Spalten
+(`profiles.created_at`, `calendar_sources.created_at`, `sessions.ics_uid`, `documents.created_at`,
+`events.created_at`, `todos.zustaendig_seit`, `todo_placements.erstellt_am`). Der Supabase-Client
+bleibt ungetypt: ein `createClient<Database>` hätte jede Abfrage auf `string` statt der engeren
+Typen gezogen und einen Umbau aller Komponenten verlangt.
+
+**Datenzugriff bündeln – Stand:** Neue Bereiche haben ihre Abfragen in eigenen Lade-Funktionen
+(`dokumentSpalten.ts`, `neuigkeiten.ts`, `notizFlags.ts`). Die bestehenden großen Komponenten
+(`TodoDetailModal`, `TerminDetailPanel`, `DokumentDetailModal`, `Settings`) fragen weiter selbst
+ab; sie ohne die Möglichkeit eines angemeldeten Rundgangs im Browser umzubauen, wäre ein großer
+Umbau ohne Prüfnetz. Sinnvoll schrittweise, wenn eine dieser Komponenten ohnehin angefasst wird.

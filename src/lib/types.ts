@@ -34,6 +34,7 @@ export interface Profile {
    * dailyallris). Wird aus den Teilen-Kandidatenlisten ausgeblendet, behält
    * sonst aber alle Rechte eines Mitglieds - siehe 0041_profiles_technisch.sql. */
   technisch: boolean
+  created_at: string
 }
 
 export interface PresseschauRow {
@@ -168,6 +169,7 @@ export interface CalendarSource {
   /** Token-Id aus src/lib/sourceColors.ts, null = Theme-Primärfarbe */
   farbe: string | null
   art: CalendarSourceArt
+  created_at: string
 }
 
 export interface UserSourceSubscription {
@@ -191,6 +193,8 @@ export interface SessionRow {
   ort: string | null
   quelle_url: string | null
   status: SessionStatus
+  /** ALLRIS-Sitzungskennung aus dem ICS-Feed ("ALLRIS-Sitzung-<SILFDNR>"), null bei nachgetragenen Sitzungen. */
+  ics_uid: string | null
   /** Nur bei manuell nachgetragenen Sitzungen gesetzt (nicht via ICS-Import) - bestimmt Bearbeiten/Löschen-Rechte. */
   erstellt_von: string | null
 }
@@ -202,6 +206,7 @@ export interface DocumentRow {
   ausschuss: string | null
   session_id: string | null
   tags: string[] | null
+  created_at: string
 }
 
 export interface SummaryRow {
@@ -228,6 +233,7 @@ export interface EventRow {
   status: EventStatus
   herkunft: EventHerkunft
   erstellt_von: string
+  created_at: string
 }
 
 export interface TodoColumn {
@@ -252,6 +258,8 @@ export interface TodoRow {
   zustaendig: string | null
   /** Zuständige Person (0056) - hat die Karte immer auf ihrem Board oder hat sie angelegt. */
   zustaendig_user_id: string | null
+  /** Seit wann die Person zuständig ist (0057, für die Neuigkeiten). */
+  zustaendig_seit: string | null
   faellig_am: string | null
   dokument_id: string | null
   session_id: string | null
@@ -272,6 +280,8 @@ export interface TodoPlacement {
   user_id: string
   column_id: string
   position: number
+  /** Seit wann die Karte auf diesem Board liegt (0057). */
+  erstellt_am: string
 }
 
 /** n:m-Verknüpfung zwischen ToDo-Karten und Dokumenten-Hub-Dokumenten
