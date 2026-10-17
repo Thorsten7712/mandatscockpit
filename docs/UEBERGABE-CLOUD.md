@@ -134,35 +134,50 @@ dort. **Achtung:** Ein Push auf `main` löst sofort zwei Deploys aus (GitHub Pag
 `npm ci`, `npx tsc -b`, `npx vite build`. Der ICS-Import-Skript braucht zwingend 22 (nicht 20),
 wegen des Realtime-Clients in supabase-js.
 
-### 3. Supabase CLI + zwei Umgebungsvariablen
+### 3. Migrationen: über den Supabase-Connector, nicht per `supabase db push`
 
-Das ist der Punkt, an dem es hier am häufigsten geklemmt hat: Auf dem Mac holt sich die CLI den
-Zugangstoken aus dem Schlüsselbund, und jede Abfrage blieb an einem Dialog hängen. In der Cloud gibt
-es keinen Schlüsselbund – dort laufen Migrationen **zuverlässiger**, sobald diese Variablen gesetzt
-sind:
+**`supabase db push` funktioniert in der Cloud-Umgebung nicht**, auch nicht mit Zugangsdaten.
+Getestet am 17.10.2026: Nach außen geht aus dem Container nur HTTPS. Die Postgres-Ports 5432/6543
+sind direkt gesperrt; der Proxy der Umgebung öffnet zwar einen Tunnel zum Pooler, bricht ihn aber
+als HTTPS auf – Postgres verhandelt TLS innerhalb seines eigenen Protokolls, das passt nicht
+zusammen (Verbindung wird zurückgesetzt). Daran ändern auch die „Allowed domains" nichts
+(`*.supabase.co`/`*.supabase.com` standen bereits drin), sie regeln nur das Ziel, nicht das Protokoll.
 
-| Variable | Wofür |
-|---|---|
-| `SUPABASE_ACCESS_TOKEN` | Persönlicher Supabase-Zugangstoken (nicht anon/service_role!). Existiert bereits als Repository-Secret gleichen Namens. |
-| `SUPABASE_DB_PASSWORD` | Datenbank-Passwort des Projekts. Ohne das fragt `supabase db push` interaktiv – in einer Cloud-Sitzung bleibt es dann hängen. |
+`SUPABASE_ACCESS_TOKEN` und `SUPABASE_DB_PASSWORD` gehören deshalb **nicht** in die
+Cloud-Umgebung: `db push` könnte sie dort nie nutzen, und das DB-Passwort ist Vollzugriff an RLS
+vorbei.
 
-Dazu einmalig im Projektordner:
+**Stattdessen über den Supabase-Connector** (läuft über HTTPS, Schreibwerkzeuge sind
+freigeschaltet). Ablauf für eine neue Migration `NNNN_name.sql`:
 
-```bash
-supabase link --project-ref cbxfeijnvnesahgksiad
-```
+1. Datei unter `supabase/migrations/` anlegen und **committen** – eingespielt wird nur, was im
+   Repository steht.
+2. Mit `execute_sql` in **einem** Aufruf, damit beides gemeinsam gelingt oder scheitert:
 
-`supabase/.temp/` ist git-ignoriert, die Verknüpfung kommt also nicht aus dem Repo mit.
+   ```sql
+   begin;
+   -- ... vollständiger Inhalt der Migrationsdatei ...
+   insert into supabase_migrations.schema_migrations (version, name, statements)
+   values ('NNNN', 'name', array['-- eingespielt über den Supabase-Connector']);
+   commit;
+   ```
 
-### 4. `.env.local` (nur für Dev-Server/Preview)
+3. Mit `list_migrations` prüfen, dass `NNNN` dasteht.
 
-```
-VITE_SUPABASE_URL=...
-VITE_SUPABASE_ANON_KEY=...
-```
+**Nicht `apply_migration` verwenden.** Es trägt die Migration unter einem Zeitstempel statt unter
+der Dateinummer ein. Die Historie ist heute sauber (`0001`–`0049`, exakt die Dateinamen); ein
+Zeitstempel-Eintrag brächte sie aus dem Takt, und der nächste `supabase db push` vom Mac bräche mit
+„Remote migration versions not found in local migrations directory" ab. Mit dem Eintrag unter der
+Dateinummer bleiben Mac und Cloud austauschbar – der Mac sieht `NNNN` als erledigt an.
 
-Beide existieren bereits als Repository-Secrets (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
-Für `tsc`/`vite build` sind sie **nicht** nötig – der Client fällt ohne sie auf Platzhalter zurück
+`raise notice`-Ausgaben kommen über `execute_sql` nicht zurück; wer Zahlen aus einer
+Daten-Migration braucht, fragt sie danach per `select` ab.
+
+### 4. `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (nur für Dev-Server/Preview)
+
+Sind als Umgebungsvariablen der Cloud-Umgebung eingetragen (17.10.2026); Vite liest sie direkt aus
+der Umgebung, eine `.env.local` ist nicht nötig. Die GitHub-Repository-Secrets gleichen Namens
+erreichen Cloud-Sitzungen **nicht**, die stehen nur Actions-Läufen zur Verfügung. Für `tsc`/`vite build` sind sie **nicht** nötig – der Client fällt ohne sie auf Platzhalter zurück
 und baut durch. Nur ein Vorschau-Server ohne diese Werte zeigt eine Seite ohne Daten.
 
 ### 5. Zwei MCP-Connectoren
@@ -180,11 +195,11 @@ es war, Zahlen aus der Datenbank zu berichten. Beispiel für den Unterschied: Di
 vergangenen Sitzungen fehlt eine Tagesordnung?" war vorher nur stichprobenartig zu beantworten –
 mit SQL ist sie eine Abfrage.
 
-Der Supabase-Server läuft über einen Personal Access Token. In einer Cloud-Sitzung muss der in der
-Umgebung liegen (GitHub-Repository-Secrets erreichen die Sitzung **nicht**, die stehen nur
-Actions-Läufen zur Verfügung). Read-only-Modus und Beschränkung auf die Projekt-Referenz
-einschalten, wo möglich: Lesen ist das, was fehlt – geschrieben wird weiter über Migrationsdateien,
-die im Repository nachvollziehbar bleiben.
+Der Supabase-Server ist ein claude.ai-Connector am Konto – er braucht kein Secret in der Umgebung
+und steht in jeder Cloud-Sitzung zur Verfügung, egal ob sie am Rechner, Handy oder iPad gestartet
+wurde. Die Schreibwerkzeuge sind bewusst freigeschaltet, weil Migrationen darüber laufen (siehe 3.).
+Die Regel dazu: Geschrieben wird ausschließlich, was als Migrationsdatei im Repository steht –
+`execute_sql` sonst nur lesend.
 
 ### 6. Was **nicht** gebraucht wird
 
@@ -193,8 +208,8 @@ gegen die Live-Datenbank; es gibt bewusst keine lokale Entwicklungsdatenbank.
 
 ### 7. Eine Warnung zur Reihenfolge
 
-Der Deploy ist **zweistufig**: `supabase db push` wirkt sofort auf die Live-DB, Frontend und Edge
-Functions gehen erst mit `git push` live. Code, der ein neues Schema erwartet, darf also nie vor der
+Der Deploy ist **zweistufig**: Eine Migration (Connector oder `supabase db push` vom Mac) wirkt
+sofort auf die Live-DB, Frontend und Edge Functions gehen erst mit dem Push nach `main` live. Code, der ein neues Schema erwartet, darf also nie vor der
 Migration gepusht werden. Umgekehrt ist eine Migration ohne Push harmlos.
 
 ---
@@ -225,8 +240,10 @@ Auswertungen Stichproben.
   Login-Durchläufe im Browser sind tabu (Passworteingabe ist eine Sicherheitsregel). Für
   UI-Änderungen lohnt ein Wegwerf-Harness, der die Komponente gegen eine Supabase-Attrappe rendert.
 - Edge Functions zusätzlich mit `deno check index.ts` in `supabase/functions/mcp-server/`.
-- Deploy ist zweistufig: erst `supabase db push`, dann `git push`. Nie umgekehrt, wenn Code ein
-  neues Schema erwartet.
+- Deploy ist zweistufig: erst die Migration einspielen, dann `git push` nach `main`. Nie umgekehrt,
+  wenn Code ein neues Schema erwartet. Migrationen laufen in der Cloud über den Supabase-Connector
+  (`execute_sql` + Eintrag unter der Dateinummer in `supabase_migrations.schema_migrations`), **nicht**
+  über `apply_migration` – Ablauf in `docs/UEBERGABE-CLOUD.md`, Teil 2, Abschnitt 3.
 - Deutsche Feld- und Tabellennamen in der Datenbank. RLS ist die **einzige** Zugriffskontrolle – es
   gibt keine Backend-Schicht, jede neue Tabelle braucht durchdachte Policies.
 - Commits und Changelog-Einträge auf Deutsch, mit der Begründung, nicht nur der Änderung. Das
@@ -251,8 +268,8 @@ Auswertungen Stichproben.
 
 - Die Tool-Liste eines MCP-Connectors ist **pro Unterhaltung eingefroren**. Nach einer Änderung am
   MCP-Server siehst du das neue Tool erst in einem neuen Chat.
-- `supabase db push` braucht `SUPABASE_ACCESS_TOKEN` und `SUPABASE_DB_PASSWORD` als
-  Umgebungsvariablen, sonst fragt es interaktiv und hängt.
+- `supabase db push` geht in der Cloud-Umgebung **nicht** (nur HTTPS nach außen, Postgres-Ports
+  gesperrt). Gar nicht erst versuchen, sondern den Connector-Weg nehmen.
 
 Frag nach, bevor du etwas Unumkehrbares tust – Löschen von Dokumenten oder Sitzungen trifft alle
 Mitglieder, nicht nur den Aufrufer.

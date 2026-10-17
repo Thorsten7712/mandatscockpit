@@ -2734,3 +2734,22 @@ von Meldungen. Nutzerwunsch: alle beheben, keine Meldungen mehr.
   die eigene einträgt).
 - **Deploy-Workflow auf Node 22** (vorher 20): Vite 8 verlangt mindestens 20.19, und Node 20 ist
   seit April 2026 ohne Support. Der ICS-Import lief schon auf 22.
+
+### Migrationen aus der Cloud-Sitzung: über den Supabase-Connector (2026-10-17)
+
+Die Übergabe-Doku sah vor, `SUPABASE_ACCESS_TOKEN` und `SUPABASE_DB_PASSWORD` in die Cloud-Umgebung
+zu legen, damit `supabase db push` dort läuft. Getestet: Das geht nicht, mit keinem Zugang. Der
+Container darf nach außen nur HTTPS; die Postgres-Ports 5432/6543 des Poolers sind direkt gesperrt,
+und durch den Proxy der Umgebung kommt Postgres auch nicht, weil der Proxy den Tunnel als HTTPS
+aufbricht (Postgres verhandelt TLS innerhalb seines eigenen Protokolls – Verbindung wird
+zurückgesetzt). Freigegebene Domains ändern daran nichts.
+
+Entscheidung (Nutzer): Migrationen aus der Cloud laufen über den Supabase-Connector, der über HTTPS
+geht und am Konto hängt – damit auch aus Sitzungen, die am Handy oder iPad gestartet werden.
+DB-Zugangsdaten kommen nicht in die Umgebung. Verfahren: committete Datei per `execute_sql` in einem
+`begin … commit` ausführen und im selben Aufruf unter ihrer Nummer in
+`supabase_migrations.schema_migrations` eintragen. Bewusst **nicht** `apply_migration`: das trägt
+einen Zeitstempel statt der Dateinummer ein, die bisher lückenlose Historie (`0001`–`0049`, exakt
+die Dateinamen) käme aus dem Takt, und der nächste `supabase db push` vom Mac bräche ab. So bleiben
+Mac und Cloud austauschbar. Festgehalten in `docs/UEBERGABE-CLOUD.md`, CLAUDE.md und im Skill
+`supabase-migration`.

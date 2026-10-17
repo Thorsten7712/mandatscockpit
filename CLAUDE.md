@@ -202,9 +202,16 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   (Beispiele: `current_user_fraktion()`, `antrag_gehoert_nutzer()`). `language sql`-Funktionen werden
   beim `CREATE FUNCTION` sofort gegen das Schema geparst (nicht erst beim Aufruf) – referenzierte
   Tabellen müssen in derselben Migration also **vorher** angelegt sein.
-- **Deploy ist zweistufig**: `supabase db push` bringt Migrationen sofort auf die Live-DB, das
-  Frontend/die Edge Functions gehen aber erst mit `git push` live (separater Workflow-Trigger). Eine
-  fertige DB-Migration ohne Push zeigt sich also noch nicht auf der Produktivseite.
+- **Deploy ist zweistufig**: Eine Migration wirkt sofort auf die Live-DB, das Frontend/die Edge
+  Functions gehen aber erst mit `git push` live (separater Workflow-Trigger). Eine fertige
+  DB-Migration ohne Push zeigt sich also noch nicht auf der Produktivseite.
+- **Migrationen in der Cloud-Sitzung laufen über den Supabase-Connector, nicht `supabase db push`**:
+  Der Container darf nach außen nur HTTPS, Postgres kommt weder direkt noch durch den Proxy durch
+  (getestet). Ablauf: Datei committen, dann per `execute_sql` in einem `begin … commit` den
+  Dateiinhalt ausführen **und** `insert into supabase_migrations.schema_migrations (version, name,
+  statements)` unter der Dateinummer. **Nie `apply_migration`** – es trägt einen Zeitstempel statt
+  der Nummer ein, und der nächste `supabase db push` vom Mac bricht dann ab. Keine
+  DB-Zugangsdaten in die Cloud-Umgebung. Details: `docs/UEBERGABE-CLOUD.md`, Teil 2, Abschnitt 3.
 - **Edge Functions**: eigenes `deno.json` pro Funktionsordner nötig für lokales `deno check`
   (Repo-Root-`package.json` bringt sonst Denos Modulauflösung durcheinander). `SUPABASE_URL`/
   `SUPABASE_SERVICE_ROLE_KEY` werden automatisch injiziert. Default `verify_jwt = true` prüft den
