@@ -128,6 +128,11 @@ Deno.serve(async (req) => {
   if (!user) {
     return respond(jsonRpcError(id, -32001, 'Unauthorized: ungültiges oder unbekanntes Token.'))
   }
+  // Für alle Tool-Aufrufe ein Client, der das Konto als Header mitschickt: Mit
+  // dem Service-Role-Schlüssel ist auth.uid() in der Datenbank leer, das
+  // Löschprotokoll (0053_loeschprotokoll.sql) liest das Konto deshalb aus
+  // x-mc-user - und nur bei der Service-Role, ein Nutzer kann ihn nicht fälschen.
+  const db = createClient(supabaseUrl, serviceRoleKey, { global: { headers: { 'x-mc-user': user.id } } })
 
   // Ab hier läuft jede Antwort bewusst über HTTP 200, auch JSON-RPC-Fehler
   // (falsche/fehlende method, unbekanntes Tool, nicht unterstützte
@@ -175,112 +180,112 @@ Deno.serve(async (req) => {
       let result: ReturnType<typeof toolTextResult>
       switch (name) {
         case 'create_todo':
-          result = await createTodo(supabase, user.id, args)
+          result = await createTodo(db, user.id, args)
           break
         case 'create_event':
-          result = await createEvent(supabase, user.id, args)
+          result = await createEvent(db, user.id, args)
           break
         case 'list_sessions':
-          result = await listSessions(supabase, user.id, args)
+          result = await listSessions(db, user.id, args)
           break
         case 'list_events':
-          result = await listEvents(supabase, user.id, args)
+          result = await listEvents(db, user.id, args)
           break
         case 'list_todos':
-          result = await listTodos(supabase, user.id, args)
+          result = await listTodos(db, user.id, args)
           break
         case 'list_notes':
-          result = await listNotes(supabase, user.id, args)
+          result = await listNotes(db, user.id, args)
           break
         case 'create_session_note':
-          result = await createSessionNote(supabase, user.id, args)
+          result = await createSessionNote(db, user.id, args)
           break
         case 'create_event_note':
-          result = await createEventNote(supabase, user.id, args)
+          result = await createEventNote(db, user.id, args)
           break
         case 'create_todo_note':
-          result = await createTodoNote(supabase, user.id, args)
+          result = await createTodoNote(db, user.id, args)
           break
         case 'complete_todo':
-          result = await completeTodo(supabase, user.id, args)
+          result = await completeTodo(db, user.id, args)
           break
         case 'update_todo':
-          result = await updateTodo(supabase, user.id, args)
+          result = await updateTodo(db, user.id, args)
           break
         case 'create_antrag':
-          result = await createAntrag(supabase, user.id, args)
+          result = await createAntrag(db, user.id, args)
           break
         case 'list_antraege':
-          result = await listAntraege(supabase, user.id, args)
+          result = await listAntraege(db, user.id, args)
           break
         case 'update_antrag_status':
-          result = await updateAntragStatus(supabase, user.id, args)
+          result = await updateAntragStatus(db, user.id, args)
           break
         case 'create_antrag_note':
-          result = await createAntragNote(supabase, user.id, args)
+          result = await createAntragNote(db, user.id, args)
           break
         case 'list_antrag_fristen':
-          result = await listAntragFristen(supabase, user.id)
+          result = await listAntragFristen(db, user.id)
           break
         case 'upload_presseschau':
-          result = await uploadPresseschau(supabase, user.id, args)
+          result = await uploadPresseschau(db, user.id, args)
           break
         case 'start_file_upload':
-          result = await startFileUpload(supabase, user.id, args)
+          result = await startFileUpload(db, user.id, args)
           break
         case 'append_file_chunk':
-          result = await appendFileChunk(supabase, user.id, args)
+          result = await appendFileChunk(db, user.id, args)
           break
         case 'finish_file_upload':
-          result = await finishFileUpload(supabase, user.id, args)
+          result = await finishFileUpload(db, user.id, args)
           break
         case 'create_document':
-          result = await createDocument(supabase, user.id, args)
+          result = await createDocument(db, user.id, args)
           break
         case 'list_documents':
-          result = await listDocuments(supabase, user.id, args)
+          result = await listDocuments(db, user.id, args)
           break
         case 'get_document':
-          result = await getDocument(supabase, user.id, args)
+          result = await getDocument(db, user.id, args)
           break
         case 'update_document_titel':
-          result = await updateDocumentTitel(supabase, user.id, args)
+          result = await updateDocumentTitel(db, user.id, args)
           break
         case 'link_document_session':
-          result = await linkDocumentSession(supabase, user.id, args)
+          result = await linkDocumentSession(db, user.id, args)
           break
         case 'unlink_document_session':
-          result = await unlinkDocumentSession(supabase, user.id, args)
+          result = await unlinkDocumentSession(db, user.id, args)
           break
         case 'set_session_agenda':
-          result = await setSessionAgenda(supabase, user.id, args)
+          result = await setSessionAgenda(db, user.id, args)
           break
         case 'list_session_agenda':
-          result = await listSessionAgenda(supabase, user.id, args)
+          result = await listSessionAgenda(db, user.id, args)
           break
         case 'update_document_archiv':
-          result = await updateDocumentArchiv(supabase, user.id, args)
+          result = await updateDocumentArchiv(db, user.id, args)
           break
         case 'update_document_inhalt':
-          result = await updateDocumentInhalt(supabase, user.id, args)
+          result = await updateDocumentInhalt(db, user.id, args)
           break
         case 'delete_document':
-          result = await deleteDocument(supabase, user.id, args)
+          result = await deleteDocument(db, user.id, args)
           break
         case 'link_todo_document':
-          result = await linkTodoDocument(supabase, user.id, args)
+          result = await linkTodoDocument(db, user.id, args)
           break
         case 'unlink_todo_document':
-          result = await unlinkTodoDocument(supabase, user.id, args)
+          result = await unlinkTodoDocument(db, user.id, args)
           break
         case 'update_document_tags':
-          result = await updateDocumentTags(supabase, user.id, args)
+          result = await updateDocumentTags(db, user.id, args)
           break
         case 'update_document_sharing':
-          result = await updateDocumentSharing(supabase, user.id, args)
+          result = await updateDocumentSharing(db, user.id, args)
           break
         case 'search':
-          result = await search(supabase, user.id, args)
+          result = await search(db, user.id, args)
           break
         default:
           return respond(jsonRpcError(id, -32602, `Unbekanntes Tool: ${name}`))

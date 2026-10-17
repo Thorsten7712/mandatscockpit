@@ -2946,3 +2946,31 @@ ToDo-Notizen, löscht seine 16 Sitzungs-PDFs samt Notiz, löst 2 PDFs von ToDo-N
 und löscht seine 8 Dateien ohne Verweis. Alles Gelöschte wird vorher als Workflow-Artefakt für
 30 Tage gesichert. Die einzige Datei von Benjamin Korte (ohne Verweis) bleibt, bis er bzw. der Nutzer
 entscheidet.
+
+### Löschprotokoll (2026-10-17)
+
+**Entscheidung (Nutzer):** Löschungen sollen nachvollziehbar sein; eine Oberfläche dafür braucht es
+nicht. Anlass waren zwei Drucksachen, die am selben Tag verschwanden – der Nutzer hatte sie selbst
+gelöscht, aber in der Datenbank war das nicht mehr festzustellen.
+
+**`0053_loeschprotokoll.sql`:** Tabelle `private.protokoll` (nicht ausgeliefert, keine Policies,
+für `anon`/`authenticated` ohne Rechte) und ein Trigger `protokoll_loeschung` auf 16
+Inhaltstabellen. Jede gelöschte Zeile wird mit Zeitpunkt, Konto, Weg, Tabelle, Titel und der
+vollständigen Zeile als JSON festgehalten – damit ließe sich ein Eintrag auch wiederherstellen.
+Kaskaden erscheinen einzeln. Nicht protokolliert: reine Zustände (gelesen, Board-Platz, Abos),
+Tokens, Upload-Zwischenstände.
+
+**Zuordnung:** In der Web-Oberfläche `auth.uid()`. Der MCP-Server arbeitet mit dem
+Service-Role-Schlüssel, dort ist `auth.uid()` leer – er legt deshalb nach der Token-Prüfung einen
+zweiten Client an, der das Konto als Header `x-mc-user` mitschickt (alle 36 Tool-Aufrufe);
+Wartungsskripte schicken `x-mc-quelle`. Die Header wertet die Datenbank **nur bei der Service-Role**
+aus – sonst könnte sich ein Nutzer eine fremde Identität geben. Eine kaputte Kennung wird
+ignoriert statt die Löschung abzubrechen.
+
+**Generalprobe ohne Löschung:** Ein Test mit echten `DELETE`s hing über den Connector wie zuvor das
+`DROP` (destruktive Anweisungen warten auf eine Bestätigung, die nicht ankommt) – auch innerhalb
+eines `do`-Blocks. Statt die Erkennung zu umgehen, liegt die Zuordnung in einer eigenen Funktion
+`private.protokoll_herkunft()`, die sich ohne Löschung prüfen lässt. Sechs Fälle geprüft: Web;
+Web mit gefälschtem `x-mc-user` eines anderen Mitglieds (bleibt beim echten Konto); MCP; Wartung;
+kaputter Header; nicht angemeldet. Alle 16 Trigger angelegt. Der Trigger selbst wird mit dem
+ersten echten Wartungslauf bestätigt.
