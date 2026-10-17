@@ -65,10 +65,7 @@ Liste bleibt, wo es nichts zu lesen gibt: eigene Termine und Sitzungen ganz ohne
 
 1. **dailyallris:** Kleine Kommissionen, Verwaltungs- und Aufsichtsräte beim Tagesordnungs-Import
    überspringen. Dazu: die 33 verbliebenen Tagesordnungs-PDFs nach dem Einlesen löschen.
-2. **Lückenlose Prüfung**, welchen vergangenen Sitzungen eine Tagesordnung fehlt – bisher nur
-   stichprobenartig. Kann dailyallris selbst erzeugen (`list_session_agenda` über alle Sitzungen).
-3. **Arbeitskreis Entwicklung Iserlohn** – nicht geklärt, ob öffentlich oder nicht.
-4. Die sechs Punkte unter „Geplante nächste Schritte" in `CLAUDE.md` (ToDo-Zuständigkeit,
+2. Die sechs Punkte unter „Geplante nächste Schritte" in `CLAUDE.md` (ToDo-Zuständigkeit,
    Fraktionsbüro-Termine, RIS-Import, iCal-Export, Bilder in Vorlagen, MCP-Tools für Fakten).
 
 ---
@@ -123,18 +120,26 @@ Beide existieren bereits als Repository-Secrets (`VITE_SUPABASE_URL`, `VITE_SUPA
 Für `tsc`/`vite build` sind sie **nicht** nötig – der Client fällt ohne sie auf Platzhalter zurück
 und baut durch. Nur ein Vorschau-Server ohne diese Werte zeigt eine Seite ohne Daten.
 
-### 5. Der MCP-Connector — bitte zuerst prüfen
+### 5. Zwei MCP-Connectoren
 
-Ein großer Teil der Arbeit hier lief über den MandatsCockpit-MCP-Connector (`list_sessions`,
-`list_documents`, `list_session_agenda`, `delete_document`, …). **Ob der in einer Cloud-Sitzung
-verfügbar ist, weiß ich nicht** – das hängt daran, wie Connectors dort durchgereicht werden. Das
-bitte als Erstes testen (ein `list_sessions` mit kleinem Limit genügt).
+**MandatsCockpit** (unsere eigene Edge Function): `list_sessions`, `list_documents`,
+`list_session_agenda`, `set_session_agenda`, `delete_document`, … Authentifiziert über das
+persönliche Bearer-Token aus `mcp_tokens`, braucht **kein** Secret in der Umgebung. Darüber lief
+der größte Teil der bisherigen Arbeit.
 
-Falls er fehlt, bleibt als Ersatz:
+**Supabase** (der offizielle Server): `execute_sql`, `list_tables`, `apply_migration`,
+`list_migrations`, `get_advisors`, … Seit dem 17.10.2026 verbunden und ein echter Gewinn – vorher
+gab es **keinen SQL-Zugriff**. Auswertungen liefen über Tool-Aufrufe mit Limits und
+Stichproben, und die Migrationen `0045`–`0048` tragen `raise notice`-Zeilen, deren einziger Zweck
+es war, Zahlen aus der Datenbank zu berichten. Beispiel für den Unterschied: Die Frage „welchen
+vergangenen Sitzungen fehlt eine Tagesordnung?" war vorher nur stichprobenartig zu beantworten –
+mit SQL ist sie eine Abfrage.
 
-- Lesen/Schreiben über die Supabase-REST-API mit dem Service-Role-Key (umgeht RLS, entsprechend
-  vorsichtig) – der liegt als Repository-Secret `SUPABASE_SERVICE_ROLE_KEY`.
-- Oder einmalige Auswertungen als Migration mit `raise notice`, wie es `0045`–`0048` tun.
+Der Supabase-Server läuft über einen Personal Access Token. In einer Cloud-Sitzung muss der in der
+Umgebung liegen (GitHub-Repository-Secrets erreichen die Sitzung **nicht**, die stehen nur
+Actions-Läufen zur Verfügung). Read-only-Modus und Beschränkung auf die Projekt-Referenz
+einschalten, wo möglich: Lesen ist das, was fehlt – geschrieben wird weiter über Migrationsdateien,
+die im Repository nachvollziehbar bleiben.
 
 ### 6. Was **nicht** gebraucht wird
 
@@ -164,9 +169,10 @@ die Begründung zu jeder Design-Entscheidung fest; schlag dort nach, bevor du ei
 Entscheidung änderst. `docs/UEBERGABE-CLOUD.md` fasst den Stand der letzten beiden Arbeitstage
 zusammen.
 
-**Prüfe als Erstes, ob der MandatsCockpit-MCP-Connector in dieser Sitzung verfügbar ist**
-(`list_sessions` mit `limit: 3`). Melde das Ergebnis – ohne ihn fehlt dir der Blick auf die
-Live-Daten, und wir müssen einen anderen Weg finden.
+**Prüfe als Erstes, ob beide MCP-Connectoren verfügbar sind:** MandatsCockpit (`list_sessions`
+mit `limit: 3`) und Supabase (`execute_sql`). Melde das Ergebnis – ohne sie fehlt dir der Blick auf
+die Live-Daten. Der Supabase-Server ist der wichtigere: Er gibt SQL-Zugriff, und ohne den bleiben
+Auswertungen Stichproben.
 
 **Arbeitsweise in diesem Projekt:**
 
@@ -185,14 +191,10 @@ Live-Daten, und wir müssen einen anderen Weg finden.
 
 **Was ansteht**, in der Reihenfolge, die ich vorschlagen würde:
 
-1. Lückenlos prüfen, welchen vergangenen Sitzungen eine Tagesordnung fehlt. Bisher ist das nur
-   stichprobenartig geschehen.
-2. Die 33 verbliebenen Tagesordnungs-PDFs im Dokumenten-Hub aufräumen, sobald die jeweilige
+1. Die 33 verbliebenen Tagesordnungs-PDFs im Dokumenten-Hub aufräumen, sobald die jeweilige
    Tagesordnung strukturiert vorliegt (`delete_document`; der Hub-Bestand gehört dem Konto
    „ALLRIS-Import", Admins dürfen dessen Dokumente löschen).
-3. Klären, ob der „Arbeitskreis Entwicklung Iserlohn" öffentlich tagt – falls nicht, gehört er zu
-   den Gremien, die zwar im Kalender stehen, aber keinen Inhalt bekommen.
-4. Danach die Punkte unter „Geplante nächste Schritte" in `CLAUDE.md`.
+2. Danach die Punkte unter „Geplante nächste Schritte" in `CLAUDE.md`.
 
 **Zwei Dinge, die dich sonst Zeit kosten:**
 
