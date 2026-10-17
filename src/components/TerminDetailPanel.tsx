@@ -68,7 +68,6 @@ export function TerminDetailPanel({
 
   const [summaries, setSummaries] = useState<SummaryRow[]>([])
   const [newInhalt, setNewInhalt] = useState('')
-  const [newFile, setNewFile] = useState<File | null>(null)
   const [savingSummary, setSavingSummary] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(null)
 
@@ -320,33 +319,19 @@ export function TerminDetailPanel({
   async function handleAddSummary(e: FormEvent) {
     e.preventDefault()
     if (!userId) return
-    if (!newInhalt && !newFile) return
+    if (!newInhalt) return
     setSavingSummary(true)
     setSummaryError(null)
-
-    let dateiUrl: string | null = null
-    if (newFile) {
-      const path = `${userId}/${Date.now()}-${newFile.name}`
-      const { error: uploadError } = await supabase.storage.from('zusammenfassungen').upload(path, newFile)
-      if (uploadError) {
-        setSummaryError(uploadError.message)
-        setSavingSummary(false)
-        return
-      }
-      dateiUrl = path
-    }
 
     const { error } = await supabase.from('summaries').insert({
       user_id: userId,
       [kind === 'event' ? 'event_id' : 'session_id']: id,
       inhalt: newInhalt || null,
-      datei_url: dateiUrl,
     })
     if (error) {
       setSummaryError(error.message)
     } else {
       setNewInhalt('')
-      setNewFile(null)
       await loadSummaries()
     }
     setSavingSummary(false)
@@ -680,21 +665,16 @@ export function TerminDetailPanel({
 
       <form onSubmit={handleAddSummary} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <textarea
-          placeholder="Notiz (optional)"
+          placeholder="Notiz"
           value={newInhalt}
           onChange={(e) => setNewInhalt(e.target.value)}
           className="mc-input w-full"
           rows={3}
         />
-        <input
-          type="file"
-          onChange={(e) => setNewFile(e.target.files?.[0] ?? null)}
-          className="w-full text-sm"
-        />
         {summaryError && <p className="text-red-600 text-sm">{summaryError}</p>}
         <button
           type="submit"
-          disabled={savingSummary || (!newInhalt && !newFile)}
+          disabled={savingSummary || !newInhalt}
           className="mc-btn-primary"
         >
           {savingSummary ? 'Speichern...' : 'Hinzufügen'}

@@ -109,6 +109,9 @@ const GLIEDERUNG_PLATZHALTER: Record<string, string> = {
   land: 'z. B. Nordrhein-Westfalen',
 }
 
+const PROFILBILD_MAX_BYTES = 2 * 1024 * 1024
+const PROFILBILD_TYPEN = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
 export default function Settings() {
   const [activeSection, setActiveSection] = useState<SectionId>('profil')
   const [sources, setSources] = useState<CalendarSource[]>([])
@@ -457,6 +460,16 @@ export default function Settings() {
 
   async function handleUploadFoto() {
     if (!userId || !newFoto) return
+    // Gleiche Grenzen wie am Bucket (0052_uploads_sperren.sql) - hier vorab
+    // geprüft, damit statt der englischen Storage-Meldung ein klarer Hinweis kommt.
+    if (newFoto.size > PROFILBILD_MAX_BYTES) {
+      setFotoError('Das Bild ist größer als 2 MB. Bitte ein kleineres wählen.')
+      return
+    }
+    if (!PROFILBILD_TYPEN.includes(newFoto.type)) {
+      setFotoError('Nur JPG, PNG, WebP oder GIF.')
+      return
+    }
     setSavingFoto(true)
     setFotoError(null)
     const path = `${userId}/${Date.now()}-${newFoto.name}`
@@ -630,7 +643,7 @@ export default function Settings() {
           <div className="flex-1 space-y-1">
             <input
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               onChange={(e) => setNewFoto(e.target.files?.[0] ?? null)}
               className="w-full text-sm"
             />

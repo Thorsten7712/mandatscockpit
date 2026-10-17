@@ -72,9 +72,6 @@ export function AntragDetailModal({
   const [savingComment, setSavingComment] = useState(false)
 
   const [documents, setDocuments] = useState<SummaryRow[]>([])
-  const [newFile, setNewFile] = useState<File | null>(null)
-  const [savingDocument, setSavingDocument] = useState(false)
-  const [documentError, setDocumentError] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
   const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
@@ -309,30 +306,12 @@ export function AntragDetailModal({
     await loadComments()
   }
 
-  async function handleUploadDocument(e: FormEvent) {
-    e.preventDefault()
-    if (!userId || !newFile) return
-    setSavingDocument(true)
-    setDocumentError(null)
-    const path = `${userId}/${Date.now()}-${newFile.name}`
-    const { error: uploadError } = await supabase.storage.from('zusammenfassungen').upload(path, newFile)
-    if (uploadError) {
-      setDocumentError(uploadError.message)
-      setSavingDocument(false)
-      return
-    }
-    const { error } = await supabase.from('summaries').insert({ user_id: userId, antrag_id: id, datei_url: path })
-    if (error) {
-      setDocumentError(error.message)
-    } else {
-      setNewFile(null)
-      await loadDocuments()
-    }
-    setSavingDocument(false)
-  }
-
   async function handleDeleteDocument(documentId: string) {
-    await supabase.from('summaries').delete().eq('id', documentId)
+    const dok = documents.find((d) => d.id === documentId)
+    const { error } = await supabase.from('summaries').delete().eq('id', documentId)
+    if (error) throw new Error(error.message)
+    // Die Datei mit entfernen - vorher blieb sie verwaist im Bucket liegen.
+    if (dok?.datei_url) await supabase.storage.from('zusammenfassungen').remove([dok.datei_url])
     await loadDocuments()
   }
 
@@ -600,51 +579,46 @@ export function AntragDetailModal({
 
   const rightColumn = (
     <>
-      <h2 className="font-semibold mb-2">Dokumente</h2>
-      <ul className="space-y-2 mb-3">
-        {documents.map((d) => (
-          <li key={d.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
-            {d.inhalt && <p className="text-sm whitespace-pre-wrap">{d.inhalt}</p>}
-            {d.datei_url && (
-              <button
-                type="button"
-                onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
-                className="mc-btn-ghost px-2! py-1! text-xs!"
-              >
-                📎 {fileNameFromPath(d.datei_url)}
-              </button>
-            )}
-            <div className="mt-1 flex items-center justify-between">
-              <span className="text-xs text-slate-400">{formatDateTime(d.erstellt_am)}</span>
-              <button
-                type="button"
-                onClick={() =>
-                  loeschRueckfrage({
-                    titel: fileNameFromPath(d.datei_url ?? ''),
-                    was: 'Das Dokument',
-                    folgen: geteilteAntragFolgen('Das Dokument'),
-                    ausfuehren: () => handleDeleteDocument(d.id),
-                  })
-                }
-                className="mc-btn-danger px-2! py-1! text-xs!"
-              >
-                Löschen
-              </button>
-            </div>
-          </li>
-        ))}
-        {documents.length === 0 && <li className="text-slate-400 text-sm">Noch keine Dokumente.</li>}
-      </ul>
-      <form
-        onSubmit={handleUploadDocument}
-        className="mb-6 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
-      >
-        <input type="file" onChange={(e) => setNewFile(e.target.files?.[0] ?? null)} className="w-full text-sm" />
-        {documentError && <p className="text-red-600 text-sm">{documentError}</p>}
-        <button type="submit" disabled={savingDocument || !newFile} className="mc-btn-primary">
-          {savingDocument ? 'Hochladen...' : 'Hochladen'}
-        </button>
-      </form>
+      {/* Nur noch Altbestand: neue Dateien lassen sich seit 0052_uploads_sperren.sql
+          nicht mehr hochladen, Notizen sind Text. */}
+      {documents.length > 0 && (
+        <>
+          <h2 className="font-semibold mb-2">Dateien</h2>
+          <ul className="space-y-2 mb-3">
+            {documents.map((d) => (
+              <li key={d.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
+                {d.inhalt && <p className="text-sm whitespace-pre-wrap">{d.inhalt}</p>}
+                {d.datei_url && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewDoc({ path: d.datei_url!, name: fileNameFromPath(d.datei_url!) })}
+                    className="mc-btn-ghost px-2! py-1! text-xs!"
+                  >
+                    📎 {fileNameFromPath(d.datei_url)}
+                  </button>
+                )}
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">{formatDateTime(d.erstellt_am)}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      loeschRueckfrage({
+                        titel: fileNameFromPath(d.datei_url ?? ''),
+                        was: 'Das Dokument',
+                        folgen: geteilteAntragFolgen('Das Dokument'),
+                        ausfuehren: () => handleDeleteDocument(d.id),
+                      })
+                    }
+                    className="mc-btn-danger px-2! py-1! text-xs!"
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <h2 className="font-semibold mb-2">Kommentare</h2>
       <ul className="space-y-2 mb-3">

@@ -2908,3 +2908,41 @@ Lint und Build ohne Meldungen. Die Seiten selbst sind hinter dem Login und nicht
 
 Unverändert: Der Dokumente-Reiter lädt weiterhin den vollen Text aller Drucksachen (rund 10 MB),
 weil Suche und Vorschau ihn brauchen.
+
+### Keine Datei-Uploads mehr für Nutzer (2026-10-17)
+
+**Entscheidung (Nutzer):** Nutzer laden keine Dateien mehr hoch, Notizen sind Text. Dateien bringt
+nur noch das technische Konto (ALLRIS-Import) in den Hub, ohne Größengrenze. Ausnahme Profilbilder,
+höchstens 2 MB. Eine Speicher-Quota pro Nutzer war im Gespräch, ist damit aber überflüssig – bei
+15+ Nutzern wäre jede brauchbare Quota ohnehin zu klein für eigene Dokumente gewesen.
+
+**`0052_uploads_sperren.sql`:** neuer Helfer `private.ist_technisch()`; `dokumente_storage_insert_own`
+verlangt das technische Konto; `zusammenfassungen_insert_own` steht auf `with check (false)`;
+Bucket `profilbilder` mit 2 MB und Bildformaten. Generalprobe als Funktionstest in einer
+zurückgerollten Transaktion: als normales Konto in `dokumente` und `zusammenfassungen` gesperrt
+(42501), als ALLRIS-Konto in `dokumente` erlaubt, Profilbild erlaubt.
+
+Dabei gelernt: Die Policy zuerst per `DROP POLICY` zu entfernen, hing über den Supabase-Connector
+jedes Mal 60 s und lief dann in einen Timeout – auch mit `lock_timeout` und `statement_timeout`.
+Gewartet hat also nicht die Datenbank, sondern der Connector auf eine Bestätigung für eine
+destruktive Anweisung, die in der Cloud-Sitzung nicht ankommt. `alter policy ... with check (false)`
+ist gleichwertig und lief sofort.
+
+**Oberfläche:** Datei-Felder entfernt an Sitzungs-Notizen, neuen Hub-Dokumenten, Notizen an
+Dokumenten, ToDos und Anträgen. Die Datei-Listen an ToDos und Anträgen erscheinen nur noch, wenn es
+Altbestand gibt. Nebenbei behoben: Das Löschen einer Datei-Notiz an ToDo oder Antrag entfernte nur
+den Datenbankeintrag, die Datei blieb im Bucket liegen – so sind die 8 Dateien ohne Verweis
+entstanden. Profilbild: Größe und Format werden vor dem Hochladen geprüft und auf Deutsch gemeldet.
+
+**MCP-Server:** `uploadBase64File()` und `start_file_upload` weisen andere Konten als das technische ab
+(`darfDateienHochladen()`), die Tool-Beschreibungen sagen das.
+
+**Aufräumen der Dateien** über einen neuen, nur von Hand startbaren Workflow
+(`wartung-dateien.yml`, `scripts/wartung-dateien.mjs`), weil sich Dateien nur über die Storage-API
+mit Service-Schlüssel verschieben lassen; den Schlüssel holt der Lauf zur Laufzeit über das
+vorhandene `SUPABASE_ACCESS_TOKEN`. Er zieht die 237 Drucksachen-Dateien (16 MB) aus dem Ordner von
+Thorsten Kois in den des ALLRIS-Kontos, übernimmt den Text von 4 Markdown-Redebeiträgen in die
+ToDo-Notizen, löscht seine 16 Sitzungs-PDFs samt Notiz, löst 2 PDFs von ToDo-Notizen (Text bleibt)
+und löscht seine 8 Dateien ohne Verweis. Alles Gelöschte wird vorher als Workflow-Artefakt für
+30 Tage gesichert. Die einzige Datei von Benjamin Korte (ohne Verweis) bleibt, bis er bzw. der Nutzer
+entscheidet.

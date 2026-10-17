@@ -163,7 +163,6 @@ export function DokumentDetailModal({
 
   const [newTitel, setNewTitel] = useState('')
   const [newInhalt, setNewInhalt] = useState('')
-  const [newFile, setNewFile] = useState<File | null>(null)
   const [newTags, setNewTags] = useState<string[]>([])
   const [newSichtbarkeit, setNewSichtbarkeit] = useState<DokumentSichtbarkeit>('persoenlich')
   const [teilenMit, setTeilenMit] = useState<string[]>([])
@@ -415,7 +414,6 @@ export function DokumentDetailModal({
   function resetForm() {
     setNewTitel('')
     setNewInhalt('')
-    setNewFile(null)
     setNewTags([])
     setNewSichtbarkeit('persoenlich')
     setTeilenMit([])
@@ -429,8 +427,9 @@ export function DokumentDetailModal({
       setFormError('Titel ist erforderlich.')
       return
     }
-    if (!newInhalt.trim() && !newFile) {
-      setFormError('Entweder Text oder eine Datei angeben.')
+    // Seit 0052_uploads_sperren.sql nur noch Text - Dateien bringt allein der ALLRIS-Import.
+    if (!newInhalt.trim()) {
+      setFormError('Notiz ist erforderlich.')
       return
     }
     if (newSichtbarkeit === 'einzelpersonen' && teilenMit.length === 0) {
@@ -440,18 +439,6 @@ export function DokumentDetailModal({
 
     setSaving(true)
     setFormError(null)
-
-    let dateiUrl: string | null = null
-    if (newFile) {
-      const path = `${userId}/${Date.now()}-${newFile.name}`
-      const { error: uploadError } = await supabase.storage.from('dokumente').upload(path, newFile)
-      if (uploadError) {
-        setFormError(uploadError.message)
-        setSaving(false)
-        return
-      }
-      dateiUrl = path
-    }
 
     const ebene = newSichtbarkeit === 'geteilt' ? document.ebene : null
     const gliederung = newSichtbarkeit === 'geteilt' ? document.gliederung : null
@@ -467,7 +454,6 @@ export function DokumentDetailModal({
         gliederung,
         tags: newTags,
         inhalt: newInhalt.trim() || null,
-        datei_url: dateiUrl,
       })
       .select('id')
       .single()
@@ -824,13 +810,12 @@ export function DokumentDetailModal({
               required
             />
             <textarea
-              placeholder="Notiz/Analyse (optional)"
+              placeholder="Notiz"
               value={newInhalt}
               onChange={(e) => setNewInhalt(e.target.value)}
               className="mc-input w-full"
               rows={3}
             />
-            <input type="file" onChange={(e) => setNewFile(e.target.files?.[0] ?? null)} className="w-full text-sm" />
 
             <TagEditor tags={newTags} onChange={setNewTags} vorschlaege={TAG_VORSCHLAEGE} />
 

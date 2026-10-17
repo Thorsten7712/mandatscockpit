@@ -240,6 +240,18 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   curl-Test beweist also nicht, dass es aus dem Browser heraus geht. Bei Clients, die auf jeden
   Non-200-Status besonders reagieren (z. B. OAuth-Discovery bei jedem 401), immer HTTP 200 mit dem
   Fehler im JSON-Body zurückgeben statt echter HTTP-Fehlercodes.
+- **Nutzer laden keine Dateien hoch** (seit `0052_uploads_sperren.sql`): Notizen sind reiner Text.
+  Nur das technische Konto (`profiles.technisch`, Helfer `private.ist_technisch()`) darf in den
+  Bucket `dokumente` schreiben – ohne Größengrenze. `zusammenfassungen` nimmt nichts Neues an
+  (Policy mit `with check (false)`, bestehende Dateien bleiben lesbar). Ausnahme Profilbilder:
+  2 MB, nur JPG/PNG/WebP/GIF, am Bucket erzwungen. Der MCP-Server umgeht die Policies und prüft
+  deshalb selbst (`darfDateienHochladen()` in `shared.ts`). Keine Upload-Felder mehr in der
+  Oberfläche einbauen.
+- **`DROP` über den Supabase-Connector hängt**: `execute_sql` hält destruktive Anweisungen für
+  eine Bestätigung zurück, die in der Cloud-Sitzung nicht ankommt – der Aufruf läuft nach 60 s
+  in einen Timeout, ohne dass etwas passiert (Statement-/Lock-Timeouts greifen nicht, es wartet
+  nicht die Datenbank). Policies daher mit `alter policy ... with check (false)` sperren statt
+  löschen, oder das `DROP` vom Mac aus per `supabase db push` einspielen.
 - **Storage**: private Buckets (`zusammenfassungen`, `profilbilder`), Pfad-Muster
   `<user_id>/<dateiname>`, RLS via `(storage.foldername(name))[1] = ((select auth.uid()))::text`. Signed URLs:
   60s für einmalige Downloads, 3600s für dauerhaft sichtbare Inhalte (Fotos, offene Dokumentvorschau).

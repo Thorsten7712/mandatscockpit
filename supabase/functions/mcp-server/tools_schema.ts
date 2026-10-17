@@ -154,15 +154,15 @@ export const TOOLS = [
         },
         dateiname: {
           type: 'string',
-          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang, z. B. "sammeldokument.pdf" (optional, nur zusammen mit datei_base64, nur für Dateien bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Dateiname inkl. Endung für einen kleinen Datei-Anhang, z. B. "sammeldokument.pdf" (optional, nur zusammen mit datei_base64, nur für Dateien bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
         },
         datei_base64: {
           type: 'string',
-          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur für Dateien bis ca. 13 KB).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur für Dateien bis ca. 13 KB).',
         },
         datei_pfad: {
           type: 'string',
-          description: 'Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
         },
       },
       required: ['session_id'],
@@ -185,15 +185,15 @@ export const TOOLS = [
         },
         dateiname: {
           type: 'string',
-          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
         },
         datei_base64: {
           type: 'string',
-          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
         },
         datei_pfad: {
           type: 'string',
-          description: 'Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
         },
       },
       required: ['event_id'],
@@ -216,15 +216,15 @@ export const TOOLS = [
         },
         dateiname: {
           type: 'string',
-          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
         },
         datei_base64: {
           type: 'string',
-          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
         },
         datei_pfad: {
           type: 'string',
-          description: 'Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
         },
       },
       required: ['todo_id'],
@@ -363,15 +363,15 @@ export const TOOLS = [
         inhalt: { type: 'string', description: 'Freitext-Notiz (optional).' },
         dateiname: {
           type: 'string',
-          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
         },
         datei_base64: {
           type: 'string',
-          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
         },
         datei_pfad: {
           type: 'string',
-          description: 'Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Storage-Pfad einer bereits per finish_file_upload hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
         },
       },
       required: ['antrag_id'],
@@ -405,7 +405,7 @@ export const TOOLS = [
   {
     name: 'start_file_upload',
     description:
-      'Startet einen mehrteiligen Upload für eine größere Datei (z. B. PDF), die nicht in einem einzigen dateiname+datei_base64-Aufruf übertragen werden kann - Base64-Tool-Argumente über ca. 18.000 Zeichen (= ca. 13 KB Originaldatei) werden vom aufrufenden Client selbst abgeschnitten, nicht vom Server abgelehnt. Liefert eine upload_id, mit der anschließend append_file_chunk (mehrfach, mit dem Base64-Inhalt in Häppchen von je höchstens ca. 8000 Zeichen) und danach genau einmal finish_file_upload aufgerufen wird. Der finish_file_upload-Aufruf liefert einen datei_pfad, der bei create_session_note/create_event_note/create_todo_note/create_antrag_note statt dateiname+datei_base64 angegeben wird.',
+      'Nur für das technische Konto (ALLRIS-Import) - andere Konten können keine Dateien hochladen und legen Notizen als Text an. Startet einen mehrteiligen Upload für eine größere Datei (z. B. PDF), die nicht in einem einzigen dateiname+datei_base64-Aufruf übertragen werden kann - Base64-Tool-Argumente über ca. 18.000 Zeichen (= ca. 13 KB Originaldatei) werden vom aufrufenden Client selbst abgeschnitten, nicht vom Server abgelehnt. Liefert eine upload_id, mit der anschließend append_file_chunk (mehrfach, mit dem Base64-Inhalt in Häppchen von je höchstens ca. 8000 Zeichen) und danach genau einmal finish_file_upload aufgerufen wird. Der finish_file_upload-Aufruf liefert einen datei_pfad, der bei create_session_note/create_event_note/create_todo_note/create_antrag_note statt dateiname+datei_base64 angegeben wird.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -485,15 +485,15 @@ export const TOOLS = [
         inhalt: { type: 'string', description: 'Freitext-Inhalt, z. B. eine im Chat erstellte Analyse (optional).' },
         dateiname: {
           type: 'string',
-          description: 'Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Dateiname inkl. Endung für einen kleinen Datei-Anhang (optional, nur zusammen mit datei_base64, nur bis ca. 13 KB - siehe datei_pfad für größere Dateien).',
         },
         datei_base64: {
           type: 'string',
-          description: 'Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Base64-kodierter Inhalt der anzuhängenden Datei (optional, nur zusammen mit dateiname, nur bis ca. 13 KB).',
         },
         datei_pfad: {
           type: 'string',
-          description: 'Storage-Pfad einer bereits per finish_file_upload(ziel="dokument") hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
+          description: 'Nur für das technische Konto (ALLRIS-Import), andere Konten legen Notizen als Text an. Storage-Pfad einer bereits per finish_file_upload(ziel="dokument") hochgeladenen (größeren) Datei (optional, alternativ zu dateiname+datei_base64, nicht zusammen mit diesen angeben).',
         },
       },
       required: ['titel', 'sichtbarkeit'],
