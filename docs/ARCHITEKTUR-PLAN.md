@@ -53,7 +53,7 @@ Erledigtes wird hier abgehakt, die Begründungen stehen ausführlich im CHANGELO
 ## Arbeitsliste
 
 - [x] Plan ablegen, PR-Prüfung
-- [ ] Uploads sperren, Bucket-Grenzen, Dateien umziehen und aufräumen
+- [x] Uploads sperren, Bucket-Grenzen (0052) – Dateien umziehen/aufräumen per Wartungs-Workflow
 - [ ] Speicheranzeige für Admins
 - [ ] Löschprotokoll
 - [ ] Backup

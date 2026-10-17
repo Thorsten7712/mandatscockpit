@@ -123,6 +123,19 @@ export function guessContentType(dateiname: string): string {
   return CONTENT_TYPE_BY_EXTENSION[ext] ?? 'application/octet-stream'
 }
 
+export const UPLOAD_GESPERRT =
+  'Fehler: Dateien hochladen kann nur das technische Konto (ALLRIS-Import). Notizen bitte als Text anlegen (Parameter inhalt).'
+
+/** Seit 0052_uploads_sperren.sql laden Nutzer keine Dateien mehr hoch, nur das
+ *  technische Konto (profiles.technisch) bringt die ALLRIS-Vorlagen in den Hub.
+ *  Die Storage-Policies setzen das in der Datenbank durch - der MCP-Server
+ *  läuft aber über den Service-Role-Client und umgeht sie, deshalb dieselbe
+ *  Prüfung hier noch einmal. */
+export async function darfDateienHochladen(supabase: SupabaseClient, userId: string): Promise<boolean> {
+  const { data } = await supabase.from('profiles').select('technisch').eq('id', userId).maybeSingle()
+  return Boolean(data?.technisch)
+}
+
 export interface Base64UploadResult {
   path?: string
   error?: string
@@ -140,6 +153,7 @@ export async function uploadBase64File(
   dateiname: string,
   base64: string,
 ): Promise<Base64UploadResult> {
+  if (!(await darfDateienHochladen(supabase, userId))) return { error: UPLOAD_GESPERRT }
   let bytes: Uint8Array
   try {
     bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))

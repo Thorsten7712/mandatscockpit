@@ -1,5 +1,5 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
-import { toolTextResult, uploadBase64File } from '../shared.ts'
+import { darfDateienHochladen, toolTextResult, UPLOAD_GESPERRT, uploadBase64File } from '../shared.ts'
 
 /** "notiz" (Standard) = Anhang an Sitzung/Termin/ToDo/Antrag (Bucket
  *  "zusammenfassungen"), "dokument" = Eintrag im Dokumenten-Hub (Bucket
@@ -26,6 +26,8 @@ const STALE_UPLOAD_MS = 60 * 60 * 1000
 export async function startFileUpload(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const dateiname = typeof args.dateiname === 'string' ? args.dateiname.trim() : ''
   if (!dateiname) return toolTextResult('Fehler: dateiname ist erforderlich.', true)
+  // Früh abweisen statt erst nach allen Häppchen in finish_file_upload.
+  if (!(await darfDateienHochladen(supabase, userId))) return toolTextResult(UPLOAD_GESPERRT, true)
 
   // Alte, nie abgeschlossene Uploads dieses Nutzers aufräumen (z. B. nach
   // einem abgebrochenen Übertragungsversuch) - sonst würden liegen

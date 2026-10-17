@@ -137,7 +137,6 @@ export default function Dokumente() {
   const [newEbene, setNewEbene] = useState<Ebene | ''>('')
   const [newTags, setNewTags] = useState<string[]>([])
   const [newInhalt, setNewInhalt] = useState('')
-  const [newFile, setNewFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -232,7 +231,6 @@ export default function Dokumente() {
     setNewEbene('')
     setNewTags([])
     setNewInhalt('')
-    setNewFile(null)
     setFormError(null)
   }
 
@@ -243,8 +241,9 @@ export default function Dokumente() {
       setFormError('Titel ist erforderlich.')
       return
     }
-    if (!newInhalt.trim() && !newFile) {
-      setFormError('Entweder Text oder eine Datei angeben.')
+    // Seit 0052_uploads_sperren.sql nur noch Text - Dateien bringt allein der ALLRIS-Import.
+    if (!newInhalt.trim()) {
+      setFormError('Text ist erforderlich.')
       return
     }
     if (!newEbene) {
@@ -255,18 +254,6 @@ export default function Dokumente() {
     setSaving(true)
     setFormError(null)
 
-    let dateiUrl: string | null = null
-    if (newFile) {
-      const path = `${userId}/${Date.now()}-${newFile.name}`
-      const { error: uploadError } = await supabase.storage.from('dokumente').upload(path, newFile)
-      if (uploadError) {
-        setFormError(uploadError.message)
-        setSaving(false)
-        return
-      }
-      dateiUrl = path
-    }
-
     const gliederung = gliederungFuer(profile, newEbene)
     const { error } = await supabase.from('dokumente').insert({
       user_id: userId,
@@ -276,7 +263,6 @@ export default function Dokumente() {
       gliederung,
       tags: newTags,
       inhalt: newInhalt.trim() || null,
-      datei_url: dateiUrl,
     })
     if (error) {
       setFormError(error.message)
@@ -529,13 +515,12 @@ export default function Dokumente() {
               <TagEditor tags={newTags} onChange={setNewTags} vorschlaege={TAG_VORSCHLAEGE} />
             </div>
             <textarea
-              placeholder="Text (optional)"
+              placeholder="Text"
               value={newInhalt}
               onChange={(e) => setNewInhalt(e.target.value)}
               className="mc-input w-full"
               rows={3}
             />
-            <input type="file" onChange={(e) => setNewFile(e.target.files?.[0] ?? null)} className="w-full text-sm" />
             {formError && <p className="text-sm text-red-600">{formError}</p>}
             <button type="submit" disabled={saving} className="mc-btn-primary">
               {saving ? 'Speichern...' : 'Dokument speichern'}
