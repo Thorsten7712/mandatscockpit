@@ -12,7 +12,7 @@ export const TOOLS = [
         spalte: {
           type: 'string',
           description:
-            "Name der Board-Spalte (z. B. 'Neu', 'Geplant', 'Wartet', 'Fertig'). Wird angelegt, falls sie beim Nutzer noch nicht existiert.",
+            'Board-Spalte: eine der festen Spalten "Neu", "Geplant", "Ergebnis erstellt", "Fertig".',
         },
         faellig_am: {
           type: 'string',
@@ -107,7 +107,7 @@ export const TOOLS = [
         spalte: {
           type: 'string',
           description:
-            'Filtert auf eine Board-Spalte des Nutzers, z. B. "Wartet" (optional, Teilstring-Vergleich ohne Groß-/Kleinschreibung).',
+            'Filtert auf eine Board-Spalte des Nutzers: "Neu", "Geplant", "Ergebnis erstellt" oder "Fertig" (optional, Teilstring-Vergleich ohne Groß-/Kleinschreibung).',
         },
         session_id: {
           type: 'string',
@@ -195,7 +195,7 @@ export const TOOLS = [
         spalte: {
           type: 'string',
           description:
-            'Board-Spalte, in die die Karte (auf dem eigenen Board des Nutzers) verschoben werden soll - wird angelegt, falls sie noch nicht existiert (optional).',
+            'Board-Spalte, in die die Karte (auf dem eigenen Board des Nutzers) verschoben werden soll: "Neu", "Geplant", "Ergebnis erstellt" oder "Fertig" (optional).',
         },
       },
       required: ['todo_id'],

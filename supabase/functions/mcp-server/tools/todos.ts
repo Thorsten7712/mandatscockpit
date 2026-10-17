@@ -1,6 +1,30 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { formatDate, parseLimit, toolTextResult } from '../shared.ts'
 
+// Feste Board-Spalten seit 0060 - frei konfigurierbar waren sie vorher. Die
+// Datenbank lässt keine anderen Namen mehr zu (Constraint todo_columns_feste_spalten).
+const SPALTEN = ['Neu', 'Geplant', 'Ergebnis erstellt', 'Fertig']
+
+/** Sucht eine der vier festen Spalten des Nutzers (ohne Groß-/Kleinschreibung)
+ *  oder liefert einen Fehlertext. */
+async function festeSpalte(
+  supabase: SupabaseClient,
+  userId: string,
+  name: string,
+): Promise<{ id: string; titel: string } | string> {
+  const gesucht = SPALTEN.find((s) => s.toLowerCase() === name.trim().toLowerCase())
+  if (!gesucht) return `Fehler: Spalte "${name}" gibt es nicht. Feste Spalten: ${SPALTEN.join(', ')}.`
+  const { data, error } = await supabase
+    .from('todo_columns')
+    .select('id, titel')
+    .eq('user_id', userId)
+    .eq('titel', gesucht)
+    .maybeSingle()
+  if (error) return `Fehler beim Laden der Spalten: ${error.message}`
+  if (!data) return `Fehler: Spalte "${gesucht}" fehlt auf deinem Board.`
+  return data
+}
+
 export async function createTodo(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
   const titel = typeof args.titel === 'string' ? args.titel.trim() : ''
   const spalte = typeof args.spalte === 'string' ? args.spalte.trim() : ''
@@ -10,25 +34,8 @@ export async function createTodo(supabase: SupabaseClient, userId: string, args:
   const faelligAm = typeof args.faellig_am === 'string' && args.faellig_am ? args.faellig_am : null
   const sessionId = typeof args.session_id === 'string' && args.session_id ? args.session_id : null
 
-  const { data: columns, error: columnsError } = await supabase
-    .from('todo_columns')
-    .select('id, titel, reihenfolge')
-    .eq('user_id', userId)
-  if (columnsError) return toolTextResult(`Fehler beim Laden der Spalten: ${columnsError.message}`, true)
-
-  let column = (columns ?? []).find((c) => c.titel.trim().toLowerCase() === spalte.toLowerCase())
-  if (!column) {
-    const maxOrder = (columns ?? []).reduce((max, c) => Math.max(max, c.reihenfolge), -1)
-    const { data: created, error: createError } = await supabase
-      .from('todo_columns')
-      .insert({ user_id: userId, titel: spalte, reihenfolge: maxOrder + 1 })
-      .select('id, titel, reihenfolge')
-      .single()
-    if (createError || !created) {
-      return toolTextResult(`Fehler beim Anlegen der Spalte "${spalte}": ${createError?.message}`, true)
-    }
-    column = created
-  }
+  const column = await festeSpalte(supabase, userId, spalte)
+  if (typeof column === 'string') return toolTextResult(column, true)
 
   // Board-Platzierung (Spalte/Position) lebt seit dem Erledigt/Teilen-Ausbau
   // in einer eigenen todo_placements-Zeile statt direkt auf todos, damit eine
@@ -287,18 +294,8 @@ export async function updateTodo(supabase: SupabaseClient, userId: string, args:
   const spalte = typeof args.spalte === 'string' ? args.spalte.trim() : ''
   let spaltenHinweis = ''
   if (spalte) {
-    const { data: columns } = await supabase.from('todo_columns').select('id, titel, reihenfolge').eq('user_id', userId)
-    let column = (columns ?? []).find((c) => c.titel.trim().toLowerCase() === spalte.toLowerCase())
-    if (!column) {
-      const maxOrder = (columns ?? []).reduce((max, c) => Math.max(max, c.reihenfolge), -1)
-      const { data: created, error: createError } = await supabase
-        .from('todo_columns')
-        .insert({ user_id: userId, titel: spalte, reihenfolge: maxOrder + 1 })
-        .select('id, titel, reihenfolge')
-        .single()
-      if (createError || !created) return toolTextResult(`Fehler beim Anlegen der Spalte "${spalte}": ${createError?.message}`, true)
-      column = created
-    }
+    const column = await festeSpalte(supabase, userId, spalte)
+    if (typeof column === 'string') return toolTextResult(column, true)
     const { data: last } = await supabase
       .from('todo_placements')
       .select('position')

@@ -160,9 +160,6 @@ export default function Settings() {
   const [editError, setEditError] = useState<string | null>(null)
 
   const [todoColumns, setTodoColumns] = useState<TodoColumn[]>([])
-  const [newColumnTitel, setNewColumnTitel] = useState('')
-  const [editingColumnId, setEditingColumnId] = useState<string | null>(null)
-  const [editColumnTitel, setEditColumnTitel] = useState('')
   const [boardSettings, setBoardSettings] = useState<TodoBoardSettings | null>(null)
 
   const [fristenTage, setFristenTage] = useState<Record<Ebene, string>>({
@@ -494,56 +491,6 @@ export default function Settings() {
     setNewFoto(null)
     await loadProfile(userId)
     setSavingFoto(false)
-  }
-
-  async function handleAddColumn(e: FormEvent) {
-    e.preventDefault()
-    if (!userId || !newColumnTitel.trim()) return
-    const maxReihenfolge = Math.max(-1, ...todoColumns.map((c) => c.reihenfolge))
-    const { data } = await supabase
-      .from('todo_columns')
-      .insert({ user_id: userId, titel: newColumnTitel.trim(), reihenfolge: maxReihenfolge + 1 })
-      .select()
-      .single()
-    if (data) setTodoColumns((prev) => [...prev, data])
-    setNewColumnTitel('')
-  }
-
-  function startEditColumn(col: TodoColumn) {
-    setEditingColumnId(col.id)
-    setEditColumnTitel(col.titel)
-  }
-
-  async function saveEditColumn() {
-    if (!editingColumnId) return
-    const titel = editColumnTitel.trim()
-    if (titel) {
-      await supabase.from('todo_columns').update({ titel }).eq('id', editingColumnId)
-      setTodoColumns((prev) => prev.map((c) => (c.id === editingColumnId ? { ...c, titel } : c)))
-    }
-    setEditingColumnId(null)
-  }
-
-  async function handleMoveColumn(col: TodoColumn, direction: 'left' | 'right') {
-    const sorted = [...todoColumns].sort((a, b) => a.reihenfolge - b.reihenfolge)
-    const index = sorted.findIndex((c) => c.id === col.id)
-    const swapIndex = direction === 'left' ? index - 1 : index + 1
-    if (swapIndex < 0 || swapIndex >= sorted.length) return
-    const other = sorted[swapIndex]
-    await supabase.from('todo_columns').update({ reihenfolge: other.reihenfolge }).eq('id', col.id)
-    await supabase.from('todo_columns').update({ reihenfolge: col.reihenfolge }).eq('id', other.id)
-    setTodoColumns((prev) =>
-      prev.map((c) => {
-        if (c.id === col.id) return { ...c, reihenfolge: other.reihenfolge }
-        if (c.id === other.id) return { ...c, reihenfolge: col.reihenfolge }
-        return c
-      }),
-    )
-  }
-
-  async function handleDeleteColumn(col: TodoColumn) {
-    await supabase.from('todo_columns').delete().eq('id', col.id)
-    setTodoColumns((prev) => prev.filter((c) => c.id !== col.id))
   }
 
   async function toggleBoardSetting(field: 'zeige_termin' | 'zeige_zustaendig') {
@@ -1086,83 +1033,19 @@ export default function Settings() {
       {activeSection === 'board' && (
       <section className="mc-animate-fade">
       <h2 className="mb-2 text-base font-semibold text-slate-900">ToDo-Board</h2>
-      <p className="text-xs text-slate-400 mb-2 max-w-md">Spalten verwalten und sortieren.</p>
-      <ul className="space-y-2 max-w-md">
+      {/* Feste Spalten seit 0060 - frei konfigurierbar waren sie vorher. */}
+      <p className="mb-2 max-w-md text-xs text-slate-400">
+        Die Spalten sind für alle gleich und fest vorgegeben.
+      </p>
+      <ol className="flex max-w-md flex-wrap gap-2">
         {[...todoColumns]
           .sort((a, b) => a.reihenfolge - b.reihenfolge)
-          .map((col, i, sorted) => {
-            if (editingColumnId === col.id) {
-              return (
-                <li key={col.id} className="mc-card px-3 py-2 rounded-lg!">
-                  <input
-                    type="text"
-                    value={editColumnTitel}
-                    onChange={(e) => setEditColumnTitel(e.target.value)}
-                    onBlur={saveEditColumn}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') saveEditColumn()
-                      if (e.key === 'Escape') setEditingColumnId(null)
-                    }}
-                    autoFocus
-                    className="mc-input w-full"
-                  />
-                </li>
-              )
-            }
-            return (
-              <li key={col.id} className="mc-card flex items-center justify-between px-3 py-2 rounded-lg!">
-                <span className="cursor-pointer" onClick={() => startEditColumn(col)}>
-                  {col.titel}
-                </span>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <button
-                    type="button"
-                    onClick={() => handleMoveColumn(col, 'left')}
-                    disabled={i === 0}
-                    className="disabled:opacity-30"
-                  >
-                    ◀
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleMoveColumn(col, 'right')}
-                    disabled={i === sorted.length - 1}
-                    className="disabled:opacity-30"
-                  >
-                    ▶
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      loeschRueckfrage({
-                        titel: col.titel,
-                        was: 'Die Spalte',
-                        hinweis: 'Enthaltene Karten werden mitgelöscht.',
-                        ausfuehren: () => handleDeleteColumn(col),
-                      })
-                    }
-                    className="text-red-500"
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            )
-          })}
-        {todoColumns.length === 0 && <li className="text-slate-400 text-sm">Noch keine Spalten.</li>}
-      </ul>
-      <form onSubmit={handleAddColumn} className="flex gap-2 max-w-md mt-2">
-        <input
-          type="text"
-          placeholder="Neue Spalte"
-          value={newColumnTitel}
-          onChange={(e) => setNewColumnTitel(e.target.value)}
-          className="mc-input flex-1"
-        />
-        <button type="submit" className="bg-primary hover:bg-primary-hover text-white rounded-sm px-3 py-2 text-sm">
-          Hinzufügen
-        </button>
-      </form>
+          .map((col) => (
+            <li key={col.id} className="mc-card rounded-lg! px-3 py-1.5 text-sm">
+              {col.titel}
+            </li>
+          ))}
+      </ol>
 
       <p className="text-sm text-slate-600 mt-4 mb-2">Details auf den Karten anzeigen</p>
       <div className="mc-card max-w-md space-y-2 p-4">

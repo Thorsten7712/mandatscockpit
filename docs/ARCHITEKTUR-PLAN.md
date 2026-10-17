@@ -42,6 +42,7 @@ Erledigtes wird hier abgehakt, die Begründungen stehen ausführlich im CHANGELO
 - **ToDo-Zuweisung an Personen** statt Freitext: die zugewiesene Person sieht die Karte auf ihrem
   Board und darf sie bearbeiten. Zuweisbar sind Kolleg*innen gleicher Partei und Ebene.
 - Ungenutzte Tabellen (`documents`, `antraege`, `fakten`) bleiben vorerst.
+- **Nachtrag:** feste ToDo-Spalten (Neu, Geplant, Ergebnis erstellt, Fertig), aktive Sitzung manuell, keine Zusammenfassungen (0060).
 - **Zurückgestellt:** Kalenderquellen auf Fraktions-/Ebenen-Ebene, Rolle Fraktionsbüro.
 
 ### Code und Leistung

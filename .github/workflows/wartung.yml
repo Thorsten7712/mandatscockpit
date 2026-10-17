@@ -1,0 +1,66 @@
+name: Wartung
+
+# Wartungsläufe von Hand, Details im jeweiligen Skript:
+#   vorschau  scripts/wartung-vorschau.mjs  Listenvorschau der Dokumente neu
+#             berechnen (0058) - etwa nach einer Änderung an vorschau()
+#   speicher  scripts/wartung-speicher.mjs  einmalig: Speicherbereich
+#             "zusammenfassungen" samt letzter Datei entfernen (0060)
+# Zuerst mit "probe" laufen lassen und die Ausgabe prüfen, dann mit
+# "ausfuehren". Die früheren Läufe für Dateien und Notizen (17.10.2026) sind
+# erledigt und entfernt.
+#
+# Das Repository ist öffentlich: Protokolle kann jeder angemeldete
+# GitHub-Nutzer lesen. Die Skripte schreiben deshalb nur Zahlen ins
+# Protokoll, keine Inhalte.
+#
+# Den Service-Role-Schlüssel holt der Lauf sich über die Management-API mit dem
+# vorhandenen Secret SUPABASE_ACCESS_TOKEN - er liegt nirgends gespeichert und
+# wird im Protokoll maskiert.
+
+on:
+  workflow_dispatch:
+    inputs:
+      skript:
+        description: 'Welche Wartung'
+        required: true
+        default: vorschau
+        type: choice
+        options: [vorschau, speicher]
+      modus:
+        description: '"probe" zeigt nur den Plan, "ausfuehren" ändert'
+        required: true
+        default: probe
+        type: choice
+        options: [probe, ausfuehren]
+
+permissions:
+  contents: read
+
+jobs:
+  wartung:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Service-Role-Schlüssel holen
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          key=$(curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/api-keys?reveal=true" \
+            | jq -r '.[] | select(.name == "service_role") | .api_key')
+          if [ -z "$key" ] || [ "$key" = "null" ]; then echo "Kein service_role-Schlüssel erhalten"; exit 1; fi
+          echo "::add-mask::$key"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$key" >> "$GITHUB_ENV"
+      - name: Wartung
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          MODUS: ${{ inputs.modus }}
+        # --experimental-strip-types: wartung-vorschau importiert die
+        # TypeScript-Datei, die auch Web-Oberfläche und MCP-Server nutzen.
+        run: node --experimental-strip-types "scripts/wartung-${{ inputs.skript }}.mjs"
