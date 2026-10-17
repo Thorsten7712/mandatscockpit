@@ -1,14 +1,32 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
-import { fileNameFromPath, formatDateTime, parseLimit, toolTextResult, truncate, uploadBase64File } from '../shared.ts'
+import { formatDateTime, parseLimit, toolTextResult, truncate } from '../shared.ts'
+
+// Notizen gibt es seit 0055 nur noch an ToDo-Karten (summaries.todo_id) und
+// an Dokumenten im Hub (dokumente.parent_id, create_document mit parent_id).
+// Sitzungen und Termine haben keine eigenen mehr: was zu ihnen gehört, hängt
+// an den verknüpften Karten und Dokumenten. list_notes nimmt deshalb weiter
+// session_id/event_id an, liest dann aber die Notizen der dort verknüpften
+// Karten.
+
+/** Eigene Karten plus die per todo_placements geteilten - wie die RLS von
+ *  todos. Erledigte eigene Karten haben oft keine Platzierung mehr, deshalb
+ *  beides. Liefert bei einem Fehler dessen Meldung. */
+async function sichtbareKarten(supabase: SupabaseClient, userId: string): Promise<string[] | string> {
+  const [eigene, platziert] = await Promise.all([
+    supabase.from('todos').select('id').eq('user_id', userId),
+    supabase.from('todo_placements').select('todo_id').eq('user_id', userId),
+  ])
+  if (eigene.error) return eigene.error.message
+  if (platziert.error) return platziert.error.message
+  return Array.from(
+    new Set([...(eigene.data ?? []).map((t) => t.id as string), ...(platziert.data ?? []).map((p) => p.todo_id as string)]),
+  )
+}
 
 interface NoteListRow {
   id: string
-  session_id: string | null
-  event_id: string | null
-  todo_id: string | null
-  antrag_id: string | null
+  todo_id: string
   inhalt: string | null
-  datei_url: string | null
   erstellt_am: string
   user_id: string
 }
@@ -24,219 +42,85 @@ export async function listNotes(supabase: SupabaseClient, userId: string, args: 
     return toolTextResult('Fehler: bitte höchstens einen der Filter session_id, event_id, todo_id setzen.', true)
   }
 
-  // Sichtbarkeit wie in der Web-UI: eigene Notizen (summaries_manage_own) plus
-  // Notizen anderer auf ToDo-Karten, auf denen der Nutzer eine Platzierung hat
-  // (summaries_select_via_todo_placement). Anträge bleiben außen vor, solange es
-  // keine Antrags-Tools gibt.
-  const { data: placements } = await supabase.from('todo_placements').select('todo_id').eq('user_id', userId)
-  const placedTodoIds = (placements ?? []).map((p) => p.todo_id as string)
+  // Sichtbarkeit wie in der Web-UI: die Notizen aller Karten, die man selbst
+  // angelegt hat oder die auf dem eigenen Board liegen. Der
+  // Service-Role-Client umgeht RLS, daher hier explizit.
+  let todoIds = await sichtbareKarten(supabase, userId)
+  if (typeof todoIds === 'string') return toolTextResult(`Fehler beim Laden der Karten: ${todoIds}`, true)
 
-  const baseQuery = () => {
-    let q = supabase
-      .from('summaries')
-      .select('id, session_id, event_id, todo_id, antrag_id, inhalt, datei_url, erstellt_am, user_id')
-    if (sessionId) q = q.eq('session_id', sessionId)
-    if (eventId) q = q.eq('event_id', eventId)
-    if (todoId) q = q.eq('todo_id', todoId)
-    return q.order('erstellt_am', { ascending: false }).limit(limit)
+  if (todoId) {
+    if (!todoIds.includes(todoId)) {
+      return toolTextResult(`ToDo mit id ${todoId} gehört nicht zu diesem Konto (auch nicht per Teilen).`, true)
+    }
+    todoIds = [todoId]
+  } else if (sessionId || eventId) {
+    const { data: verknuepft, error } = await supabase
+      .from('todos')
+      .select('id')
+      .in('id', todoIds.length > 0 ? todoIds : ['00000000-0000-0000-0000-000000000000'])
+      .eq(sessionId ? 'session_id' : 'event_id', (sessionId ?? eventId)!)
+    if (error) return toolTextResult(`Fehler beim Laden der Karten: ${error.message}`, true)
+    todoIds = (verknuepft ?? []).map((t) => t.id as string)
   }
-  const [own, viaTodo] = await Promise.all([
-    baseQuery().eq('user_id', userId),
-    placedTodoIds.length > 0 ? baseQuery().in('todo_id', placedTodoIds) : Promise.resolve({ data: [], error: null }),
+  if (todoIds.length === 0) {
+    return toolTextResult(
+      sessionId || eventId
+        ? 'Keine Notizen gefunden - mit diesem Termin ist keine ToDo-Karte mit Notizen verknüpft. Notizen an verknüpften Dokumenten liefert list_documents/get_document.'
+        : 'Keine Notizen gefunden.',
+    )
+  }
+
+  const { data, error } = await supabase
+    .from('summaries')
+    .select('id, todo_id, inhalt, erstellt_am, user_id')
+    .in('todo_id', todoIds)
+    .not('inhalt', 'is', null)
+    .order('erstellt_am', { ascending: false })
+    .limit(limit)
+  if (error) return toolTextResult(`Fehler beim Laden der Notizen: ${error.message}`, true)
+  const rows = (data ?? []) as NoteListRow[]
+  if (rows.length === 0) return toolTextResult('Keine Notizen gefunden.')
+
+  const kartenIds = Array.from(new Set(rows.map((r) => r.todo_id)))
+  const autorIds = Array.from(new Set(rows.map((r) => r.user_id)))
+  const [todos, profile] = await Promise.all([
+    supabase.from('todos').select('id, titel').in('id', kartenIds),
+    supabase.from('profiles').select('id, name').in('id', autorIds),
   ])
-  if (own.error) return toolTextResult(`Fehler beim Laden der Notizen: ${own.error.message}`, true)
-  if (viaTodo.error) return toolTextResult(`Fehler beim Laden der Notizen: ${viaTodo.error.message}`, true)
-
-  const byId = new Map<string, NoteListRow>()
-  ;[...(own.data ?? []), ...(viaTodo.data ?? [])].forEach((n) => byId.set(n.id, n as NoteListRow))
-  const rows = Array.from(byId.values())
-    .sort((a, b) => b.erstellt_am.localeCompare(a.erstellt_am))
-    .slice(0, limit)
-
-  if (rows.length === 0) return toolTextResult('Keine Notizen/Dokumente gefunden.')
-
-  // Titel der verknüpften Objekte in je einer Sammelabfrage nachladen.
-  const idsOf = (key: 'session_id' | 'event_id' | 'todo_id') =>
-    Array.from(new Set(rows.map((r) => r[key]).filter((v): v is string => Boolean(v))))
-  const [sessions, events, todos] = await Promise.all([
-    idsOf('session_id').length > 0
-      ? supabase.from('sessions').select('id, titel').in('id', idsOf('session_id'))
-      : Promise.resolve({ data: [] }),
-    idsOf('event_id').length > 0
-      ? supabase.from('events').select('id, titel').in('id', idsOf('event_id'))
-      : Promise.resolve({ data: [] }),
-    idsOf('todo_id').length > 0
-      ? supabase.from('todos').select('id, titel').in('id', idsOf('todo_id'))
-      : Promise.resolve({ data: [] }),
-  ])
-  const titelById = new Map<string, string>()
-  ;[...(sessions.data ?? []), ...(events.data ?? []), ...(todos.data ?? [])].forEach((r) =>
-    titelById.set(r.id as string, r.titel as string),
-  )
+  const titelById = new Map((todos.data ?? []).map((t) => [t.id as string, t.titel as string]))
+  const nameById = new Map((profile.data ?? []).map((p) => [p.id as string, p.name as string]))
 
   // Bei einem gesetzten Filter ist der Kontext eng - dann den vollen Text zeigen,
   // sonst kürzen, damit eine breite Liste die Antwort nicht sprengt.
   const maxLen = gesetzteFilter.length === 1 ? 4000 : 500
-
   const lines = rows.map((n) => {
-    let ziel = 'ohne Zuordnung'
-    if (n.session_id) ziel = `Sitzung "${titelById.get(n.session_id) ?? n.session_id}"`
-    else if (n.event_id) ziel = `Termin "${titelById.get(n.event_id) ?? n.event_id}"`
-    else if (n.todo_id) ziel = `ToDo "${titelById.get(n.todo_id) ?? n.todo_id}"`
-    else if (n.antrag_id) ziel = 'Antrag'
-    const teile: string[] = []
-    if (n.inhalt) teile.push(truncate(n.inhalt, maxLen))
-    if (n.datei_url) teile.push(`[Datei: ${fileNameFromPath(n.datei_url)}]`)
-    if (n.user_id !== userId) teile.push('(von einer geteilten Karte)')
-    return `- ${formatDateTime(n.erstellt_am)} · ${ziel}: ${teile.join(' ')}`
+    const von = n.user_id === userId ? '' : ` (von ${nameById.get(n.user_id) ?? 'einer Kollegin/einem Kollegen'})`
+    return `- ${formatDateTime(n.erstellt_am)} · ToDo "${titelById.get(n.todo_id) ?? n.todo_id}"${von}: ${truncate(n.inhalt ?? '', maxLen)}`
   })
   return toolTextResult(lines.join('\n\n'))
 }
 
-interface NoteTargetConfig {
-  /** Name des Arguments, das die UUID des Ziels trägt (session_id/event_id/todo_id/antrag_id). */
-  idArgName: string
-  /** Tabelle des Ziels. */
-  table: 'sessions' | 'events' | 'todos' | 'antraege'
-  /** Spalte in summaries, die auf das Ziel zeigt. */
-  idColumn: 'session_id' | 'event_id' | 'todo_id' | 'antrag_id'
-  /** events/todos/antraege gehören einem Nutzer (RLS events_select_own/
-   *  todos_select_own_or_placed/antraege_select_own_or_shared) - Service-Role-Client umgeht RLS,
-   *  daher hier manuell auf user_id prüfen. sessions gehören dagegen keinem einzelnen Nutzer und
-   *  werden nicht ownership-geprüft (Sichtbarkeit hängt an der Kalenderquelle, siehe
-   *  sessions_select_visible_source - hier bewusst nicht nachgebildet, da eine Notiz am fremden
-   *  Sitzungs-Datensatz nur im eigenen summaries-Bestand landet). */
-  ownerScoped: boolean
-  /** Zusätzlicher Zugriffsweg neben user_id = userId (Teilen), z. B. todo_placements für ToDos
-   *  oder antrag_shares für Anträge - Tabelle hat eine Spalte namens idColumn mit der Ziel-id und
-   *  eine Spalte user_id. */
-  sharedVia?: { table: string; idColumn: string }
-  /** Für Fehlermeldungen/Bestätigungstext, z. B. "Sitzung", "Termin", "ToDo", "Antrag". */
-  label: string
-}
+export async function createTodoNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
+  const todoId = typeof args.todo_id === 'string' ? args.todo_id.trim() : ''
+  const inhalt = typeof args.inhalt === 'string' ? args.inhalt.trim() : ''
+  if (!todoId) return toolTextResult('Fehler: todo_id ist erforderlich.', true)
+  if (!inhalt) return toolTextResult('Fehler: inhalt ist erforderlich - Notizen sind reiner Text.', true)
 
-async function createNote(
-  supabase: SupabaseClient,
-  userId: string,
-  args: Record<string, unknown>,
-  target: NoteTargetConfig,
-) {
-  const targetId = typeof args[target.idArgName] === 'string' ? (args[target.idArgName] as string).trim() : ''
-  const inhalt = typeof args.inhalt === 'string' && args.inhalt.trim() ? args.inhalt.trim() : null
-  const dateiname = typeof args.dateiname === 'string' ? args.dateiname.trim() : ''
-  const dateiBase64 = typeof args.datei_base64 === 'string' ? args.datei_base64.trim() : ''
-  // Alternative zu dateiname+datei_base64 für größere Dateien: ein per
-  // start_file_upload/append_file_chunk/finish_file_upload bereits
-  // hochgeladener Storage-Pfad (siehe tools/uploads.ts) - direkte
-  // Base64-Übergabe scheitert bei größeren Dateien an der Zeichenlänge,
-  // die der aufrufende MCP-Client in einem einzelnen Tool-Aufruf generieren
-  // kann.
-  const dateiPfad = typeof args.datei_pfad === 'string' ? args.datei_pfad.trim() : ''
-  const hasFile = Boolean((dateiname && dateiBase64) || dateiPfad)
-
-  if (!targetId) return toolTextResult(`Fehler: ${target.idArgName} ist erforderlich.`, true)
-  if (!inhalt && !hasFile) {
-    return toolTextResult('Fehler: entweder inhalt, dateiname+datei_base64 oder datei_pfad sind erforderlich.', true)
-  }
-  if ((dateiname && !dateiBase64) || (!dateiname && dateiBase64)) {
-    return toolTextResult('Fehler: dateiname und datei_base64 müssen zusammen angegeben werden.', true)
-  }
-  if (dateiPfad && (dateiname || dateiBase64)) {
-    return toolTextResult('Fehler: datei_pfad kann nicht zusammen mit dateiname/datei_base64 angegeben werden.', true)
-  }
-  if (dateiPfad && !dateiPfad.startsWith(`${userId}/`)) {
-    return toolTextResult('Fehler: datei_pfad gehört nicht zu diesem Konto.', true)
-  }
-
-  // Immer dieselbe, konstante Spaltenliste abfragen (nicht abhängig von
-  // ownerScoped) - sessions hat z. B. gar keine user_id-Spalte, und ein
-  // laufzeitabhängiger Select-String verwirrt außerdem supabase-js' Typinferenz.
-  const { data: targetRow, error: targetError } = await supabase
-    .from(target.table)
-    .select('id, titel')
-    .eq('id', targetId)
-    .maybeSingle()
-  if (targetError) return toolTextResult(`Fehler beim Prüfen (${target.label}): ${targetError.message}`, true)
-  if (!targetRow) return toolTextResult(`${target.label} mit id ${targetId} wurde nicht gefunden.`, true)
-
-  if (target.ownerScoped) {
-    const { data: ownerRow } = await supabase.from(target.table).select('user_id').eq('id', targetId).maybeSingle()
-    let erlaubt = ownerRow?.user_id === userId
-    if (!erlaubt && target.sharedVia) {
-      const { data: shareRow } = await supabase
-        .from(target.sharedVia.table)
-        .select('id')
-        .eq(target.sharedVia.idColumn, targetId)
-        .eq('user_id', userId)
-        .maybeSingle()
-      erlaubt = Boolean(shareRow)
-    }
-    if (!erlaubt) {
-      return toolTextResult(`${target.label} mit id ${targetId} gehört nicht zu diesem Konto (auch nicht per Teilen).`, true)
-    }
-  }
-
-  let dateiUrl: string | null = null
-  if (dateiPfad) {
-    dateiUrl = dateiPfad
-  } else if (dateiname && dateiBase64) {
-    const uploaded = await uploadBase64File(supabase, 'zusammenfassungen', userId, dateiname, dateiBase64)
-    if (uploaded.error) return toolTextResult(uploaded.error, true)
-    dateiUrl = uploaded.path!
+  // Wie die Policy summaries_insert_todo (0055): eigene oder geteilte Karte.
+  const { data: todo, error: todoError } = await supabase.from('todos').select('id, titel').eq('id', todoId).maybeSingle()
+  if (todoError) return toolTextResult(`Fehler beim Prüfen der Karte: ${todoError.message}`, true)
+  if (!todo) return toolTextResult(`ToDo mit id ${todoId} wurde nicht gefunden.`, true)
+  const karten = await sichtbareKarten(supabase, userId)
+  if (typeof karten === 'string') return toolTextResult(`Fehler beim Prüfen der Karte: ${karten}`, true)
+  if (!karten.includes(todoId)) {
+    return toolTextResult(`ToDo mit id ${todoId} gehört nicht zu diesem Konto (auch nicht per Teilen).`, true)
   }
 
   const { data: note, error } = await supabase
     .from('summaries')
-    .insert({ user_id: userId, [target.idColumn]: targetId, inhalt, datei_url: dateiUrl })
+    .insert({ user_id: userId, todo_id: todoId, inhalt })
     .select('id')
     .single()
   if (error || !note) return toolTextResult(`Fehler beim Speichern der Notiz: ${error?.message}`, true)
-
-  const dateiLabel = dateiname || (dateiUrl ? fileNameFromPath(dateiUrl) : '')
-  const parts = [inhalt ? 'Text' : null, dateiUrl ? `Datei "${dateiLabel}"` : null].filter(Boolean)
-  return toolTextResult(
-    `Notiz (${parts.join(' + ')}) zu ${target.label} "${targetRow.titel}" wurde gespeichert (id: ${note.id}).`,
-  )
-}
-
-export function createSessionNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
-  return createNote(supabase, userId, args, {
-    idArgName: 'session_id',
-    table: 'sessions',
-    idColumn: 'session_id',
-    ownerScoped: false,
-    label: 'Sitzung',
-  })
-}
-
-export function createEventNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
-  return createNote(supabase, userId, args, {
-    idArgName: 'event_id',
-    table: 'events',
-    idColumn: 'event_id',
-    ownerScoped: true,
-    label: 'Termin',
-  })
-}
-
-export function createTodoNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
-  return createNote(supabase, userId, args, {
-    idArgName: 'todo_id',
-    table: 'todos',
-    idColumn: 'todo_id',
-    ownerScoped: true,
-    sharedVia: { table: 'todo_placements', idColumn: 'todo_id' },
-    label: 'ToDo',
-  })
-}
-
-export function createAntragNote(supabase: SupabaseClient, userId: string, args: Record<string, unknown>) {
-  return createNote(supabase, userId, args, {
-    idArgName: 'antrag_id',
-    table: 'antraege',
-    idColumn: 'antrag_id',
-    ownerScoped: true,
-    sharedVia: { table: 'antrag_shares', idColumn: 'antrag_id' },
-    label: 'Antrag',
-  })
+  return toolTextResult(`Notiz zu ToDo "${todo.titel}" wurde gespeichert (id: ${note.id}).`)
 }

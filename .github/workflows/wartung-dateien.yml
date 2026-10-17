@@ -1,8 +1,16 @@
-name: Wartung – Dateien umziehen und aufräumen
+name: Wartung – Dateien und Notizen aufräumen
 
-# Einmalige Datei-Wartung nach der Upload-Sperre, Details in
-# scripts/wartung-dateien.mjs. Nur von Hand startbar; zuerst mit "probe"
-# laufen lassen und die Ausgabe prüfen, dann mit "ausfuehren".
+# Einmalige Wartungsläufe, Details im jeweiligen Skript:
+#   dateien  scripts/wartung-dateien.mjs  (nach der Upload-Sperre, 0052)
+#   notizen  scripts/wartung-notizen.mjs  (ein Notiz-System, 0055)
+# Nur von Hand startbar; zuerst mit "probe" laufen lassen und die Ausgabe
+# prüfen, dann mit "ausfuehren".
+#
+# Das Repository ist öffentlich: Protokolle UND Artefakte kann jeder
+# angemeldete GitHub-Nutzer lesen. Die Skripte schreiben deshalb keine
+# Inhalte ins Protokoll, und die Sicherung des Gelöschten geht nur
+# verschlüsselt (Secret BACKUP_PASSWORT, wie beim Backup) als Artefakt raus.
+# Ohne das Secret bricht "ausfuehren" ab, bevor etwas gelöscht wird.
 #
 # Den Service-Role-Schlüssel holt der Lauf sich über die Management-API mit dem
 # vorhandenen Secret SUPABASE_ACCESS_TOKEN - er liegt nirgends gespeichert und
@@ -11,12 +19,22 @@ name: Wartung – Dateien umziehen und aufräumen
 on:
   workflow_dispatch:
     inputs:
+      skript:
+        description: 'Welche Wartung'
+        required: true
+        default: notizen
+        type: choice
+        options: [dateien, notizen]
       modus:
         description: '"probe" zeigt nur den Plan, "ausfuehren" ändert'
         required: true
         default: probe
         type: choice
         options: [probe, ausfuehren]
+      auch_von:
+        description: 'nur notizen: Namen (kommagetrennt), deren Sitzungs-Notizen nach Vorlage ebenfalls gelöscht werden'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -25,6 +43,15 @@ jobs:
   wartung:
     runs-on: ubuntu-latest
     steps:
+      - name: Passwort für die Sicherung vorhanden?
+        if: inputs.modus == 'ausfuehren'
+        env:
+          BACKUP_PW: ${{ secrets.BACKUP_PASSWORT }}
+        run: |
+          if [ -z "$BACKUP_PW" ]; then
+            echo "::error::Secret BACKUP_PASSWORT fehlt - ohne Verschlüsselung landete die Sicherung öffentlich lesbar im Artefakt."
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -46,13 +73,26 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           MODUS: ${{ inputs.modus }}
+          AUCH_VON: ${{ inputs.auch_von }}
           EXPORT_DIR: export
-        run: node scripts/wartung-dateien.mjs
-      # Sicherung der gelöschten Dateien, läuft nach 30 Tagen von selbst ab.
+        run: node "scripts/wartung-${{ inputs.skript }}.mjs"
+      # Sicherung des Gelöschten, verschlüsselt; läuft nach 30 Tagen von selbst
+      # ab. Entschlüsseln: gpg --decrypt sicherung.tar.gz.gpg | tar xz
+      - name: Sicherung verschlüsseln
+        if: inputs.modus == 'ausfuehren'
+        env:
+          BACKUP_PASSWORT: ${{ secrets.BACKUP_PASSWORT }}
+        run: |
+          if [ -d export ] && [ -n "$(ls -A export)" ]; then
+            tar czf sicherung.tar.gz export
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSWORT" \
+              --symmetric --cipher-algo AES256 -o sicherung.tar.gz.gpg sicherung.tar.gz
+            rm -rf export sicherung.tar.gz
+          fi
       - uses: actions/upload-artifact@v4
         if: inputs.modus == 'ausfuehren'
         with:
-          name: geloeschte-dateien
-          path: export/
+          name: geloeschte-${{ inputs.skript }}-${{ github.run_number }}
+          path: sicherung.tar.gz.gpg
           retention-days: 30
           if-no-files-found: ignore

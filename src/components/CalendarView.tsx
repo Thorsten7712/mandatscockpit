@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { ladeTermineMitNotizen } from '../lib/notizFlags'
 import type { CalendarSource, Ebene, EventRow, SessionRow } from '../lib/types'
 import { TerminDetailModal } from './TerminDetailModal'
 import { formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
@@ -48,14 +49,9 @@ export function CalendarView() {
   }
 
   async function loadNotizenFlags() {
-    const { data } = await supabase.from('summaries').select('event_id, session_id')
-    const ids = new Set<string>()
-    ;(data ?? []).forEach((s) => {
-      if (s.event_id) ids.add(s.event_id)
-      if (s.session_id) ids.add(s.session_id)
-    })
-    setNotizenIds(ids)
+    setNotizenIds(await ladeTermineMitNotizen())
   }
+
 
   // Sitzungen aus "sitzung"-Quellen (gremienweise gefiltert) und aus
   // "termin"-Quellen (reiner Terminkalender, ungefiltert) getrennt laden und
@@ -287,8 +283,8 @@ export function CalendarView() {
                   >
                     <span className="truncate">{item.titel}</span>
                     {notizenIds.has(item.id) && (
-                      <span className="shrink-0" title="Enthält Notizen/Dokumente">
-                        📎
+                      <span className="shrink-0" title="Aufgaben mit Notizen">
+                        📝
                       </span>
                     )}
                     {badgeText && (

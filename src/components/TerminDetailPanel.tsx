@@ -1,15 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, SummaryRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
+import type { AntragRow, CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
 import { AntragDetailModal } from './AntragDetailModal'
 import { DokumentDetailModal } from './DokumentDetailModal'
-import { DocumentPreviewModal } from './DocumentPreviewModal'
-import { fileNameFromPath } from '../lib/dateien'
 import { useLoeschDialog } from './LoeschDialog'
 import { formatDateTime } from '../lib/format'
 import { antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
+import { inStuecken } from '../lib/alleZeilen'
 
 // Gleiche Liste wie in Settings.tsx/Archiv.tsx (Kalenderquellen- bzw.
 // Sitzung-nachtragen-Formular) - bewusst dupliziert, siehe CLAUDE.md.
@@ -19,6 +18,19 @@ const EBENEN: { value: Ebene; label: string }[] = [
   { value: 'land', label: 'Land' },
   { value: 'bund', label: 'Bund' },
 ]
+
+/** Eine Notiz, die an einer verknüpften Aufgabe oder einem verknüpften
+ *  Dokument hängt. Sitzungen und Termine haben seit 0055 keine eigenen
+ *  Notizen mehr - was zu ihnen gehört, steht dort und wird hier nur gezeigt. */
+interface IndirekteNotiz {
+  id: string
+  quelle: 'todo' | 'dokument'
+  bezugId: string
+  bezugTitel: string
+  user_id: string
+  inhalt: string
+  erstellt_am: string
+}
 
 function toDatetimeLocalValue(iso: string): string {
   const d = new Date(iso)
@@ -66,14 +78,11 @@ export function TerminDetailPanel({
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
 
-  const [summaries, setSummaries] = useState<SummaryRow[]>([])
-  const [newInhalt, setNewInhalt] = useState('')
-  const [savingSummary, setSavingSummary] = useState(false)
-  const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [notizen, setNotizen] = useState<IndirekteNotiz[]>([])
+  const [autorNamen, setAutorNamen] = useState<Map<string, string>>(new Map())
 
   const [linkedTodos, setLinkedTodos] = useState<TodoRow[]>([])
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
-  const [previewDoc, setPreviewDoc] = useState<{ path: string; name: string } | null>(null)
 
   const [linkedAntraege, setLinkedAntraege] = useState<AntragRow[]>([])
   const [openAntragId, setOpenAntragId] = useState<string | null>(null)
@@ -105,12 +114,6 @@ export function TerminDetailPanel({
       }
       setSession(data)
     }
-  }
-
-  async function loadSummaries() {
-    const column = kind === 'event' ? 'event_id' : 'session_id'
-    const { data } = await supabase.from('summaries').select('*').eq(column, id).order('erstellt_am')
-    setSummaries(data ?? [])
   }
 
   async function loadLinkedTodos() {
@@ -195,7 +198,6 @@ export function TerminDetailPanel({
     setOpenDokument(null)
     setDokumenteGeladen(false)
     loadTermin()
-    loadSummaries()
     loadLinkedTodos()
     loadLinkedAntraege()
     // Nur im Modal direkt in den Leser springen. Auf der eigenen Seite
@@ -316,30 +318,74 @@ export function TerminDetailPanel({
     await loadTermin()
   }
 
-  async function handleAddSummary(e: FormEvent) {
-    e.preventDefault()
-    if (!userId) return
-    if (!newInhalt) return
-    setSavingSummary(true)
-    setSummaryError(null)
-
-    const { error } = await supabase.from('summaries').insert({
-      user_id: userId,
-      [kind === 'event' ? 'event_id' : 'session_id']: id,
-      inhalt: newInhalt || null,
-    })
-    if (error) {
-      setSummaryError(error.message)
-    } else {
-      setNewInhalt('')
-      await loadSummaries()
+  // Notizen der verknüpften Aufgaben (summaries.todo_id) und Dokumente
+  // (dokumente.parent_id). RLS liefert nur, was der Nutzer ohnehin sehen darf.
+  // Eine Ratssitzung hat gut 80 Dokumente - die Ids deshalb in Stücken.
+  useEffect(() => {
+    let abgebrochen = false
+    async function ladeNotizen() {
+      const todoTitel = new Map(linkedTodos.map((t) => [t.id, t.titel]))
+      const dokTitel = new Map(linkedDokumente.map((d) => [d.id, d.titel]))
+      const gesammelt: IndirekteNotiz[] = []
+      for (const ids of inStuecken([...todoTitel.keys()])) {
+        const { data } = await supabase
+          .from('summaries')
+          .select('id, todo_id, user_id, inhalt, erstellt_am')
+          .in('todo_id', ids)
+          .not('inhalt', 'is', null)
+        for (const n of data ?? []) {
+          gesammelt.push({
+            id: n.id,
+            quelle: 'todo',
+            bezugId: n.todo_id,
+            bezugTitel: todoTitel.get(n.todo_id) ?? '',
+            user_id: n.user_id,
+            inhalt: n.inhalt,
+            erstellt_am: n.erstellt_am,
+          })
+        }
+      }
+      for (const ids of inStuecken([...dokTitel.keys()])) {
+        const { data } = await supabase
+          .from('dokumente')
+          .select('id, parent_id, user_id, titel, inhalt, erstellt_am')
+          .in('parent_id', ids)
+        for (const n of data ?? []) {
+          gesammelt.push({
+            id: n.id,
+            quelle: 'dokument',
+            bezugId: n.parent_id,
+            bezugTitel: dokTitel.get(n.parent_id) ?? '',
+            user_id: n.user_id,
+            inhalt: [n.titel, n.inhalt].filter(Boolean).join('\n'),
+            erstellt_am: n.erstellt_am,
+          })
+        }
+      }
+      gesammelt.sort((a, b) => Date.parse(b.erstellt_am) - Date.parse(a.erstellt_am))
+      const autoren = [...new Set(gesammelt.map((n) => n.user_id))]
+      const { data: profs } =
+        autoren.length > 0
+          ? await supabase.from('profiles').select('id, name').in('id', autoren)
+          : { data: [] as { id: string; name: string }[] }
+      if (abgebrochen) return
+      // Beide nach demselben await setzen (siehe CLAUDE.md).
+      setAutorNamen(new Map((profs ?? []).map((p) => [p.id, p.name])))
+      setNotizen(gesammelt)
     }
-    setSavingSummary(false)
-  }
+    ladeNotizen()
+    return () => {
+      abgebrochen = true
+    }
+  }, [linkedTodos, linkedDokumente])
 
-  async function handleDeleteSummary(summaryId: string) {
-    await supabase.from('summaries').delete().eq('id', summaryId)
-    await loadSummaries()
+  function oeffneBezug(n: IndirekteNotiz) {
+    if (n.quelle === 'todo') {
+      setOpenTodoId(n.bezugId)
+      return
+    }
+    const dok = linkedDokumente.find((d) => d.id === n.bezugId)
+    if (dok) setOpenDokument(dok)
   }
 
   const titel = event?.titel ?? session?.titel
@@ -617,75 +663,38 @@ export function TerminDetailPanel({
 
   const notesBlock = (
     <>
-      <h3 className="mb-2 text-sm font-semibold text-slate-900">Notizen &amp; Dokumente</h3>
+      <h3 className="mb-1 text-sm font-semibold text-slate-900">Notizen</h3>
+      <p className="mb-2 text-xs text-slate-500">
+        Aus den verknüpften Aufgaben und Dokumenten – Notizen schreibst du dort.
+      </p>
       <ul className="mb-3 space-y-2">
-        {summaries.map((s) => (
-          <li key={s.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
-            {s.inhalt && <p className="text-sm whitespace-pre-wrap">{s.inhalt}</p>}
-            {s.datei_url && (
-              <button
-                type="button"
-                onClick={() => setPreviewDoc({ path: s.datei_url!, name: fileNameFromPath(s.datei_url!) })}
-                className="mc-btn-ghost px-2! py-1! text-xs!"
-              >
-                📎 {fileNameFromPath(s.datei_url)}
-              </button>
-            )}
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs text-slate-400">{formatDateTime(s.erstellt_am)}</span>
-              {s.user_id === userId && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    loeschRueckfrage({
-                      titel: s.datei_url ? fileNameFromPath(s.datei_url) : (s.inhalt ?? '').slice(0, 70),
-                      was: s.datei_url ? 'Das Dokument' : 'Die Notiz',
-                      folgen:
-                        s.sichtbarkeit === 'geteilt'
-                          ? [
-                              'Der Eintrag ist geteilt und verschwindet auch für die anderen.',
-                              'Das lässt sich nicht rückgängig machen.',
-                            ]
-                          : undefined,
-                      ausfuehren: () => handleDeleteSummary(s.id),
-                    })
-                  }
-                  className="mc-btn-danger px-2! py-1! text-xs!"
-                >
-                  Löschen
-                </button>
-              )}
-            </div>
+        {notizen.map((n) => (
+          <li key={`${n.quelle}-${n.id}`}>
+            <button
+              type="button"
+              onClick={() => oeffneBezug(n)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
+            >
+              <span className="block truncate text-xs font-medium text-slate-500">
+                {n.quelle === 'todo' ? 'Aufgabe' : 'Dokument'}: {n.bezugTitel}
+              </span>
+              <span className="mt-0.5 line-clamp-3 text-sm whitespace-pre-wrap text-slate-800">{n.inhalt}</span>
+              <span className="mt-1 block text-xs text-slate-400">
+                {n.user_id === userId ? 'Du' : autorNamen.get(n.user_id) ?? 'Unbekannt'} · {formatDateTime(n.erstellt_am)}
+              </span>
+            </button>
           </li>
         ))}
-        {summaries.length === 0 && (
-          <li className="text-slate-400 text-sm">Noch keine Notizen oder Dokumente.</li>
+        {notizen.length === 0 && (
+          <li className="text-slate-400 text-sm">Noch keine Notizen an verknüpften Aufgaben oder Dokumenten.</li>
         )}
       </ul>
-
-      <form onSubmit={handleAddSummary} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <textarea
-          placeholder="Notiz"
-          value={newInhalt}
-          onChange={(e) => setNewInhalt(e.target.value)}
-          className="mc-input w-full"
-          rows={3}
-        />
-        {summaryError && <p className="text-red-600 text-sm">{summaryError}</p>}
-        <button
-          type="submit"
-          disabled={savingSummary || !newInhalt}
-          className="mc-btn-primary"
-        >
-          {savingSummary ? 'Speichern...' : 'Hinzufügen'}
-        </button>
-      </form>
     </>
   )
 
   /** Die Sitzung selbst, wie sie im Leser als erster Punkt der Tagesordnung
-   *  erscheint: Kopfdaten, verknüpfte Aufgaben und Anträge, Notizen und
-   *  Dateien. Ohne die Tagesordnungsliste - die steht links daneben. */
+   *  erscheint: Kopfdaten, verknüpfte Aufgaben und Anträge und die Notizen
+   *  daran. Ohne die Tagesordnungsliste - die steht links daneben. */
   const uebersichtBlock = (
     <>
       {detailsBlock}
@@ -725,13 +734,6 @@ export function TerminDetailPanel({
             setOpenDokument(null)
             loadLinkedDokumente()
           }}
-        />
-      )}
-      {previewDoc && (
-        <DocumentPreviewModal
-          path={previewDoc.path}
-          fileName={previewDoc.name}
-          onClose={() => setPreviewDoc(null)}
         />
       )}
     </>

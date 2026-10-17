@@ -1,25 +1,24 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { darfDateienHochladen, toolTextResult, UPLOAD_GESPERRT, uploadBase64File } from '../shared.ts'
 
-/** "notiz" (Standard) = Anhang an Sitzung/Termin/ToDo/Antrag (Bucket
- *  "zusammenfassungen"), "dokument" = Eintrag im Dokumenten-Hub (Bucket
- *  "dokumente", siehe tools/dokumente.ts). Ein Parameter statt einer zweiten,
- *  fast identischen Upload-Tool-Trias. */
+/** Einziges Ziel ist seit 0055 der Dokumenten-Hub (Bucket "dokumente", siehe
+ *  tools/dokumente.ts): Notizen sind reiner Text, Dateien lädt nur noch das
+ *  technische Konto hoch. Der Parameter ziel bleibt, damit bestehende Aufrufe
+ *  mit ziel="dokument" weiter funktionieren. */
 const BUCKET_BY_ZIEL: Record<string, string> = {
-  notiz: 'zusammenfassungen',
   dokument: 'dokumente',
 }
 
 // Größere Dateien (z. B. PDFs) lassen sich nicht in einem einzigen
-// create_*_note-Aufruf übertragen, weil der Base64-Tool-Aufruf-Text beim
+// create_document-Aufruf übertragen, weil der Base64-Tool-Aufruf-Text beim
 // aufrufenden MCP-Client irgendwo zwischen ca. 18.000 und 20.000 Zeichen
 // abgeschnitten wird (Nutzer-Feedback, siehe docs/CHANGELOG.md) - eine
 // Grenze der Tool-Aufruf-Generierung selbst, nicht dieses Servers. Diese drei
 // Tools übertragen eine Datei stattdessen in mehreren kleinen Häppchen über
 // mehrere Aufrufe, serverseitig zwischengespeichert in mcp_uploads/
 // mcp_upload_chunks, und liefern am Ende einen datei_pfad, der bei den
-// create_*_note-Tools als Alternative zu dateiname+datei_base64 übergeben
-// werden kann (siehe createNote() in notes.ts).
+// create_document als Alternative zu dateiname+datei_base64 übergeben
+// werden kann (siehe tools/dokumente.ts).
 
 const STALE_UPLOAD_MS = 60 * 60 * 1000
 
@@ -84,9 +83,9 @@ export async function finishFileUpload(supabase: SupabaseClient, userId: string,
   const uploadId = typeof args.upload_id === 'string' ? args.upload_id.trim() : ''
   if (!uploadId) return toolTextResult('Fehler: upload_id ist erforderlich.', true)
 
-  const ziel = typeof args.ziel === 'string' && args.ziel.trim() ? args.ziel.trim() : 'notiz'
+  const ziel = typeof args.ziel === 'string' && args.ziel.trim() ? args.ziel.trim() : 'dokument'
   const bucket = BUCKET_BY_ZIEL[ziel]
-  if (!bucket) return toolTextResult(`Fehler: ziel muss "notiz" oder "dokument" sein (war "${ziel}").`, true)
+  if (!bucket) return toolTextResult(`Fehler: ziel kann nur noch "dokument" sein (war "${ziel}") - Notizen sind reiner Text.`, true)
 
   const { data: upload } = await supabase
     .from('mcp_uploads')
@@ -124,11 +123,7 @@ export async function finishFileUpload(supabase: SupabaseClient, userId: string,
   // Löscht per on-delete-cascade auch die zugehörigen mcp_upload_chunks-Zeilen.
   await supabase.from('mcp_uploads').delete().eq('id', uploadId)
 
-  const naechsterSchritt =
-    ziel === 'dokument'
-      ? 'create_document'
-      : 'create_session_note/create_event_note/create_todo_note/create_antrag_note'
   return toolTextResult(
-    `Datei "${upload.dateiname}" wurde vollständig hochgeladen. Jetzt datei_pfad="${uploaded.path}" bei ${naechsterSchritt} angeben.`,
+    `Datei "${upload.dateiname}" wurde vollständig hochgeladen. Jetzt datei_pfad="${uploaded.path}" bei create_document angeben.`,
   )
 }

@@ -57,7 +57,7 @@ Erledigtes wird hier abgehakt, die Begründungen stehen ausführlich im CHANGELO
 - [x] Speicheranzeige für Admins (0054)
 - [x] Löschprotokoll (0053)
 - [x] Backup (Secrets `SUPABASE_DB_PASSWORD`, `BACKUP_PASSWORT` nötig)
-- [ ] Notizen konsolidieren, Kommentare und Sitzungs-Notizen entfernen
+- [x] Notizen konsolidieren, Kommentare und Sitzungs-Notizen entfernen (0055; Altdaten per `wartung-notizen`, DROP der Kommentar-Tabellen offen)
 - [ ] ToDo-Zuweisung
 - [ ] Neuigkeiten im Cockpit
 - [ ] Code und Leistung

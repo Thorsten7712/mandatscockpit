@@ -114,7 +114,7 @@ const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
  *  standardmäßig als `text/plain;charset=UTF-8` ab - der Browser rendert
  *  PDFs mit diesem Content-Type nicht im `<iframe>`-Vorschau-Modal
  *  (DocumentPreviewModal.tsx), sondern bietet nur einen Download an. Beide
- *  MCP-Upload-Pfade (createNote() in notes.ts, finishFileUpload() in
+ *  MCP-Upload-Pfade (createDocument() in tools/dokumente.ts, finishFileUpload() in
  *  uploads.ts) müssen deshalb den Content-Type explizit anhand der
  *  Dateiendung setzen, wie es ein echtes File-Objekt aus der Web-UI
  *  automatisch tut. */
@@ -143,9 +143,8 @@ export interface Base64UploadResult {
 
 /** Dekodiert einen Base64-String und lädt ihn unter `<userId>/<Date.now()>-<dateiname>`
  *  in den angegebenen Bucket hoch, mit korrektem Content-Type (siehe guessContentType()).
- *  Gemeinsam genutzt von createNote() (notes.ts, Bucket "zusammenfassungen") und
- *  createDocument() (tools/dokumente.ts, Bucket "dokumente") - vorher war diese Logik
- *  nur in createNote() inline vorhanden. */
+ *  Genutzt von createDocument() (tools/dokumente.ts) und finishFileUpload()
+ *  (tools/uploads.ts), beide Bucket "dokumente". */
 export async function uploadBase64File(
   supabase: SupabaseClient,
   bucket: string,

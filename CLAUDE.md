@@ -45,8 +45,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Dashboard**: optionaler „Presseschau"-Abschnitt (newspaperartige Darstellung hochgeladener
   Presseschauen, Tage-Navigation, nur sichtbar wenn `profiles.presseschau_aktiv` gesetzt ist,
   strikt privat pro Nutzer), ToDo-Board (frei definierbare Spalten, Drag & Drop, Teilen mit Partei-/
-  Ebenen-/Gliederungs-Kolleg*innen), „Meine Dokumente" (Anträge + Sitzungs- + ToDo-Dokumente in einer
-  Liste, filterbar nach Sitzung), „Nächste Termine" (eigene Termine + importierte Sitzungen
+  Ebenen-/Gliederungs-Kolleg*innen), „Meine Dokumente" (Anträge + ToDo-Karten mit Notizen in einer
+  Liste, filterbar nach Gremium), „Nächste Termine" (eigene Termine + importierte Sitzungen
   zusammengeführt, mit Detail-Modal).
 - **Settings** (Sidebar-Navigation): Profil (Foto/Name), Kalenderquellen (eigene + gemeinsam
   verwaltete, strikt privat pro Nutzer getrennt), Meine Gremien/Ebenen/Gliederung, ToDo-Board-Struktur,
@@ -100,7 +100,7 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   `dokumente.archiviert_am` gesetzt wurde (`0038_dokumente_archiv.sql`, Regel in
   `src/lib/dokumenteArchiv.ts`). Archiviertes ist in der Liste ausgeblendet (Chip „Archiv (n)" blendet
   es ein), wird von der Suche aber **immer** mitdurchsucht. Es erscheint zusätzlich im „Dokumente"-
-  Reiter des Archivs, gemischt mit den `summaries`-Datei-Uploads. Dazu: Paginierung mit wählbarer
+  Reiter des Archivs. Dazu: Paginierung mit wählbarer
   Seitengröße (10/25/50/100/Alle) und ein Schnellfilter „Meine Gremien" (über die Sitzung des
   Dokuments, `user_gremien`). **Löschen nur im Detail-Modal**, nicht aus der Liste heraus: bei einem
   geteilten Dokument verlangt der Dialog eine ausdrückliche Bestätigung per Checkbox, weil es für
@@ -123,7 +123,7 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   *kein eigenes Chrome mehr* (`imLeser` – es genügt irgendein verknüpftes Dokument, eine
   importierte Tagesordnung ist nicht nötig) – die frühere Listenansicht
   lag sonst nach dem Schließen wieder frei, obwohl sie gerade übersprungen worden war. Die Sitzung
-  selbst – Kopfdaten, Aufgaben, Anträge, Notizen, Dateien – ist dort der **erste Eintrag über der
+  selbst – Kopfdaten, Aufgaben, Anträge und die Notizen der verknüpften Karten und Dokumente – ist dort der **erste Eintrag über der
   Tagesordnung** (`uebersicht`/`uebersichtTitel`); im Übersichts-Modus zeigt der Kopf den
   Sitzungstitel und nur noch das Schließen-X, die Spalten werden zu Navigation + Sitzung.
   Ohne TOP-Nummern startet der Leser in der **Übersicht** (`starteInUebersicht`) und beschriftet
@@ -162,7 +162,7 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 36 Tools über
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 33 Tools über
   ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
   README.md Abschnitt 9 und `docs/CHANGELOG.md`). `get_document` liefert den Markdown-Text eines Hub-Dokuments (in Abschnitten bis 20.000
   Zeichen) – `list_documents` lädt den Text bewusst nicht. `list_documents` kennt das Dokumenten-Archiv
@@ -221,6 +221,19 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   Migration samt Messung vorher läuft als Generalprobe in einem `execute_sql`-Aufruf, der am Ende
   absichtlich abbricht – ein Aufruf ist eine Transaktion, es bleibt nichts zurück. Vorlage und
   Ablauf im CHANGELOG-Eintrag zu 0050.
+- **Ein Notiz-System** (seit `0055_notizen_nur_todo.sql`): Notizen gibt es nur an ToDo-Karten
+  (`summaries.todo_id`, sichtbar für alle, auf deren Board die Karte liegt) und an Hub-Dokumenten
+  (`dokumente.parent_id`). Keine Kommentare, keine Notizen an Sitzungen, Terminen oder Anträgen –
+  die Sitzungsansicht zeigt die Notizen ihrer verknüpften Karten und Dokumente nur an. Die
+  RLS-Bedingung steht in `summaries_manage_own` (WITH CHECK), im MCP-Server gespiegelt in
+  `tools/notes.ts`. `todo_comments`/`antrag_comments` sind leer und ohne Schreibweg, ein DROP steht
+  für den nächsten `supabase db push` vom Mac aus.
+- **Das Repository ist öffentlich** – damit auch die Protokolle der Actions-Läufe und ihre
+  Artefakte (jeder angemeldete GitHub-Nutzer kann sie herunterladen). Workflows, die mit echten
+  Daten arbeiten, schreiben keine Inhalte ins Protokoll und laden Artefakte nur verschlüsselt hoch
+  (`gpg --symmetric` mit dem Secret `BACKUP_PASSWORT`, siehe `backup.yml`,
+  `wartung-dateien.yml`). Ein unverschlüsseltes Artefakt aus dem ersten Wartungslauf am 17.10.
+  musste von Hand gelöscht werden.
 - **Deploy ist zweistufig**: Eine Migration wirkt sofort auf die Live-DB, das Frontend/die Edge
   Functions gehen aber erst mit `git push` live (separater Workflow-Trigger). Eine fertige
   DB-Migration ohne Push zeigt sich also noch nicht auf der Produktivseite.
@@ -404,7 +417,7 @@ lieber nachfragen als eine der Optionen fest einzubauen:
   brauchen also immer eine durchdachte Policy, nicht nur `enable row level security`.
 - Für wiederkehrende Prozeduren gibt es Skills unter `.claude/skills/`: `supabase-migration` (neue
   Migration/RLS-Policy), `edge-function` (neue/geänderte Supabase Edge Function), `document-feature`
-  (Notizen-/Datei-Upload an einer neuen Entität nach dem `summaries`-Muster). Vor entsprechenden
+  (überholt seit 0055, siehe Warnung im Skill). Vor entsprechenden
   Aufgaben aufrufen statt die Konventionen aus diesem File neu herzuleiten.
 
 ## Setup
