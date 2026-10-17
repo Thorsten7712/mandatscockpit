@@ -536,8 +536,37 @@ export const TOOLS = [
           description:
             'Umgang mit archivierten Dokumenten (Standard "ohne", wie in der Web-UI). Ein Dokument gilt als archiviert, wenn seine verknüpfte Sitzung vorbei ist ODER es per update_document_archiv von Hand archiviert wurde. "alle" listet zusätzlich das Archiv, "nur" ausschließlich das Archiv.',
         },
-        limit: { type: 'number', description: 'Maximale Anzahl Dokumente (Standard 20, Maximum 100). Greift erst nach dem Archiv-Filter.' },
+        seit: {
+          type: 'string',
+          description:
+            'Nur Dokumente, die ab diesem Zeitpunkt in den Hub hochgeladen wurden (optional) - für einen täglichen Scan nach neuen Drucksachen. Ein Datum wie "2026-10-17" gilt ab Mitternacht deutscher Zeit, ein Zeitstempel wie "2026-10-17T06:00:00+02:00" exakt. Greift in der Datenbank, also vor dem Limit. Für einen Scan archiv="alle" setzen: eine neue Drucksache zu einer schon vergangenen Sitzung gilt sonst als archiviert und fehlt.',
+        },
+        limit: {
+          type: 'number',
+          description:
+            'Maximale Anzahl Dokumente (Standard 20, Maximum 100). Greift erst nach dem Archiv-Filter. Gibt es mehr Treffer, nennt die letzte Zeile der Antwort die Gesamtzahl.',
+        },
       },
+    },
+  },
+  {
+    name: 'get_document',
+    description:
+      'Liefert ein einzelnes Dokument aus dem Dokumenten-Hub mit seinem gespeicherten Text (Markdown) - bei Drucksachen die vollständige Vorlage. list_documents zeigt nur Titel, Tags und Sitzungen, den Text gibt es nur hier. Dazu Kopfdaten: Sichtbarkeit, Ersteller*in, Tags, verknüpfte Sitzungen mit TOP-Nummer, Archivstatus, Dateiname und die Zahl der für den Nutzer sichtbaren Notizen. Funktioniert auch für Notizen (parent_id gesetzt). Lange Texte kommen in Abschnitten von höchstens 20.000 Zeichen; die Antwort nennt dann den Wert für ab_zeichen, mit dem es weitergeht.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dokument_id: { type: 'string', description: 'UUID des Dokuments (z. B. aus list_documents).' },
+        ab_zeichen: {
+          type: 'number',
+          description: 'Ab welchem Zeichen der Text geliefert wird (optional, Standard 0) - für die Fortsetzung langer Texte, den Wert nennt die vorige Antwort.',
+        },
+        max_zeichen: {
+          type: 'number',
+          description: 'Höchstens so viele Zeichen Text (optional, Standard und Maximum 20.000).',
+        },
+      },
+      required: ['dokument_id'],
     },
   },
   {
