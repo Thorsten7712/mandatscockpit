@@ -1,0 +1,46 @@
+name: Prüfung
+
+# Läuft bei jedem Pull Request (und von Hand): dieselben Prüfungen, die ein
+# Mensch oder Claude vor dem Merge lokal laufen lassen soll. Vorher prüfte
+# nichts automatisch - die Workflows liefen erst nach dem Merge auf main, ein
+# kaputter PR wäre also direkt live gegangen.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # Ohne VITE_*-Werte fällt der Client auf Platzhalter zurück und baut
+      # trotzdem durch - für die Prüfung genügt das.
+      - run: npm run build
+
+  edge-functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      # Jede Function hat ihr eigenes deno.json (siehe CLAUDE.md), deshalb
+      # einzeln aus dem jeweiligen Ordner heraus prüfen.
+      - name: deno check
+        run: |
+          status=0
+          for dir in supabase/functions/*/; do
+            echo "== ${dir}"
+            (cd "$dir" && deno check index.ts) || status=1
+          done
+          exit $status
