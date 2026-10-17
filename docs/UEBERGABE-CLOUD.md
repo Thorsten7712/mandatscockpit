@@ -159,9 +159,15 @@ freigeschaltet). Ablauf für eine neue Migration `NNNN_name.sql`:
 
 **Nicht `apply_migration` verwenden.** Es trägt die Migration unter einem Zeitstempel statt unter
 der Dateinummer ein. Die Historie ist heute sauber (`0001`–`0049`, exakt die Dateinamen); ein
-Zeitstempel-Eintrag brächte sie aus dem Takt, und der nächste `supabase db push` vom Mac bräche mit
+Zeitstempel-Eintrag brächte sie aus dem Takt, und `supabase db push` bräche mit
 „Remote migration versions not found in local migrations directory" ab. Mit dem Eintrag unter der
-Dateinummer bleiben Mac und Cloud austauschbar – der Mac sieht `NNNN` als erledigt an.
+Dateinummer bleiben Connector und Workflow austauschbar – `db push` sieht `NNNN` als erledigt an.
+
+**Zweiter Weg (seit 17.10.2026): Workflow `migrationen.yml`.** Ein GitHub-Runner erreicht die
+Datenbank über den Pooler (Secret `SUPABASE_DB_PASSWORD`, wie das nächtliche Backup). Im Pull
+Request ein Trockenlauf (`db push --dry-run`), nach dem Merge auf `main` spielt er ein, was noch
+fehlt. Pflichtweg für `DROP`/`DELETE`, die über den Connector hängen; sonst Sicherheitsnetz. Einen
+Mac gibt es im Ablauf nicht – gearbeitet wird ausschließlich in Cloud-Sitzungen.
 
 `raise notice`-Ausgaben kommen über `execute_sql` nicht zurück; wer Zahlen aus einer
 Daten-Migration braucht, fragt sie danach per `select` ab.
@@ -201,7 +207,7 @@ gegen die Live-Datenbank; es gibt bewusst keine lokale Entwicklungsdatenbank.
 
 ### 7. Eine Warnung zur Reihenfolge
 
-Der Deploy ist **zweistufig**: Eine Migration (Connector oder `supabase db push` vom Mac) wirkt
+Der Deploy ist **zweistufig**: Eine Migration (Connector, oder Workflow `migrationen.yml` nach dem Merge) wirkt
 sofort auf die Live-DB, Frontend und Edge Functions gehen erst mit dem Push nach `main` live. Code, der ein neues Schema erwartet, darf also nie vor der
 Migration gepusht werden. Umgekehrt ist eine Migration ohne Push harmlos.
 

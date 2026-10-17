@@ -294,14 +294,6 @@ export interface TodoDokument {
   erstellt_am: string
 }
 
-export interface TodoComment {
-  id: string
-  todo_id: string
-  user_id: string
-  inhalt: string
-  erstellt_am: string
-}
-
 export interface McpToken {
   user_id: string
   token_hash: string
@@ -321,14 +313,6 @@ export interface AntragRow {
   session_id: string | null
   eingereicht_am: string | null
   created_at: string
-}
-
-export interface AntragComment {
-  id: string
-  antrag_id: string
-  user_id: string
-  inhalt: string
-  erstellt_am: string
 }
 
 /** Teilen-Freigabe eines Antrags mit einer Kollegin/einem Kollegen (analog TodoPlacement, ohne Board-Position) */

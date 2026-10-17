@@ -41,11 +41,13 @@ bestehenden Policies stehen in `docs/CHANGELOG.md`, falls eine Design-Entscheidu
    - Geteilt mit ausgewählten Kolleg*innen (Partei/Ebene/Gliederung): siehe `antrag_shares`/
      `todo_placements` als Vorlage, inkl. der SECURITY DEFINER-Helper aus Punkt 4.
 7. **Deployen**: Die Migration geht sofort auf die Produktiv-DB – das ist **getrennt** vom
-   App-Deploy. Zwei Wege, die zueinander kompatibel sind, weil beide unter der Dateinummer in
-   `supabase_migrations.schema_migrations` eintragen:
-   - **Auf dem Mac**: `supabase db push`.
-   - **In einer Cloud-Sitzung** (dort kommt keine Postgres-Verbindung durch): Datei erst
-     committen, dann per Supabase-Connector `execute_sql` mit
+   App-Deploy. Gearbeitet wird ausschließlich in Cloud-Sitzungen (dort kommt keine
+   Postgres-Verbindung durch). Zwei Wege, die zueinander kompatibel sind, weil beide unter der
+   Dateinummer in `supabase_migrations.schema_migrations` eintragen:
+   - **Workflow `migrationen.yml`** (`supabase db push` vom GitHub-Runner): Trockenlauf im PR,
+     Einspielen nach dem Merge. Pflicht für `DROP`/`DELETE` – die hängen über den Connector.
+   - **Supabase-Connector**, wenn der Code im selben PR das neue Schema braucht (sonst ginge das
+     Frontend vor der Migration live): Datei erst committen, dann per `execute_sql` mit
      `begin; <Dateiinhalt>; insert into supabase_migrations.schema_migrations (version, name,
      statements) values ('NNNN', 'kurze_beschreibung', array['-- eingespielt über den
      Supabase-Connector']); commit;` und mit `list_migrations` nachprüfen. **Nicht

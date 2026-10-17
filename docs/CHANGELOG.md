@@ -3152,3 +3152,21 @@ Typen gezogen und einen Umbau aller Komponenten verlangt.
 (`TodoDetailModal`, `TerminDetailPanel`, `DokumentDetailModal`, `Settings`) fragen weiter selbst
 ab; sie ohne die Möglichkeit eines angemeldeten Rundgangs im Browser umzubauen, wäre ein großer
 Umbau ohne Prüfnetz. Sinnvoll schrittweise, wenn eine dieser Komponenten ohnehin angefasst wird.
+
+### Migrationen über GitHub, Kommentare und Sicherungen entfernt (2026-10-17)
+
+**Klarstellung (Nutzer):** Es gibt keinen Mac im Ablauf; gearbeitet wird ausschließlich im Repo
+über Claude-Code-Cloud-Sitzungen. Damit fehlte ein Weg für `DROP`/`DELETE`, die über den
+Supabase-Connector hängen.
+
+**`.github/workflows/migrationen.yml`:** `supabase db push` vom GitHub-Runner (über den Pooler,
+Secret `SUPABASE_DB_PASSWORD` – seit dem Backup vorhanden). Im PR nur Trockenlauf, nach dem Merge
+auf `main` wird eingespielt, was in `schema_migrations` noch fehlt. Mit dem Connector-Weg
+verträglich, weil beide unter der Dateinummer eintragen; die Historie war vor dem ersten Lauf
+deckungsgleich mit den Dateien (`0001`–`0058`).
+
+**`0059_kommentare_und_sicherungen_entfernen.sql`** (erste Migration über den Workflow): löscht die
+leeren Tabellen `todo_comments`/`antrag_comments` (bricht ab, falls doch etwas darin steht) und das
+Schema `backup` mit der Sicherung der am 17.10. von Hand bereinigten Notizen – laut Nutzer nicht
+mehr benötigt. `scripts/wartung-notizen.mjs` entfällt (lief einmal, liest die Kommentar-Tabellen),
+ebenso die Typen `TodoComment`/`AntragComment`.

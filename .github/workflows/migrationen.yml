@@ -1,0 +1,62 @@
+name: Migrationen einspielen
+
+# Spielt neue Dateien aus supabase/migrations/ per `supabase db push` in die
+# Live-Datenbank ein - nach dem Merge auf main. In einem Pull Request läuft
+# dieselbe Prüfung nur als Trockenlauf und zeigt, was eingespielt würde.
+#
+# Warum ein Workflow: Gearbeitet wird ausschließlich in Claude-Code-Cloud-
+# Sitzungen. Dort kommt keine Postgres-Verbindung durch, und über den
+# Supabase-Connector hängen DROP- und DELETE-Anweisungen (siehe CLAUDE.md).
+# Ein GitHub-Runner erreicht die Datenbank dagegen über den Pooler, wie beim
+# nächtlichen Backup.
+#
+# Verträgt sich mit dem bisherigen Weg über den Connector: der trägt unter
+# derselben Nummer in supabase_migrations.schema_migrations ein, db push sieht
+# eine so eingespielte Datei als erledigt an.
+#
+# Secrets: SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, SUPABASE_DB_PASSWORD.
+
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/migrations/**']
+  pull_request:
+    paths: ['supabase/migrations/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Nie zwei Läufe gleichzeitig gegen dieselbe Datenbank.
+concurrency:
+  group: migrationen
+  cancel-in-progress: false
+
+jobs:
+  migrationen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Verbinden
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          if [ -z "$SUPABASE_DB_PASSWORD" ]; then echo "::error::Secret SUPABASE_DB_PASSWORD fehlt."; exit 1; fi
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+      - name: Was eingespielt würde
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD"
+      - name: Einspielen
+        if: github.event_name != 'pull_request'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        # `yes`, falls die CLI trotz fehlendem Terminal nachfragt.
+        run: yes | supabase db push --password "$SUPABASE_DB_PASSWORD"

@@ -2,7 +2,8 @@ name: Wartung – Dateien und Notizen aufräumen
 
 # Einmalige Wartungsläufe, Details im jeweiligen Skript:
 #   dateien  scripts/wartung-dateien.mjs  (nach der Upload-Sperre, 0052)
-#   notizen  scripts/wartung-notizen.mjs  (ein Notiz-System, 0055)
+#   (notizen: scripts/wartung-notizen.mjs, ein Notiz-System 0055 - lief am
+#    17.10.2026 und ist entfernt, die Kommentar-Tabellen gibt es seit 0059 nicht mehr)
 #   vorschau scripts/wartung-vorschau.mjs (Listenvorschau der Dokumente, 0058)
 # Nur von Hand startbar; zuerst mit "probe" laufen lassen und die Ausgabe
 # prüfen, dann mit "ausfuehren".
@@ -23,19 +24,15 @@ on:
       skript:
         description: 'Welche Wartung'
         required: true
-        default: notizen
+        default: vorschau
         type: choice
-        options: [dateien, notizen, vorschau]
+        options: [dateien, vorschau]
       modus:
         description: '"probe" zeigt nur den Plan, "ausfuehren" ändert'
         required: true
         default: probe
         type: choice
         options: [probe, ausfuehren]
-      auch_von:
-        description: 'nur notizen: Namen (kommagetrennt), deren Sitzungs-Notizen nach Vorlage ebenfalls gelöscht werden'
-        required: false
-        default: ''
 
 permissions:
   contents: read
@@ -74,7 +71,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           MODUS: ${{ inputs.modus }}
-          AUCH_VON: ${{ inputs.auch_von }}
           EXPORT_DIR: export
         # --experimental-strip-types: wartung-vorschau importiert die
         # TypeScript-Datei, die auch Web-Oberfläche und MCP-Server nutzen.
