@@ -13,6 +13,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DokumentRow } from './types'
 import { startOfTodayIso } from './format'
+import { alleZeilen, inStuecken } from './alleZeilen'
 
 export type ArchivGrund = 'manuell' | 'sitzung'
 
@@ -78,19 +79,26 @@ export async function ladeSitzungenJeDokument(
 ): Promise<SitzungsErgebnis> {
   if (dokumentIds.length === 0) return { sitzungen: new Map(), fehler: null }
 
-  const { data: links, error: linkFehler } = await supabase
-    .from('sitzung_dokumente')
-    .select('dokument_id, session_id')
-    .in('dokument_id', dokumentIds)
-  if (linkFehler) return { sitzungen: new Map(), fehler: linkFehler.message }
-
-  const paare = (links ?? []) as { dokument_id: string; session_id: string }[]
+  // In Stücken und seitenweise: Für den ganzen Hub sind das über 1.000 Ids und
+  // mehr als 1.000 Verknüpfungen - beides schnitt vorher stillschweigend ab
+  // (siehe src/lib/alleZeilen.ts).
+  const paare: { dokument_id: string; session_id: string }[] = []
+  for (const stueck of inStuecken(dokumentIds)) {
+    const { zeilen, fehler } = await alleZeilen<{ dokument_id: string; session_id: string }>((von, bis) =>
+      supabase.from('sitzung_dokumente').select('dokument_id, session_id').in('dokument_id', stueck).order('id').range(von, bis),
+    )
+    if (fehler) return { sitzungen: new Map(), fehler }
+    paare.push(...zeilen)
+  }
   const sessionIds = Array.from(new Set(paare.map((l) => l.session_id)))
   if (sessionIds.length === 0) return { sitzungen: new Map(), fehler: null }
 
-  const { data, error } = await supabase.from('sessions').select('id, datum, gremium, titel').in('id', sessionIds)
-  if (error) return { sitzungen: new Map(), fehler: error.message }
-  const sessionById = new Map(((data ?? []) as SessionInfo[]).map((s) => [s.id, s]))
+  const sessionById = new Map<string, SessionInfo>()
+  for (const stueck of inStuecken(sessionIds)) {
+    const { data, error } = await supabase.from('sessions').select('id, datum, gremium, titel').in('id', stueck)
+    if (error) return { sitzungen: new Map(), fehler: error.message }
+    for (const s of (data ?? []) as SessionInfo[]) sessionById.set(s.id, s)
+  }
 
   const ergebnis: SitzungenJeDokument = new Map()
   for (const l of paare) {

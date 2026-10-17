@@ -11,6 +11,7 @@ import { TagEditor } from '../components/TagEditor'
 import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
 import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { vorschau } from '../lib/vorlageMarkdown'
+import { alleZeilen } from '../lib/alleZeilen'
 
 // Vorschläge, keine feste Liste - Nutzer können jederzeit eigene Tags
 // eintragen (siehe Eingabefeld im Formular unten).
@@ -125,6 +126,7 @@ export default function Dokumente() {
   // Ohne Sitzungsdaten wäre kein Dokument archiviert - das darf nicht
   // stillschweigend wie eine leere Archiv-Ablage aussehen.
   const [sessionFehler, setSessionFehler] = useState<string | null>(null)
+  const [ladeFehler, setLadeFehler] = useState<string | null>(null)
   const [meineGremien, setMeineGremien] = useState<string[]>([])
 
   const [seite, setSeite] = useState(1)
@@ -145,8 +147,17 @@ export default function Dokumente() {
   const [gelesenMap, setGelesenMap] = useState<Map<string, string>>(new Map())
 
   async function loadDocuments() {
-    const { data } = await supabase.from('dokumente').select('*').is('parent_id', null).order('erstellt_am', { ascending: false })
-    const rows = data ?? []
+    // Seitenweise: als eine Abfrage kamen nur die neuesten 1.000 Dokumente an,
+    // die ältesten fehlten in Liste und Suche (src/lib/alleZeilen.ts).
+    const { zeilen: rows, fehler: dokFehler } = await alleZeilen<DokumentRow>((von, bis) =>
+      supabase
+        .from('dokumente')
+        .select('*')
+        .is('parent_id', null)
+        .order('erstellt_am', { ascending: false })
+        .order('id')
+        .range(von, bis),
+    )
     // Datum/Gremium der verknüpften Sitzungen: entscheidet, ob ein Dokument
     // archiviert ist (Sitzung vorbei) und ob es unter "Meine Gremien" fällt.
     //
@@ -161,6 +172,8 @@ export default function Dokumente() {
     )
     setSitzungen(geladen)
     setSessionFehler(fehler)
+    // Eigener Hinweis: sonst sähe eine abgebrochene Liste aus wie eine vollständige.
+    setLadeFehler(dokFehler)
     setDocuments(rows)
     setLoading(false)
   }
@@ -171,7 +184,9 @@ export default function Dokumente() {
   // erneut geladen, damit gerade gelesene Dokumente sofort nicht mehr fett
   // erscheinen.
   async function loadLeseStatus(uid: string) {
-    const { data: kinder } = await supabase.from('dokumente').select('parent_id, erstellt_am').not('parent_id', 'is', null)
+    const { zeilen: kinder } = await alleZeilen<{ parent_id: string; erstellt_am: string }>((von, bis) =>
+      supabase.from('dokumente').select('parent_id, erstellt_am').not('parent_id', 'is', null).order('id').range(von, bis),
+    )
     const byParent = new Map<string, { erstellt_am: string }[]>()
     for (const k of kinder ?? []) {
       const list = byParent.get(k.parent_id as string) ?? []
@@ -382,6 +397,12 @@ export default function Dokumente() {
             </button>
           )}
         </div>
+        {ladeFehler && (
+          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Die Dokumente konnten nicht vollständig geladen werden ({ladeFehler}) – die Liste ist
+            unvollständig, auch die Suche findet nicht alles.
+          </p>
+        )}
         {sessionFehler && (
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
             Sitzungsdaten konnten nicht geladen werden ({sessionFehler}) – Dokumente vergangener Sitzungen
