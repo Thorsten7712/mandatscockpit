@@ -23,6 +23,10 @@
 //     -> { ok: true }  (wird password gesetzt, erzwingt das wie bei der
 //        Neuanlage einen Passwortwechsel beim nächsten Login -
 //        muss_passwort_aendern wird auf true zurückgesetzt)
+//   { action: 'speicher' }
+//     -> { datenbank_bytes, dateien: [{ bucket, konto, name, anzahl, bytes }] }
+//        (Belegung je Bucket und Person, aus public.speicherbelegung(),
+//        0054 - die Funktion ist nur für die Service-Role aufrufbar)
 //   { action: 'delete', user_id }
 //     -> { ok: true }  (bereinigt vorher calendar_sources.verwaltet_von und
 //        events.erstellt_von, die NICHT on delete cascade sind, sowie die
@@ -118,12 +122,22 @@ Deno.serve(async (req) => {
             rolle: p?.rolle ?? 'mitglied',
             fraktion: p?.fraktion ?? null,
             partei: p?.partei ?? null,
+            // Ohne dieses Feld zeigte das Bearbeiten-Formular die Checkbox
+            // immer leer, und ein Speichern nahm dem ALLRIS-Konto still die
+            // Markierung - und damit seit 0052 das Recht, Dateien abzulegen.
+            technisch: p?.technisch ?? false,
             created_at: u.created_at,
             last_sign_in_at: u.last_sign_in_at ?? null,
           }
         })
         .sort((a, b) => a.name.localeCompare(b.name, 'de'))
       return jsonResponse({ users })
+    }
+
+    case 'speicher': {
+      const { data, error } = await admin.rpc('speicherbelegung')
+      if (error) return jsonResponse({ error: error.message }, 500)
+      return jsonResponse(data)
     }
 
     case 'create': {

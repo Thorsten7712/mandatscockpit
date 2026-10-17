@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Bot, CalendarClock, CalendarDays, Landmark, Mail, Newspaper, SquareKanban, User, Users } from 'lucide-react'
+import { Bot, CalendarClock, CalendarDays, HardDrive, Landmark, Mail, Newspaper, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type {
   AntragDeadlineSetting,
@@ -16,9 +16,10 @@ import { EBENE_LABEL, SOURCE_COLORS, sourceColorById } from '../lib/sourceColors
 import { gliederungFeld } from '../lib/gliederung'
 import { UserManagement } from '../components/UserManagement'
 import { KontaktAnfragenListe } from '../components/KontaktAnfragenListe'
+import { SpeicherBelegung } from '../components/SpeicherBelegung'
 import { useLoeschDialog } from '../components/LoeschDialog'
 
-type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'fristen' | 'presseschau' | 'mcp' | 'benutzer' | 'kontakt'
+type SectionId = 'profil' | 'kalender' | 'gremien' | 'board' | 'fristen' | 'presseschau' | 'mcp' | 'benutzer' | 'kontakt' | 'speicher'
 
 const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: boolean }[] = [
   { id: 'profil', label: 'Profil', icon: User },
@@ -30,6 +31,7 @@ const SECTIONS: { id: SectionId; label: string; icon: typeof User; adminOnly?: b
   { id: 'mcp', label: 'MCP Connection', icon: Bot },
   { id: 'benutzer', label: 'Benutzerverwaltung', icon: Users, adminOnly: true },
   { id: 'kontakt', label: 'Kontaktanfragen', icon: Mail, adminOnly: true },
+  { id: 'speicher', label: 'Speicher', icon: HardDrive, adminOnly: true },
 ]
 
 // Erzeugt ein zufälliges Bearer-Token client-seitig (nie an den Server
@@ -1294,6 +1296,12 @@ export default function Settings() {
       {activeSection === 'kontakt' && isAdmin && (
       <section className="mc-animate-fade">
         <KontaktAnfragenListe />
+      </section>
+      )}
+
+      {activeSection === 'speicher' && isAdmin && (
+      <section className="mc-animate-fade">
+        <SpeicherBelegung />
       </section>
       )}
 

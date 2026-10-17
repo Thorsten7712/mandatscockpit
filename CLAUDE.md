@@ -50,8 +50,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   zusammengeführt, mit Detail-Modal).
 - **Settings** (Sidebar-Navigation): Profil (Foto/Name), Kalenderquellen (eigene + gemeinsam
   verwaltete, strikt privat pro Nutzer getrennt), Meine Gremien/Ebenen/Gliederung, ToDo-Board-Struktur,
-  Antrags-Fristen, MCP Connection (persönliches Bearer-Token), Benutzerverwaltung + Kontaktanfragen
-  (nur `rolle = 'admin'`).
+  Antrags-Fristen, MCP Connection (persönliches Bearer-Token), Benutzerverwaltung, Kontaktanfragen und Speicher-
+  belegung gegen die Free-Tier-Grenzen (nur `rolle = 'admin'`).
 - **Archiv**: vergangene Sitzungen (inkl. manuell nachtragbar, z. B. für Gremien ohne ICS-Feed - nur
   der erstellende Nutzer darf seine eigene nachgetragene Sitzung bearbeiten/löschen), erledigte
   Aufgaben, hochgeladene Dokumente, entschiedene Anträge.

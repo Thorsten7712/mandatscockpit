@@ -2991,3 +2991,22 @@ scheinbar gutes Artefakt zu hinterlassen.
 **Braucht zwei neue Repository-Secrets:** `SUPABASE_DB_PASSWORD` und `BACKUP_PASSWORT` (frei
 gewählt, getrennt aufbewahren – ohne es ist das Backup wertlos). Fehlen sie, scheitert der Lauf
 mit einem klaren Hinweis. Wiederherstellen: siehe Kopf der Workflow-Datei.
+
+### Speicheranzeige für Admins (2026-10-17)
+
+**Entscheidung (Nutzer):** statt einer Quota pro Nutzer eine Anzeige der Belegung. Neuer
+Einstellungs-Reiter „Speicher" (nur Admins, `SpeicherBelegung.tsx`): Dateien gegen 1 GB,
+Datenbank gegen 500 MB, darunter je Bucket die Belegung pro Person.
+
+**`0054_speicherbelegung.sql`:** `public.speicherbelegung()` fasst `storage.objects` je Bucket und
+Ordner (= Konto) zusammen und liefert `pg_database_size`. Sie liegt in `public`, weil der
+Service-Role-Client sie nur so per `rpc` erreicht, ist aber für `anon`/`authenticated` gesperrt –
+die Belegung je Person verrät, wer was hochgeladen hat. Aufgerufen über die neue Aktion
+`speicher` der Edge Function `admin-users`, die vorher die Admin-Rolle prüft.
+
+**Nebenbei behoben:** `admin-users` (`list`) gab `technisch` nicht zurück. Das Bearbeiten-Formular
+zeigte die Checkbox deshalb immer leer, und ein Speichern hätte dem ALLRIS-Konto still die
+Markierung genommen – seit 0052 hängt daran das Recht, Drucksachen abzulegen.
+
+**Stand nach dem Wartungslauf** (17.10.): 1.139 Drucksachen-Dateien (87 MB) beim ALLRIS-Konto, zwei
+Profilbilder, eine Datei von Benjamin Korte; Datenbank 29 MB.
