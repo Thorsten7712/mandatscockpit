@@ -2974,3 +2974,20 @@ eines `do`-Blocks. Statt die Erkennung zu umgehen, liegt die Zuordnung in einer 
 Web mit gefälschtem `x-mc-user` eines anderen Mitglieds (bleibt beim echten Konto); MCP; Wartung;
 kaputter Header; nicht angemeldet. Alle 16 Trigger angelegt. Der Trigger selbst wird mit dem
 ersten echten Wartungslauf bestätigt.
+
+### Nächtliches Backup (2026-10-17)
+
+**Entscheidung (Nutzer):** Backup ja, aber ohne eigenes Repository „Mandatscockpit backup". Ein
+Dump enthält personenbezogene Daten, und was einmal in einer Git-Historie liegt, bekommt man dort
+nicht mehr heraus.
+
+**`.github/workflows/backup.yml`:** jede Nacht 01:17 UTC (und von Hand) drei Dumps über die
+Supabase-CLI – Rollen, Schema, Daten –, verschlüsselt mit `gpg --symmetric` (AES256) und als
+Workflow-Artefakt 14 Tage aufbewahrt. Nur die Datenbank: Seit der Upload-Sperre stehen
+Nutzerinhalte als Text darin, die Drucksachen-PDFs lassen sich aus ALLRIS neu holen. Ein Teil-Dump
+ohne die Kerntabellen (`dokumente`, `todos`, `sessions`, `profiles`) bricht den Lauf ab, statt ein
+scheinbar gutes Artefakt zu hinterlassen.
+
+**Braucht zwei neue Repository-Secrets:** `SUPABASE_DB_PASSWORD` und `BACKUP_PASSWORT` (frei
+gewählt, getrennt aufbewahren – ohne es ist das Backup wertlos). Fehlen sie, scheitert der Lauf
+mit einem klaren Hinweis. Wiederherstellen: siehe Kopf der Workflow-Datei.

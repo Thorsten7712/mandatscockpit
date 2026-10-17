@@ -184,7 +184,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **GitHub-Actions-Workflows**: Deploy nach GitHub Pages (inkl. `404.html`-Kopie fürs SPA-Routing),
   Supabase-Keep-Alive, täglicher ICS-Import (`import-ics.yml`, 04:00 UTC), Edge-Function-Deploy
   (`deploy-edge-functions.yml`, deployt bei jeder Änderung unter `supabase/functions/**` alle
-  Functions).
+  Functions), Prüfung jedes PRs (`pruefung.yml`), nächtliches verschlüsseltes DB-Backup als
+  Artefakt (`backup.yml`, 14 Tage, Secrets `SUPABASE_DB_PASSWORD`/`BACKUP_PASSWORT`).
 
 Volle Details zu jedem Punkt (Datenmodell, Komponenten-Props, exakte RLS-Policy-Namen) stehen im Code
 selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGELOG.md`](./docs/CHANGELOG.md).

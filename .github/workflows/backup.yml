@@ -1,0 +1,84 @@
+name: Backup der Datenbank
+
+# Nächtlicher Dump der Live-Datenbank als verschlüsseltes Workflow-Artefakt,
+# 14 Tage aufbewahrt (Entscheidung 17.10.2026, docs/ARCHITEKTUR-PLAN.md).
+#
+# Warum kein eigenes Backup-Repo: Ein Dump enthält personenbezogene Daten, und
+# was einmal in einer Git-Historie liegt, bekommt man dort nicht mehr heraus.
+# Artefakte laufen nach der Frist von selbst ab.
+#
+# Warum nur die Datenbank: Seit 0052_uploads_sperren.sql laden Nutzer keine
+# Dateien mehr hoch, ihre Inhalte stehen als Text in der Datenbank. Die
+# Drucksachen-PDFs im Bucket "dokumente" lassen sich aus ALLRIS neu holen.
+#
+# Braucht zwei Repository-Secrets, die es vorher nicht gab:
+#   SUPABASE_DB_PASSWORD  Datenbank-Passwort (Supabase-Dashboard -> Project
+#                         Settings -> Database)
+#   BACKUP_PASSWORT       frei gewählt; damit wird der Dump verschlüsselt und
+#                         wieder entschlüsselt - getrennt aufbewahren
+# Dazu die vorhandenen SUPABASE_ACCESS_TOKEN und SUPABASE_PROJECT_REF.
+#
+# Wiederherstellen: Artefakt laden, dann
+#   gpg --decrypt backup.tar.gz.gpg | tar xz
+# und die drei SQL-Dateien in dieser Reihenfolge einspielen: rollen, schema,
+# daten (z. B. mit psql in ein neues Supabase-Projekt).
+
+on:
+  schedule:
+    # Nachts zwischen den anderen Läufen (ICS-Import 04:00 UTC).
+    - cron: '17 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Secrets vorhanden?
+        env:
+          DB_PW: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          BACKUP_PW: ${{ secrets.BACKUP_PASSWORT }}
+        run: |
+          if [ -z "$DB_PW" ] || [ -z "$BACKUP_PW" ]; then
+            echo "::error::Secrets SUPABASE_DB_PASSWORD und BACKUP_PASSWORT fehlen (siehe Kopf dieser Datei)."
+            exit 1
+          fi
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # db dump holt sich Verbindung und Pooler selbst über das verknüpfte
+      # Projekt - GitHub-Runner haben kein IPv6, die direkte Datenbank-Adresse
+      # wäre von hier nicht erreichbar.
+      - name: Dump
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          mkdir -p backup && cd backup
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          supabase db dump --linked --role-only -f rollen.sql
+          supabase db dump --linked -f schema.sql
+          supabase db dump --linked --data-only --use-copy -f daten.sql
+          ls -la
+          # Schutz gegen einen stillen Teil-Dump: ohne die Kerntabellen kein Artefakt.
+          for t in dokumente todos sessions profiles; do
+            grep -q "COPY \"public\".\"$t\"" daten.sql || { echo "::error::$t fehlt im Dump"; exit 1; }
+          done
+      - name: Verschlüsseln
+        env:
+          BACKUP_PASSWORT: ${{ secrets.BACKUP_PASSWORT }}
+        run: |
+          tar czf backup.tar.gz -C backup rollen.sql schema.sql daten.sql
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSWORT" \
+            --symmetric --cipher-algo AES256 -o backup.tar.gz.gpg backup.tar.gz
+          rm -rf backup backup.tar.gz
+          ls -la backup.tar.gz.gpg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_number }}
+          path: backup.tar.gz.gpg
+          retention-days: 14
+          if-no-files-found: error
