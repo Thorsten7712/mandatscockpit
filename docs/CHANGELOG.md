@@ -2821,3 +2821,21 @@ Der letzte offene Befund des Sicherheits-Linters (`auth_leaked_password_protecti
 Free-Tier nicht beheben: Der Abgleich gegen HaveIBeenPwned ist eine Pro-Plan-Funktion, der Schalter
 ließ sich im Dashboard nicht speichern. Bewusst so belassen und in `docs/UEBERGABE-CLOUD.md` als
 erledigt-mit-Begründung vermerkt, damit künftige Sitzungen den WARN nicht erneut verfolgen.
+
+### Tagesordnungs-PDFs: bereits aufgeräumt; Entscheidung Fraktionsbüro (2026-10-17)
+
+**Tagesordnungs-PDFs.** Laut Übergabe lagen noch 33 im Dokumenten-Hub. Geprüft: Es sind keine mehr
+da – vermutlich hat dailyallris sie nach dem Einlesen der strukturierten Tagesordnungen selbst
+entfernt (das stand dort als Aufgabe). Der Hub enthält 1.141 Drucksachen und 2 eigene
+Ausarbeitungen, die 1.141 Dateien im Bucket `dokumente` sind alle einem Dokument zugeordnet, nichts
+verwaist. Eine erste Titelsuche nach „Tagesordnung" hatte 19 Treffer geliefert – das waren durchweg
+Drucksachen („Antrag zur Tagesordnung des Sportausschusses …"), also echte Anträge. Gelöscht wurde
+nichts.
+
+**Fraktionsbüro (offene Design-Entscheidung aus KONZEPT.md Abschnitt 11, jetzt entschieden).**
+Das Fraktionsbüro darf selbst angelegte Termine jederzeit nachträglich ändern und löschen, auch wenn
+das Mitglied sie inzwischen bearbeitet hat. Offen bleibt, was dann mit den Daten des Mitglieds
+passiert, die am Termin hängen (Notizen, Dateien, Verknüpfungen) – das soll in die anstehende
+Grundsatzüberlegung zu Zusammenfassungen, Notizen, eigenen Dokumenten und ToDos einfließen,
+zusammen mit einer grundsätzlichen Neubetrachtung der Kalender-Einbindung. Die Rolle wird erst danach
+gebaut.

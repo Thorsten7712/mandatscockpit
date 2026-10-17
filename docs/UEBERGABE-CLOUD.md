@@ -246,9 +246,10 @@ Auswertungen Stichproben.
 
 **Was ansteht**, in der Reihenfolge, die ich vorschlagen würde:
 
-1. Die 33 verbliebenen Tagesordnungs-PDFs im Dokumenten-Hub aufräumen, sobald die jeweilige
-   Tagesordnung strukturiert vorliegt (`delete_document`; der Hub-Bestand gehört dem Konto
-   „ALLRIS-Import", Admins dürfen dessen Dokumente löschen).
+1. ~~Die 33 verbliebenen Tagesordnungs-PDFs aufräumen~~ – am 17.10.2026 geprüft: keine mehr im
+   Hub. Der Bestand sind 1.141 Drucksachen plus 2 eigene Ausarbeitungen; die 1.141 Storage-Dateien
+   gehören alle zu einem Dokument. Vorsicht bei einer Titelsuche nach „Tagesordnung": sie trifft
+   Drucksachen wie „Antrag zur Tagesordnung des …", das sind echte Anträge.
 2. ~~`auth.uid()` → `(select auth.uid())`, `to authenticated`, Helfer nach `private`~~ –
    erledigt am 17.10.2026 (`0050`, `0051`). Neue Policies und Helfer folgen dem Muster in
    CLAUDE.md („Muster für neue Policies und RLS-Helfer"). Offen bleibt nur der
