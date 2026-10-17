@@ -60,4 +60,4 @@ Erledigtes wird hier abgehakt, die Begründungen stehen ausführlich im CHANGELO
 - [x] Notizen konsolidieren, Kommentare und Sitzungs-Notizen entfernen (0055; Altdaten per `wartung-notizen`, DROP der Kommentar-Tabellen offen)
 - [x] ToDo-Zuweisung (0056)
 - [x] Neuigkeiten im Cockpit (0057)
-- [ ] Code und Leistung
+- [x] Code und Leistung: Suche in der Datenbank (0058), Tests, Typen-Abgleich – Datenzugriff nur für neue Bereiche gebündelt (siehe CHANGELOG)

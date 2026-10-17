@@ -23,6 +23,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      # Tests für die reinen Hilfsfunktionen (src/lib/__tests__) - Archiv-Regel,
+      # Gelesen-Status, Vorlagen-Aufbereitung. Ohne Datenbank, ohne Login.
+      - run: npm test
       # Ohne VITE_*-Werte fällt der Client auf Platzhalter zurück und baut
       # trotzdem durch - für die Prüfung genügt das.
       - run: npm run build

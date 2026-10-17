@@ -356,8 +356,16 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   `fixed`-Overlay (z-60), weil Aufrufer teils in scrollenden Modal-Spalten sitzen. Löschfunktionen
   **werfen** jetzt bei Fehlern, statt sie in einen eigenen State zu schreiben – der Dialog zeigt sie
   an und bleibt offen, sonst sähe ein Fehlschlag wie ein Erfolg aus.
+- **Typen und Datenbank laufen nicht mehr still auseinander**: `src/lib/database.types.ts` ist aus
+  der Datenbank erzeugt (auf dem Mac `npm run typen`, in der Cloud über den Connector
+  `generate_typescript_types`), `src/lib/typenPruefung.ts` vergleicht beim Build jeden Zeilentyp aus
+  `types.ts` damit (fehlende/erfundene Spalten, fehlendes `null`, zu weiter Typ). Nach einer
+  Migration also die Typen neu erzeugen – tsc nennt dann, was in `types.ts` fehlt. Beim Einführen
+  fehlten sieben Spalten (u. a. `sessions.ics_uid`, `todos.zustaendig_seit`).
+- **Tests** (`npm test`, Vitest, `src/lib/__tests__/`) für die reinen Hilfsfunktionen: Archiv-Regel,
+  Gelesen-Status, Vorlagen-Aufbereitung, Fristen, Gliederung. Laufen in der PR-Prüfung mit.
 - **Login-Tests**: Passwort-Eingabe im Browser ist tabu (Sicherheitsregel), daher keine echten
-  Login-Rundgänge – Verifikation läuft über `npm run lint` + `npm run build` (`tsc -b`/`vite build`)
+  Login-Rundgänge – Verifikation läuft über `npm run lint` + `npm test` + `npm run build` (`tsc -b`/`vite build`)
   + statische Test-Harnesses. Beide laufen ohne eine einzige Meldung durch; neue Warnungen beheben
   statt sie stehen zu lassen. Nur
   Seiten ohne Login (Impressum/Datenschutz) lassen sich echt im Browser testen.
