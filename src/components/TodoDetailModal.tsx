@@ -696,7 +696,7 @@ export function TodoDetailModal({
               {linkedSession && (
                 <p className="text-xs text-slate-500">
                   Aktuell verknüpft:{' '}
-                  <Link to={`/termin/session/${linkedSession.id}`} className="underline">
+                  <Link to={`/sitzungen/${linkedSession.id}`} className="underline">
                     {linkedSession.titel} ({formatDateTime(linkedSession.datum)})
                   </Link>
                 </p>
@@ -712,7 +712,7 @@ export function TodoDetailModal({
         {linkedSession && (
           <li>
             <Link
-              to={`/termin/session/${linkedSession.id}`}
+              to={`/sitzungen/${linkedSession.id}`}
               className="block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-xs transition-shadow duration-150 hover:shadow-md"
             >
               {linkedSession.titel} ({formatDate(linkedSession.datum)})

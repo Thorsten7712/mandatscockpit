@@ -1,3 +1,4 @@
+import { Navigate } from 'react-router-dom'
 import { TerminDetailPanel } from './TerminDetailPanel'
 
 /**
@@ -19,6 +20,9 @@ export function TerminDetailModal({
   onClose: () => void
   onDeleted?: () => void
 }) {
+  // Eine Sitzung öffnet sich in der Sitzungsansicht (/sitzungen/:id), nicht
+  // mehr als Fenster über der aufrufenden Seite (UI-Umbau 18.10.2026).
+  if (kind === 'session') return <Navigate to={`/sitzungen/${id}`} />
   return (
     <TerminDetailPanel
       kind={kind}

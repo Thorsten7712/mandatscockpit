@@ -40,6 +40,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/kalender" element={<Kalender />} />
             <Route path="/sitzungen" element={<Sitzungen />} />
+            <Route path="/sitzungen/:id" element={<Sitzungen />} />
             <Route path="/aufgaben" element={<Aufgaben />} />
             <Route path="/dokumente" element={<Dokumente />} />
             <Route path="/fakten" element={<ZahlenUndFakten />} />
