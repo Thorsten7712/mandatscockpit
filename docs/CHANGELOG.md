@@ -3359,3 +3359,22 @@ Partei-Themes gelten weiter. Ein Tagesordnungspunkt öffnet sich übergangslos i
   Bausteinen (CalendarView; Liste der kommenden Sitzungen der eigenen Gremien; ToDo-Board + Notizen).
   Startseite, Sitzungsansicht und die übrigen Seiten folgen in den Schritten 2–4.
 - Schrift: IBM Plex Sans statt Inter, IBM Plex Mono für Datum, Uhrzeit und Drucksachennummern.
+
+## 18.10.2026 – UI-Umbau, Schritt 2: Startseite „Heute"
+
+Nach dem freigegebenen Entwurf A: statt Board, Terminliste und Neuigkeiten-Kasten untereinander
+jetzt ein Kurzüberblick und drei gleich breite Karten.
+
+- **Kacheln:** nächste Sitzung (öffnet sie), Aufgaben fällig in 7 Tagen mit Zahl der überfälligen
+  (→ `/aufgaben`), Zahl „Neu für dich". Die Presseschau-Karte bleibt, wo sie aktiviert ist.
+- **Diese Woche** (`ladeWoche()` in `src/lib/heute.ts`): Sitzungen der eigenen Gremien und aus
+  Terminkalender-Quellen plus eigene Termine der nächsten 7 Tage, nach Tagen gruppiert; Sitzungen
+  in der Parteifarbe getönt, mit Zahl der Tagesordnungspunkte bzw. „Noch keine Tagesordnung".
+- **Meine Aufgaben** (`ladeMeineAufgaben()`): offene Karten des eigenen Boards, mit Termin zuerst.
+  Der Haken verschiebt die Karte nach „Fertig" – dieselben zwei Schreibvorgänge wie Ziehen im
+  Board (`aufgabeErledigen()`). Darunter die Kartenzahl je Spalte.
+- **Neu für dich**: unverändert aus `ladeNeuigkeiten()`, jede Zeile jetzt mit Rubrik
+  (`Neuigkeit.art`). „Demnächst" ist in „Diese Woche" und „Meine Aufgaben" aufgegangen,
+  `NeuigkeitenSection.tsx` entfällt.
+- Zeitabhängiges (überfällig, „vorbei", „diese Woche") wird beim Laden berechnet, nicht beim
+  Rendern – die React-Compiler-Regel `react-hooks/purity` verbietet `Date.now()` im Render.
