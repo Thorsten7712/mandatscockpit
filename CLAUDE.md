@@ -53,18 +53,20 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 
 - **Login/Auth**: Supabase Auth, Redirect-Schutz (`ProtectedRoute`), erzwungener Passwortwechsel beim
   ersten Login bzw. nach Admin-Reset (`ForcedPasswordChange`).
-- **Dashboard**: „Neuigkeiten" statt Mails (`NeuigkeitenSection.tsx`, Logik in
-  `src/lib/neuigkeiten.ts`, `0057_neuigkeiten.sql`): links „Neu für dich" seit dem letzten „Alles
-  gesehen" (Zuweisungen, mit mir geteilte Karten, Notizen anderer an meinen Karten, neue
-  Tagesordnungspunkte kommender Sitzungen meiner Gremien), rechts „Demnächst" (Sitzungen meiner
-  Gremien in 7 Tagen, Aufgaben fällig in 3 Tagen oder überfällig). Der Stand liegt
-  in der eigenen Tabelle `neuigkeiten_stand`, nicht in `profiles` (dort für Kolleg*innen lesbar);
-  beim ersten Besuch gilt nichts als neu. Leer = Abschnitt ausgeblendet. Optionaler „Presseschau"-Abschnitt (newspaperartige Darstellung hochgeladener
-  Presseschauen, Tage-Navigation, nur sichtbar wenn `profiles.presseschau_aktiv` gesetzt ist,
-  strikt privat pro Nutzer), ToDo-Board (feste Spalten, Drag & Drop, Teilen mit Partei-/
-  Ebenen-/Gliederungs-Kolleg*innen), „Meine Notizen" (`NotizenSection.tsx`, ToDo-Karten mit Notizen in einer
-  Liste, filterbar nach Gremium), „Nächste Termine" (eigene Termine + importierte Sitzungen
-  zusammengeführt, mit Detail-Modal).
+- **Startseite „Heute"** (`src/pages/Dashboard.tsx`, Daten in `src/lib/heute.ts`, seit dem
+  UI-Umbau 18.10.2026): Begrüßung, drei Kacheln (nächste Sitzung, fällig in 7 Tagen/überfällig,
+  Anzahl „Neu für dich"), optional die Presseschau (nur wenn `profiles.presseschau_aktiv`, strikt
+  privat), darunter drei Karten: **Diese Woche** (Sitzungen meiner Gremien und aus
+  Terminkalender-Quellen plus eigene Termine, 7 Tage, nach Tagen gruppiert, mit TOP-Zahl),
+  **Meine Aufgaben** (offene Karten meines Boards, mit Termin zuerst; Haken = nach „Fertig" wie
+  Ziehen im Board; Zähler je Spalte) und **Neu für dich** (`src/lib/neuigkeiten.ts`,
+  `0057_neuigkeiten.sql`: Zuweisungen, mit mir geteilte Karten, Notizen anderer an meinen Karten,
+  neue Tagesordnungspunkte kommender Sitzungen meiner Gremien, seit dem letzten „Alles gesehen";
+  Stand in der eigenen Tabelle `neuigkeiten_stand`, nicht in `profiles` – dort für Kolleg*innen
+  lesbar; beim ersten Besuch gilt nichts als neu). Das ToDo-Board liegt auf `/aufgaben` (feste
+  Spalten, Drag & Drop, Teilen mit Partei-/Ebenen-/Gliederungs-Kolleg*innen, darunter „Meine
+  Notizen" – `NotizenSection.tsx`), die Termine auf `/kalender` (`CalendarView`, eigene Termine +
+  importierte Sitzungen, mit Detail-Modal), die Sitzungsliste auf `/sitzungen`.
 - **Settings** (Sidebar-Navigation): Profil (Foto/Name), Kalenderquellen (eigene + gemeinsam
   verwaltete, strikt privat pro Nutzer getrennt), Meine Gremien/Ebenen/Gliederung, ToDo-Board (Anzeigeoptionen; die Spalten sind fest),
   MCP Connection (persönliches Bearer-Token), Benutzerverwaltung, Kontaktanfragen und Speicher-

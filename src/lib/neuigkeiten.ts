@@ -16,6 +16,8 @@ export type Ziel = { art: 'todo'; id: string } | { art: 'sitzung'; id: string }
 export interface Neuigkeit {
   schluessel: string
   zeit: string
+  /** Kurze Rubrik über der Zeile („Zuweisung", „Notiz", …). */
+  art: string
   symbol: string
   text: string
   ziel: Ziel
@@ -140,6 +142,7 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
     const k = karteById.get(id)!
     neu.push({
       schluessel: `zuweisung-${id}`,
+      art: 'Zuweisung',
       zeit: k.zustaendig_seit!,
       symbol: '👤',
       text: `${wer(k.user_id)} hat dir „${k.titel}" zugewiesen`,
@@ -150,6 +153,7 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
     const k = karteById.get(p.todo_id as string)!
     neu.push({
       schluessel: `geteilt-${k.id}`,
+      art: 'Geteilt',
       zeit: p.erstellt_am as string,
       symbol: '🔗',
       text: `${wer(k.user_id)} hat „${k.titel}" mit dir geteilt`,
@@ -170,6 +174,7 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
     if (!k) continue
     neu.push({
       schluessel: `notiz-${todoId}`,
+      art: 'Notiz',
       zeit: e.zeit,
       symbol: '📝',
       text: `${[...e.autoren].join(', ')}: ${e.anzahl === 1 ? 'neue Notiz' : `${e.anzahl} neue Notizen`} an „${k.titel}"`,
@@ -182,6 +187,7 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
     const alle = topsJeSitzung.get(s.id) ?? anzahl
     neu.push({
       schluessel: `tagesordnung-${s.id}`,
+      art: 'Tagesordnung',
       zeit: letzterTopJeSitzung.get(s.id)!,
       symbol: '📋',
       text:
