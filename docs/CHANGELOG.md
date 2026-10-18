@@ -3256,3 +3256,18 @@ Abschnitt 5 als gestrichen markiert.
 
 `src/lib/database.types.ts` nach 0061 frisch über den Connector erzeugt und Zeile für Zeile mit der
 von Hand gekürzten Fassung verglichen: alle 23 Tabellen identisch, keine Änderung nötig.
+
+## 18.10.2026 – Tag „Enthält Bilder" statt Bilder im Hub
+
+Nutzerentscheidung: Ein Anhang-System für Bilder (eigene Tabelle, erweiterte Speicherregel, MCP-Tool)
+ist zu viel. Die Original-PDFs liegen ohnehin bei jeder ALLRIS-Vorlage im Hub (1.139 von 1.139,
+zusammen 83 MB, Median 62 kB); es reicht zu wissen, wo sich der Blick hinein lohnt.
+
+`scripts/wartung-bilder.py` (PyMuPDF, über `wartung.yml` skript=bilder) prüft jedes PDF: ein Bild
+zählt ab 300×200 px und 10 % der Seitenfläche, außer es kommt identisch (gleiche Prüfsumme) in 5
+oder mehr PDFs vor – das sind Logo, Wappen, Briefkopf. Gefundene Dokumente bekommen den Tag
+„Enthält Bilder", veraltete Tags werden entfernt; nicht lesbare PDFs bleiben unverändert. Ins
+Protokoll kommen nur Zahlen. dailyallris übernimmt dieselbe Regel für neue Vorlagen.
+
+`wartung-speicher.mjs` (einmaliger Lauf vom 17.10.) ist entfernt, die Option heißt jetzt `bilder`.
+

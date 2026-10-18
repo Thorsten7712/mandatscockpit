@@ -152,6 +152,11 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   Remount setzt die Spalte sonst an den Anfang zurück, was bei 84 Punkten stört. Die Auswahl besitzt der Aufrufer
   (`TerminDetailPanel`) und remountet das Modal per `key`: die lokalen Spiegel im Modal (Tags,
   Archiv-Status, Freigaben) werden nur beim Mounten aus der Prop aufgesetzt.
+  **Bilder** aus den Original-PDFs (Lagepläne, Karten, Diagramme, Scans) gibt es im Markdown nicht;
+  stattdessen trägt ein Dokument den Tag **„Enthält Bilder"**, wenn sich der Blick ins PDF lohnt
+  (Entscheidung 18.10.2026 statt eines Anhang-Systems). Gesetzt einmalig für den Bestand von
+  `scripts/wartung-bilder.py` (`wartung.yml`, skript=bilder), künftig von dailyallris beim Import.
+  Regel in beiden gleich: mind. 300×200 px, mind. 10 % der Seite, nicht in 5+ PDFs identisch (Logo).
   Die **Listenansicht** zeigt nur `vorschau()` – zwei Zeilen reiner Text, bevorzugt der
   Beschlussvorschlag. Niemals `inhalt` ungekürzt rendern: das sind pro Vorlage rund 9.000 Zeichen.
 - **Zahlen & Fakten** (`/fakten`, eigener Reiter in der Kopfleiste): Argumentationshilfen,
@@ -413,13 +418,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
    und löschen, auch nachdem das Mitglied sie bearbeitet hat. Offen dabei: Am Termin hängen Daten des Mitglieds (Notizen, verknüpfte ToDos/Dokumente). Ändert oder löscht das Fraktionsbüro den Termin, dürfen die nicht stillschweigend verschwinden – wie das gelöst wird, gehört in die anstehende Grundsatzüberlegung zu Notizen/Zusammenfassungen/Verknüpfungen und Kalender.
    Die Kalender-Einbindung insgesamt will der Nutzer ebenfalls grundsätzlich neu überdenken – vor
    dem Bau dieser Rolle also erst das Ergebnis davon abwarten.
-2. **Bilder in Vorlagen**: Markdown kann Bilder referenzieren, aber der Storage-Bucket ist privat
-   und die Lese-Policy hängt an `dokumente.datei_url` – ein eingebettetes Bild wäre nur für den
-   Hochladenden sichtbar. Nötig wären eine Jointabelle `dokument_anhaenge` plus ein zweiter
-   `exists`-Zweig in `dokumente_storage_select_own_or_shared`. `VorlageAnsicht.tsx` rendert
-   Bild-Referenzen bis dahin als Link und lädt bewusst keine fremden URLs (die würden IP und
-   Zeitpunkt jedes lesenden Mitglieds an einen fremden Server melden).
-3. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
+2. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
    `list_fakten`/`create_fakt` nach dem Muster von `tools/dokumente.ts` wäre additiv – dabei die
    Sichtbarkeitsprüfung wie dort explizit im Tool-Code nachbauen, der MCP-Server umgeht RLS.
 
@@ -435,6 +434,8 @@ Die früher offenen Punkte aus KONZEPT.md Abschnitt 11 sind entschieden:
 - **Zusammenfassungen** werden nicht mehr gebraucht – es gibt nur Notizen (Text) an ToDos und
   Dokumenten. Den Speicherbereich `zusammenfassungen` gibt es nicht mehr.
 - **ToDo-Spalten** sind fest: Neu, Geplant, Ergebnis erstellt, Fertig.
+- **Keine Bilder im Hub** (Entscheidung 18.10.2026): statt eines Anhang-Systems der Tag „Enthält
+  Bilder" mit Verweis aufs Original-PDF, siehe Dokumente oben.
 - **Kein iCal-Export** (Entscheidung 18.10.2026): der zusammengeführte Kalender bleibt im Cockpit.
 - **Aktive Sitzung**: wird manuell aufgerufen. Kein automatisch bestimmter Sitzungsfokus, keine
   vom Ratsbüro gesetzte Markierung – die Sitzungen stehen im Kalender und in „Demnächst".
