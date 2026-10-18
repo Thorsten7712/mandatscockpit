@@ -172,12 +172,6 @@ export interface CalendarSource {
   created_at: string
 }
 
-export interface UserSourceSubscription {
-  user_id: string
-  source_id: string
-  gremium_filter: string | null
-}
-
 export interface UserGremium {
   user_id: string
   gremium: string

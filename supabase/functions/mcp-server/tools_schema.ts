@@ -634,6 +634,79 @@ export const TOOLS = [
     },
   },
   {
+    name: 'list_fakten',
+    description:
+      'Listet Einträge aus "Zahlen & Fakten": Argumentationshilfen, Sprachregelungen und belegte Kennzahlen - eigene und die von Partei-Kolleg*innen derselben Ebene und Gliederung. Je Eintrag Wert (bei Zahlen), Text, Beleg (Quelle und Stand), Ebene, Tags, Ersteller*in und id (für update_fakt). Für Debatten: Fakten ohne Quelle oder Stand sind so gekennzeichnet und nicht zitierfähig.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kategorie: {
+          type: 'string',
+          enum: ['argumentationshilfe', 'sprachregelung', 'zahl'],
+          description: 'Nur diese Kategorie (optional).',
+        },
+        ebene: { type: 'string', enum: ['kommune', 'kreis', 'land', 'bund'], description: 'Nur diese Ebene (optional).' },
+        tag: { type: 'string', description: 'Nur Einträge mit genau diesem Tag (optional).' },
+        suche: {
+          type: 'string',
+          description: 'Freitext über Titel, Text, Wert, Einheit, Quelle und Tags, Groß-/Kleinschreibung egal (optional).',
+        },
+        limit: { type: 'number', description: 'Maximale Anzahl (Standard 20, Maximum 100).' },
+      },
+    },
+  },
+  {
+    name: 'create_fakt',
+    description:
+      'Legt einen Eintrag in "Zahlen & Fakten" an. Er ist immer für alle Partei-Kolleg*innen der gewählten Ebene sichtbar - private Fakten gibt es nicht (dafür den Dokumenten-Hub nutzen). Bei kategorie="zahl" ist kennzahl Pflicht, sonst inhalt. Quelle und Stand angeben, wann immer möglich: ohne sie gilt der Fakt als unbelegt.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kategorie: {
+          type: 'string',
+          enum: ['argumentationshilfe', 'sprachregelung', 'zahl'],
+          description: 'argumentationshilfe = Argument samt Erwiderung, sprachregelung = wie wir worüber sprechen, zahl = belegte Kennzahl.',
+        },
+        titel: { type: 'string', description: 'Kurzer Titel, z. B. "Sanierungsstau Schulgebäude".' },
+        inhalt: { type: 'string', description: 'Text: das Argument, die Sprachregelung bzw. die Einordnung der Zahl.' },
+        kennzahl: {
+          type: 'string',
+          description: 'Nur bei kategorie="zahl": der Wert als Text, wie veröffentlicht ("rund 1.200", "8-12", "12,5").',
+        },
+        einheit: { type: 'string', description: 'Nur bei kategorie="zahl": Einheit, z. B. "%", "Mio. €", "Wohnungen".' },
+        quelle: { type: 'string', description: 'Beleg: Behörde, Studie, Drucksache oder URL.' },
+        stand: { type: 'string', description: 'Datum, auf das sich die Angabe bezieht (YYYY-MM-DD).' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Freie Tags (optional).' },
+        ebene: {
+          type: 'string',
+          enum: ['kommune', 'kreis', 'land', 'bund'],
+          description: 'Für welche der eigenen Ebenen der Fakt gilt. Die Gliederung kommt automatisch aus dem Profil.',
+        },
+      },
+      required: ['kategorie', 'titel', 'ebene'],
+    },
+  },
+  {
+    name: 'update_fakt',
+    description:
+      'Ändert einen eigenen Eintrag in "Zahlen & Fakten" (fakt_id aus list_fakten). Nur angegebene Felder ändern sich; ein leerer String leert ein Feld, tags ersetzt die ganze Liste. Fremde Fakten lassen sich nicht ändern, die Ebene nur in der Web-Oberfläche. Löschen geht nur dort.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fakt_id: { type: 'string', description: 'UUID des Fakts.' },
+        kategorie: { type: 'string', enum: ['argumentationshilfe', 'sprachregelung', 'zahl'] },
+        titel: { type: 'string' },
+        inhalt: { type: 'string' },
+        kennzahl: { type: 'string' },
+        einheit: { type: 'string' },
+        quelle: { type: 'string' },
+        stand: { type: 'string', description: 'YYYY-MM-DD' },
+        tags: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['fakt_id'],
+    },
+  },
+  {
     name: 'search',
     description:
       'Durchsucht Titel/Inhalte von ToDo-Karten und Notizen (Freitext-Suche, Groß-/Kleinschreibung egal) - berücksichtigt dabei nur für den Nutzer sichtbare Einträge (eigene und geteilte). Für Fragen wie "wo ging es um XY".',

@@ -153,7 +153,7 @@ async function ladeSitzungen(
   return { titelJeDokument, datenJeDokument }
 }
 
-interface CallerProfile {
+export interface CallerProfile {
   partei: string | null
   ebenen: string[]
   gliederung_kommune: string | null
@@ -173,7 +173,7 @@ function gliederungFeldFuer(ebene: string): 'gliederung_kommune' | 'gliederung_k
   return null
 }
 
-function gliederungVonProfil(profile: CallerProfile, ebene: string): string | null {
+export function gliederungVonProfil(profile: CallerProfile, ebene: string): string | null {
   const feld = gliederungFeldFuer(ebene)
   return feld ? profile[feld] : null
 }
@@ -203,7 +203,7 @@ function darfSehen(
   return false // 'persoenlich' und fremd
 }
 
-async function loadCallerProfile(supabase: SupabaseClient, userId: string): Promise<CallerProfile | null> {
+export async function loadCallerProfile(supabase: SupabaseClient, userId: string): Promise<CallerProfile | null> {
   const { data } = await supabase
     .from('profiles')
     .select('partei, ebenen, gliederung_kommune, gliederung_kreis, gliederung_land')

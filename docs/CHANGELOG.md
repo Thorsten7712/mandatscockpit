@@ -3317,3 +3317,26 @@ in der Liste das Kennzeichen „Persönlich, ergänzend".
 die gemeinsame Quelle sah, sieht sie erst wieder mit eigenem persönlichem Abo. Kreistag-, LWL- und
 die Google-Quelle bleiben unverändert (Absprache mit den betroffenen Mitgliedern steht aus).
 
+## 18.10.2026 – Aufräumen nach der Kalender-Umstellung, MCP-Tools für Zahlen & Fakten
+
+Nutzerentscheidungen: Protokolle mit der alten Feed-URL löschen (eine neue ALLRIS-Kennung lässt sich
+nicht erzeugen, sie ist dort fest vergeben); Abo-Haken entfernen; Rolle „Fraktionsbüro" streichen;
+gemeinsame Kalenderquellen nur durch Admins löschbar; MCP-Tools für „Zahlen & Fakten"; Einzel-Reimport
+absichern.
+
+- **Protokolle:** `wartung.yml` bekommt den Lauf `protokolle` (eigener Job mit `actions: write`), der
+  die Protokolle aller Importläufe vor dem 18.10.2026 12:00 UTC löscht. Die Läufe bleiben stehen.
+- **`0063_abos_entfernen.sql`** (über `migrationen.yml`): `user_source_subscriptions` gelöscht. Gelesen
+  hatte die Tabelle nur der Haken in den Einstellungen – der Kalender filtert über „Meine Gremien".
+  An seiner Stelle steht jetzt „Für alle" bzw. „Nur für dich".
+- **Gemeinsame Quellen:** ändern und löschen durften schon seit 0019 nur Admins
+  (`calendar_sources_update/delete_own_or_shared_admin`); die offene Frage nach verwaisten Abos ist mit
+  0063 gegenstandslos. Der Löschdialog nennt jetzt die tatsächliche Folge.
+- **`import-ics-source`:** prüft den Aufrufer (`auth.getUser`) und lädt nur gemeinsame oder eigene
+  Quellen; eine fremde meldet „nicht gefunden". Vorher genügte irgendein gültiges Konto und die Id.
+- **MCP-Server:** `list_fakten`, `create_fakt`, `update_fakt` (`tools/fakten.ts`, 32 Tools). Die
+  Sichtbarkeit spiegelt `fakten_select_own`/`fakten_select_shared`, die Gliederung kommt wie in der
+  Oberfläche aus dem Profil. `CallerProfile`, `loadCallerProfile` und `gliederungVonProfil` exportiert
+  `tools/dokumente.ts` jetzt, statt sie ein zweites Mal zu schreiben.
+- **Fraktionsbüro:** gestrichen, aus den nächsten Schritten entfernt.
+
