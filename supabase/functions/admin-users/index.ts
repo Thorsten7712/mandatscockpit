@@ -30,7 +30,9 @@
 //   { action: 'delete', user_id }
 //     -> { ok: true }  (bereinigt vorher calendar_sources.verwaltet_von und
 //        events.erstellt_von, die NICHT on delete cascade sind, sowie die
-//        Storage-Dateien des Nutzers; alles andere cascaded über profiles)
+//        Storage-Dateien des Nutzers in profilbilder und dokumente; alles
+//        andere, auch seine Dokumente, cascaded über profiles. Technische
+//        Konten (profiles.technisch) werden abgelehnt.)
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -221,6 +223,19 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: 'Du kannst dich nicht selbst löschen.' }, 400)
       }
 
+      // Technische Konten (ALLRIS-Import) besitzen den Hub-Bestand, den alle
+      // Mitglieder lesen - über profiles -> dokumente (on delete cascade)
+      // verschwänden mit dem Konto sämtliche Drucksachen. Die Datenbank sperrt
+      // das zusätzlich (Trigger aus 0061); wer so ein Konto wirklich entfernen
+      // will, nimmt ihm vorher in der Benutzerverwaltung das Häkchen.
+      const { data: ziel } = await admin.from('profiles').select('technisch').eq('id', body.user_id).maybeSingle()
+      if (ziel?.technisch) {
+        return jsonResponse(
+          { error: 'Technische Konten lassen sich nicht löschen - ihre Dokumente sind für alle Mitglieder da.' },
+          400,
+        )
+      }
+
       // Referenzen ohne on delete cascade bereinigen, sonst schlägt das
       // Löschen mit FK-Fehler fehl:
       // - calendar_sources.verwaltet_von -> null (= gemeinsam verwaltet)
@@ -238,11 +253,23 @@ Deno.serve(async (req) => {
       }
 
       // Storage-Dateien des Nutzers entfernen (liegen unter <user_id>/...,
-      // würden sonst verwaist im Bucket bleiben).
-      for (const bucket of ['profilbilder', 'zusammenfassungen']) {
-        const { data: files } = await admin.storage.from(bucket).list(body.user_id)
-        if (files && files.length > 0) {
-          await admin.storage.from(bucket).remove(files.map((f) => `${body.user_id}/${f.name}`))
+      // würden sonst verwaist im Bucket bleiben). Seine Zeilen in dokumente
+      // gehen per on delete cascade mit dem Konto, die Dateien dazu liegen im
+      // Bucket dokumente. list() liefert höchstens 100 Einträge je Aufruf;
+      // da jede Runde die gelisteten Dateien löscht, beginnt die nächste
+      // wieder bei 0. Unterordner (id null) gibt es im Pfadmuster nicht und
+      // werden übergangen; die Rundengrenze fängt ein remove() ab, das still
+      // nichts entfernt.
+      for (const bucket of ['profilbilder', 'dokumente']) {
+        for (let runde = 0; runde < 1000; runde++) {
+          const { data, error: listError } = await admin.storage.from(bucket).list(body.user_id, { limit: 100 })
+          if (listError) return jsonResponse({ error: `Dateien in ${bucket}: ${listError.message}` }, 500)
+          const files = (data ?? []).filter((f) => f.id)
+          if (files.length === 0) break
+          const { error: removeError } = await admin.storage
+            .from(bucket)
+            .remove(files.map((f) => `${body.user_id}/${f.name}`))
+          if (removeError) return jsonResponse({ error: `Dateien in ${bucket}: ${removeError.message}` }, 500)
         }
       }
 

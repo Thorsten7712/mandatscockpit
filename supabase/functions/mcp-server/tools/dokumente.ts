@@ -181,7 +181,7 @@ function gliederungVonProfil(profile: CallerProfile, ebene: string): string | nu
 /** Der MCP-Server läuft komplett über den Service-Role-Client (siehe
  *  index.ts) - Postgres-RLS wird dadurch für JEDE Abfrage umgangen, die
  *  Sichtbarkeitsprüfung muss deshalb explizit im Tool-Code passieren (gleiches
- *  Muster wie list_antraege/list_todos: eigene Zeilen + manuell aufgelöste
+ *  Muster wie list_todos: eigene Zeilen + manuell aufgelöste
  *  Freigaben, niemals ein "RLS filtert das schon"-Trugschluss). Prüft, ob
  *  `caller` ein Dokument von `uploaderPartei` mit `sichtbarkeit`/`ebene`/
  *  `gliederung` sehen darf. */

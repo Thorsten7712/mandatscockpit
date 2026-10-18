@@ -88,6 +88,8 @@ Zentrale, durchsuchbare Ablage aller öffentlichen Anträge und Sitzungsvorlagen
 
 **Iserlohn konkret:** Die Stadt nutzt das Ratsinformationssystem **ALLRIS** (Domain-Muster `iserlohn.sitzung-online.de`, dasselbe System wie z. B. Bonn oder Boppard). Der öffentliche RSS-Feed war beim Testen nicht brauchbar. Ein automatischer Import der Antragstexte selbst ist damit vorerst nicht gesichert – hier bleibt zunächst der manuelle Import/Scraper als Fallback (siehe Abschnitt 11).
 
+**Stand 18.10.2026:** Der Import ist gelöst, nur anders als geplant: dailyallris (eigenes Repo, GitHub-Action) holt Vorlagen und Tagesordnungen aus ALLRIS und schreibt sie über den MCP-Server in den Dokumenten-Hub (Tabelle `dokumente`). Die dafür ursprünglich vorgesehene Tabelle `documents` ist mit 0061 entfernt, ebenso das eigene Antragswesen (`antraege`).
+
 Für den **Sitzungskalender** gibt es dagegen eine zuverlässige, weil standardisierte Quelle: den ICS-Kalender-Abo-Link `public/ics/SiKalAbo.ics` (siehe Abschnitt 5.3) – darüber lassen sich Sitzungstermine automatisch einlesen.
 
 ### 5.2 Zusammenfassungs-Upload (statt KI-API)

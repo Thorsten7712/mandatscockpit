@@ -9,8 +9,6 @@ export async function search(supabase: SupabaseClient, userId: string, args: Rec
 
   const { data: placements } = await supabase.from('todo_placements').select('todo_id').eq('user_id', userId)
   const placedTodoIds = (placements ?? []).map((p) => p.todo_id as string)
-  const { data: shares } = await supabase.from('antrag_shares').select('antrag_id').eq('user_id', userId)
-  const sharedAntragIds = (shares ?? []).map((s) => s.antrag_id as string)
 
   // Bewusst KEIN .or('titel.ilike.X,beschreibung.ilike.Y') mit eingesetztem
   // Suchbegriff: Kommas/Klammern im Suchbegriff würden das PostgREST-Filterformat
@@ -23,15 +21,6 @@ export async function search(supabase: SupabaseClient, userId: string, args: Rec
   if (placedTodoIds.length > 0) {
     addTodos((await supabase.from('todos').select('id, titel').in('id', placedTodoIds).ilike('titel', like).limit(limit)).data)
     addTodos((await supabase.from('todos').select('id, titel').in('id', placedTodoIds).ilike('beschreibung', like).limit(limit)).data)
-  }
-
-  const antragById = new Map<string, string>()
-  const addAntraege = (rows: { id: string; titel: string }[] | null) => (rows ?? []).forEach((a) => antragById.set(a.id, a.titel))
-  addAntraege((await supabase.from('antraege').select('id, titel').eq('user_id', userId).ilike('titel', like).limit(limit)).data)
-  addAntraege((await supabase.from('antraege').select('id, titel').eq('user_id', userId).ilike('inhalt', like).limit(limit)).data)
-  if (sharedAntragIds.length > 0) {
-    addAntraege((await supabase.from('antraege').select('id, titel').in('id', sharedAntragIds).ilike('titel', like).limit(limit)).data)
-    addAntraege((await supabase.from('antraege').select('id, titel').in('id', sharedAntragIds).ilike('inhalt', like).limit(limit)).data)
   }
 
   interface NoteHit {
@@ -67,9 +56,6 @@ export async function search(supabase: SupabaseClient, userId: string, args: Rec
   const abschnitte: string[] = []
   if (todoById.size > 0) {
     abschnitte.push(`ToDos:\n${Array.from(todoById.entries()).map(([id, titel]) => `- ${titel} — id: ${id}`).join('\n')}`)
-  }
-  if (antragById.size > 0) {
-    abschnitte.push(`Anträge:\n${Array.from(antragById.entries()).map(([id, titel]) => `- ${titel} — id: ${id}`).join('\n')}`)
   }
   if (noteById.size > 0) {
     abschnitte.push(

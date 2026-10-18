@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { inStuecken } from '../alleZeilen'
-import { computeAntragDeadline } from '../antragDeadline'
 import { fileNameFromPath } from '../dateien'
 import { gleicheGliederung } from '../gliederung'
-import type { Ebene, Profile, SessionRow } from '../types'
+import type { Profile } from '../types'
 
 describe('inStuecken', () => {
   it('teilt in gleich große Stücke, das letzte darf kürzer sein', () => {
@@ -16,21 +15,6 @@ describe('fileNameFromPath', () => {
   it('blendet Ordner und Zeitstempel-Präfix aus', () => {
     expect(fileNameFromPath('d842/1789228677617-Redebeitrag.md')).toBe('Redebeitrag.md')
     expect(fileNameFromPath('ohne-praefix.pdf')).toBe('ohne-praefix.pdf')
-  })
-})
-
-describe('computeAntragDeadline', () => {
-  const sitzung = { datum: '2026-11-10T16:00:00+00:00' } as SessionRow
-  const tage = new Map<Ebene, number>([['kommune', 14]])
-
-  it('Sitzungsdatum minus Vorlauf der Ebene', () => {
-    expect(computeAntragDeadline(sitzung, 'kommune', tage)?.toISOString().slice(0, 10)).toBe('2026-10-27')
-  })
-
-  it('ohne Sitzung, Ebene oder Einstellung keine Frist', () => {
-    expect(computeAntragDeadline(null, 'kommune', tage)).toBeNull()
-    expect(computeAntragDeadline(sitzung, null, tage)).toBeNull()
-    expect(computeAntragDeadline(sitzung, 'kreis', tage)).toBeNull()
   })
 })
 

@@ -36,7 +36,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
   angelegt mit dem Konto (`handle_new_user`), Constraint `todo_columns_feste_spalten`. Drag & Drop
   via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle ~43 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle 61 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 
@@ -48,27 +48,28 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   `src/lib/neuigkeiten.ts`, `0057_neuigkeiten.sql`): links „Neu für dich" seit dem letzten „Alles
   gesehen" (Zuweisungen, mit mir geteilte Karten, Notizen anderer an meinen Karten, neue
   Tagesordnungspunkte kommender Sitzungen meiner Gremien), rechts „Demnächst" (Sitzungen meiner
-  Gremien in 7 Tagen, Aufgaben fällig in 3 Tagen oder überfällig, Antragsfristen). Der Stand liegt
+  Gremien in 7 Tagen, Aufgaben fällig in 3 Tagen oder überfällig). Der Stand liegt
   in der eigenen Tabelle `neuigkeiten_stand`, nicht in `profiles` (dort für Kolleg*innen lesbar);
   beim ersten Besuch gilt nichts als neu. Leer = Abschnitt ausgeblendet. Optionaler „Presseschau"-Abschnitt (newspaperartige Darstellung hochgeladener
   Presseschauen, Tage-Navigation, nur sichtbar wenn `profiles.presseschau_aktiv` gesetzt ist,
   strikt privat pro Nutzer), ToDo-Board (feste Spalten, Drag & Drop, Teilen mit Partei-/
-  Ebenen-/Gliederungs-Kolleg*innen), „Meine Dokumente" (Anträge + ToDo-Karten mit Notizen in einer
+  Ebenen-/Gliederungs-Kolleg*innen), „Meine Notizen" (`NotizenSection.tsx`, ToDo-Karten mit Notizen in einer
   Liste, filterbar nach Gremium), „Nächste Termine" (eigene Termine + importierte Sitzungen
   zusammengeführt, mit Detail-Modal).
 - **Settings** (Sidebar-Navigation): Profil (Foto/Name), Kalenderquellen (eigene + gemeinsam
   verwaltete, strikt privat pro Nutzer getrennt), Meine Gremien/Ebenen/Gliederung, ToDo-Board (Anzeigeoptionen; die Spalten sind fest),
-  Antrags-Fristen, MCP Connection (persönliches Bearer-Token), Benutzerverwaltung, Kontaktanfragen und Speicher-
+  MCP Connection (persönliches Bearer-Token), Benutzerverwaltung, Kontaktanfragen und Speicher-
   belegung gegen die Free-Tier-Grenzen (nur `rolle = 'admin'`).
 - **Archiv**: vergangene Sitzungen (inkl. manuell nachtragbar, z. B. für Gremien ohne ICS-Feed - nur
   der erstellende Nutzer darf seine eigene nachgetragene Sitzung bearbeiten/löschen), erledigte
-  Aufgaben, hochgeladene Dokumente, entschiedene Anträge.
+  Aufgaben, hochgeladene Dokumente. Das Antragswesen (Anträge, Freigaben, Fristen) ist seit `0061`
+  entfallen – Anträge der Fraktion liegen als Hub-Dokumente mit Tag „Antrag".
 - **Dokumente** (`/dokumente`, eigener Reiter neben dem Archiv): Top-Level-Dokumente sind immer
   "geteilt" (sichtbar für alle Mitglieder derselben Partei UND derselben Ebene/Gliederung, z. B.
   "Kommune Iserlohn", getaggt mit Ebene + freien Tags, z. B. hochgeladene Sitzungsvorlagen). Klick auf
   ein Dokument öffnet `DokumentDetailModal.tsx`: dort lassen sich eigene Notizen/Analysen anhängen
   (`dokumente.parent_id`), wahlweise "persönlich", Ebene-weit geteilt oder mit einzelnen ausgewählten
-  Personen geteilt (`dokument_shares`-Tabelle, Muster von `antrag_shares`). Alles auch über den
+  Personen geteilt (`dokument_shares`-Tabelle). Alles auch über den
   MCP-Server befüllbar (`create_document`/`list_documents` - der Server läuft über den
   Service-Role-Client, RLS greift dort nicht, die Sichtbarkeitsprüfung passiert deshalb explizit im
   Tool-Code, siehe `darfSehen()` in `tools/dokumente.ts`). Ebene-/Tag-Filterchips, Volltextsuche in der Datenbank
@@ -131,7 +132,7 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   *kein eigenes Chrome mehr* (`imLeser` – es genügt irgendein verknüpftes Dokument, eine
   importierte Tagesordnung ist nicht nötig) – die frühere Listenansicht
   lag sonst nach dem Schließen wieder frei, obwohl sie gerade übersprungen worden war. Die Sitzung
-  selbst – Kopfdaten, Aufgaben, Anträge und die Notizen der verknüpften Karten und Dokumente – ist dort der **erste Eintrag über der
+  selbst – Kopfdaten, Aufgaben und die Notizen der verknüpften Karten und Dokumente – ist dort der **erste Eintrag über der
   Tagesordnung** (`uebersicht`/`uebersichtTitel`); im Übersichts-Modus zeigt der Kopf den
   Sitzungstitel und nur noch das Schließen-X, die Spalten werden zu Navigation + Sitzung.
   Ohne TOP-Nummern startet der Leser in der **Übersicht** (`starteInUebersicht`) und beschriftet
@@ -170,8 +171,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 33 Tools über
-  ToDos/Termine/Sitzungen/Anträge/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 29 Tools über
+  ToDos/Termine/Sitzungen/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
   README.md Abschnitt 9 und `docs/CHANGELOG.md`). `get_document` liefert den Markdown-Text eines Hub-Dokuments (in Abschnitten bis 20.000
   Zeichen) – `list_documents` lädt den Text bewusst nicht. `list_documents` kennt das Dokumenten-Archiv
   (Parameter `archiv`, Standard „ohne" wie in der Web-UI) und einen Titel-Filter (`titel`, greift
@@ -210,7 +211,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 - **RLS-Rekursion**: Eine Policy, die in ihrer eigenen USING-Klausel dieselbe Tabelle per Subquery
   abfragt (z. B. `profiles`-Policy fragt `profiles` ab), verursacht „infinite recursion detected in
   policy" (Postgres 42P17). Fix: SECURITY DEFINER-Helper-Funktion, die die Tabelle direkt abfragt
-  (Beispiele: `private.current_user_fraktion()`, `private.antrag_gehoert_nutzer()`). `language sql`-Funktionen werden
+  (Beispiele: `private.current_user_fraktion()`, `private.dokument_ist_geteilt_mit()`). `language sql`-Funktionen werden
   beim `CREATE FUNCTION` sofort gegen das Schema geparst (nicht erst beim Aufruf) – referenzierte
   Tabellen müssen in derselben Migration also **vorher** angelegt sein.
 - **Muster für neue Policies und RLS-Helfer** (seit `0050_rls_helfer_privat.sql`, sonst kommen
@@ -231,7 +232,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   Ablauf im CHANGELOG-Eintrag zu 0050.
 - **Ein Notiz-System** (seit `0055_notizen_nur_todo.sql`): Notizen gibt es nur an ToDo-Karten
   (`summaries.todo_id`, sichtbar für alle, auf deren Board die Karte liegt) und an Hub-Dokumenten
-  (`dokumente.parent_id`). Keine Kommentare, keine Notizen an Sitzungen, Terminen oder Anträgen –
+  (`dokumente.parent_id`). Keine Kommentare, keine Notizen an Sitzungen oder Terminen –
   die Sitzungsansicht zeigt die Notizen ihrer verknüpften Karten und Dokumente nur an. Die
   RLS-Bedingung steht in `summaries_manage_own` (WITH CHECK), im MCP-Server gespiegelt in
   `tools/notes.ts`. Die Kommentar-Tabellen sind seit `0059` gelöscht.
@@ -273,7 +274,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   2 MB, nur JPG/PNG/WebP/GIF, am Bucket erzwungen. Der MCP-Server umgeht die Policies und prüft
   deshalb selbst (`darfDateienHochladen()` in `shared.ts`). Keine Upload-Felder mehr in der
   Oberfläche einbauen.
-- **Löschprotokoll** (`0053_loeschprotokoll.sql`): Jede gelöschte Zeile der 16 Inhaltstabellen
+- **Löschprotokoll** (`0053_loeschprotokoll.sql`): Jede gelöschte Zeile der Inhaltstabellen (seit 0061 zwölf)
   landet per Trigger in `private.protokoll` (wer, wann, über welchen Weg, ganze Zeile als JSON) –
   für Nutzer unsichtbar, einsehbar im Supabase-Dashboard (Schema `private`) bzw. per SQL. Wer
   löscht, bestimmt `private.protokoll_herkunft()`: `auth.uid()` aus der Web-Oberfläche; bei der
@@ -292,7 +293,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   `<user_id>/<dateiname>`, RLS via `(storage.foldername(name))[1] = ((select auth.uid()))::text`. Signed URLs:
   60s für einmalige Downloads, 3600s für dauerhaft sichtbare Inhalte (Fotos, offene Dokumentvorschau).
 - **Bewusste Code-Duplikation**: ICS-Parsing, Hash-Helper, `createNote()`-Konfiguration etc. sind
-  zwischen Deno (Edge Functions) und Node (Scripts) bzw. zwischen ähnlichen Entitäten (Todo/Antrag)
+  zwischen Deno (Edge Functions) und Node (Scripts) bzw. zwischen ähnlichen Entitäten (ToDo/Dokument)
   bewusst dupliziert – kein gemeinsames Backend/Build-Tooling, das eine Abstraktion rechtfertigen
   würde. Faustregel im Projekt: 2 Vorkommen sind tolerierbar, beim 3. wird in eine gemeinsame Stelle
   extrahiert (Beispiel: `fileNameFromPath`, `DetailModalShell`).
@@ -340,12 +341,16 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   vorhandene Platzierung, Partei und Ebene prüft weiterhin nur `share-todo`. Die Oberfläche teilt
   die Karte beim Zuweisen mit, wenn nötig (nur der Ersteller); der MCP-Server (`update_todo`,
   `zustaendig` = Name) weist nur unter Personen zu, die die Karte schon haben.
-- **Teilen/Kandidatensuche** (ToDos, Anträge): grobe Vorfilterung per RLS
+- **Teilen/Kandidatensuche** (ToDos, Dokumente): grobe Vorfilterung per RLS
   (`profiles_select_same_partei_ebene`), exakter Abgleich (Partei + Ebene + Gliederung) läuft
   clientseitig in `loadCandidates()`. Konten mit `profiles.technisch = true` (Automatik-Konten wie
   der ALLRIS-Import von dailyallris) fallen dort heraus – an allen drei Stellen im Frontend und in
   `resolveTeilenMitNamen()` im MCP-Server. Das ist Aufräumen der Oberfläche, keine Zugriffsgrenze.
-  Setzbar in der Benutzerverwaltung (Checkbox), siehe `0041_profiles_technisch.sql`.
+  Setzbar in der Benutzerverwaltung (Checkbox), siehe `0041_profiles_technisch.sql`. **Technische
+  Konten lassen sich nicht löschen** (`0061`, Trigger `technisches_konto_schuetzen` auf `profiles`,
+  dazu Sperre in `admin-users`): `dokumente.user_id` cascaded, mit dem ALLRIS-Konto verschwände der
+  ganze Hub. Beim Löschen eines normalen Kontos gehen seine Dokumente mit (Zeilen per Cascade,
+  Dateien im Bucket `dokumente` räumt `admin-users` vorher ab).
 - **Detail-Modals**: gemeinsame Hülle `src/components/DetailModalShell.tsx` (2-Spalten-Layout,
   `headerActions`-Slot) – für neue Entity-Detail-Modals wiederverwenden statt eigenes Chrome zu bauen.
 - **Formularblöcke vs. Blocksatz unterscheiden sich an der Lückenbreite**: Beim PDF-Auszug der
@@ -371,7 +376,7 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   Migration also die Typen neu erzeugen – tsc nennt dann, was in `types.ts` fehlt. Beim Einführen
   fehlten sieben Spalten (u. a. `sessions.ics_uid`, `todos.zustaendig_seit`).
 - **Tests** (`npm test`, Vitest, `src/lib/__tests__/`) für die reinen Hilfsfunktionen: Archiv-Regel,
-  Gelesen-Status, Vorlagen-Aufbereitung, Fristen, Gliederung. Laufen in der PR-Prüfung mit.
+  Gelesen-Status, Vorlagen-Aufbereitung, Gliederung. Laufen in der PR-Prüfung mit.
 - **Login-Tests**: Passwort-Eingabe im Browser ist tabu (Sicherheitsregel), daher keine echten
   Login-Rundgänge – Verifikation läuft über `npm run lint` + `npm test` + `npm run build` (`tsc -b`/`vite build`)
   + statische Test-Harnesses. Beide laufen ohne eine einzige Meldung durch; neue Warnungen beheben
@@ -405,22 +410,17 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
    fertig (siehe oben), es fehlt noch die Rolle „Fraktionsbüro", die ein Zielmitglied aus der eigenen
    Fraktion auswählen und für dieses einen Termin (`herkunft = 'fraktionsbuero'`) anlegen kann.
    **Entschieden (17.10.2026):** Das Fraktionsbüro darf selbst angelegte Termine jederzeit ändern
-   und löschen, auch nachdem das Mitglied sie bearbeitet hat. Offen dabei: Am Termin hängen Daten des Mitglieds (Notizen, Dateien, verknüpfte ToDos/Anträge/Dokumente). Ändert oder löscht das Fraktionsbüro den Termin, dürfen die nicht stillschweigend verschwinden – wie das gelöst wird, gehört in die anstehende Grundsatzüberlegung zu Notizen/Zusammenfassungen/Verknüpfungen und Kalender.
+   und löschen, auch nachdem das Mitglied sie bearbeitet hat. Offen dabei: Am Termin hängen Daten des Mitglieds (Notizen, verknüpfte ToDos/Dokumente). Ändert oder löscht das Fraktionsbüro den Termin, dürfen die nicht stillschweigend verschwinden – wie das gelöst wird, gehört in die anstehende Grundsatzüberlegung zu Notizen/Zusammenfassungen/Verknüpfungen und Kalender.
    Die Kalender-Einbindung insgesamt will der Nutzer ebenfalls grundsätzlich neu überdenken – vor
    dem Bau dieser Rolle also erst das Ergebnis davon abwarten.
-2. **RIS-Dokumenten-Import** (Phase 2, KONZEPT.md Abschnitt 5.1): automatischer Import öffentlicher
-   Ratsinformationssystem-Dokumente (Anträge/Vorlagen) in die weiterhin ungenutzte `documents`-Tabelle
-   (0001_init.sql) - nicht zu verwechseln mit dem neuen `/dokumente`-Reiter (Tabelle `dokumente`,
-   0033_dokumente.sql), der geteilte/persönliche, selbst hochgeladene Dokumente verwaltet und davon
-   unabhängig ist.
-3. **iCal-Export** des zusammengeführten persönlichen Kalenders.
-4. **Bilder in Vorlagen**: Markdown kann Bilder referenzieren, aber der Storage-Bucket ist privat
+2. **iCal-Export** des zusammengeführten persönlichen Kalenders.
+3. **Bilder in Vorlagen**: Markdown kann Bilder referenzieren, aber der Storage-Bucket ist privat
    und die Lese-Policy hängt an `dokumente.datei_url` – ein eingebettetes Bild wäre nur für den
    Hochladenden sichtbar. Nötig wären eine Jointabelle `dokument_anhaenge` plus ein zweiter
    `exists`-Zweig in `dokumente_storage_select_own_or_shared`. `VorlageAnsicht.tsx` rendert
    Bild-Referenzen bis dahin als Link und lädt bewusst keine fremden URLs (die würden IP und
    Zeitpunkt jedes lesenden Mitglieds an einen fremden Server melden).
-5. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
+4. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
    `list_fakten`/`create_fakt` nach dem Muster von `tools/dokumente.ts` wäre additiv – dabei die
    Sichtbarkeitsprüfung wie dort explizit im Tool-Code nachbauen, der MCP-Server umgeht RLS.
 

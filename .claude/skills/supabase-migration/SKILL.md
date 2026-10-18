@@ -21,7 +21,7 @@ bestehenden Policies stehen in `docs/CHANGELOG.md`, falls eine Design-Entscheidu
    Tabelle per Subquery abfragt (z. B. eine `profiles`-Policy, die wieder `profiles` abfragt), wirft
    „infinite recursion detected in policy" (Postgres 42P17). Stattdessen eine `SECURITY DEFINER`-
    Helper-Funktion schreiben, die die Tabelle direkt abfragt und RLS damit umgeht (Beispiele im Repo:
-   `current_user_fraktion()`, `antrag_gehoert_nutzer()`, `antrag_ist_geteilt_mit()`). Neue Helfer
+   `current_user_fraktion()`, `dokument_ist_geteilt_mit()`). Neue Helfer
    **immer im Schema `private`** anlegen (`create function private.<name>(...) ... security definer
    set search_path = public, pg_temp`) und in Policies als `private.<name>(...)` aufrufen – in
    `public` wären sie per `/rest/v1/rpc` für jeden erreichbar. `authenticated` braucht EXECUTE
@@ -38,7 +38,7 @@ bestehenden Policies stehen in `docs/CHANGELOG.md`, falls eine Design-Entscheidu
      `select` (sonst `text = text[]`-Fehler).
    - Rein privat: `user_id = (select auth.uid())` (Beispiel: `todos_manage_own`).
    - Gemeinsam lesbar, privat schreibbar: separate SELECT/INSERT/UPDATE/DELETE-Policies.
-   - Geteilt mit ausgewählten Kolleg*innen (Partei/Ebene/Gliederung): siehe `antrag_shares`/
+   - Geteilt mit ausgewählten Kolleg*innen (Partei/Ebene/Gliederung): siehe `dokument_shares`/
      `todo_placements` als Vorlage, inkl. der SECURITY DEFINER-Helper aus Punkt 4.
 7. **Deployen**: Die Migration geht sofort auf die Produktiv-DB – das ist **getrennt** vom
    App-Deploy. Gearbeitet wird ausschließlich in Cloud-Sitzungen (dort kommt keine

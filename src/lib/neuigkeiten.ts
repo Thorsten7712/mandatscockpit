@@ -1,8 +1,6 @@
 import { supabase } from './supabaseClient'
 import { inStuecken } from './alleZeilen'
-import { computeAntragDeadline } from './antragDeadline'
-import { ANTRAG_STATUS_AKTIV } from './antragStatus'
-import type { AntragDeadlineSetting, AntragRow, Ebene, SessionRow } from './types'
+import type { SessionRow } from './types'
 
 // Neuigkeiten im Cockpit statt Mails (0057, docs/ARCHITEKTUR-PLAN.md). Zwei
 // Teile: was seit dem letzten "Alles gesehen" neu ist, und was demnächst
@@ -12,9 +10,8 @@ import type { AntragDeadlineSetting, AntragRow, Ebene, SessionRow } from './type
 /** Wie weit "demnächst" reicht. */
 const TAGE_SITZUNGEN = 7
 const TAGE_AUFGABEN = 3
-const TAGE_FRISTEN = 7
 
-export type Ziel = { art: 'todo'; id: string } | { art: 'sitzung'; id: string } | { art: 'antrag'; id: string }
+export type Ziel = { art: 'todo'; id: string } | { art: 'sitzung'; id: string }
 
 export interface Neuigkeit {
   schluessel: string
@@ -196,7 +193,7 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
   }
   neu.sort((a, b) => Date.parse(b.zeit) - Date.parse(a.zeit))
 
-  // --- Demnächst: Sitzungen, fällige Aufgaben, Antragsfristen ------------------
+  // --- Demnächst: Sitzungen und fällige Aufgaben ------------------------------
   const heuteEnde = new Date()
   heuteEnde.setHours(23, 59, 59, 999)
   for (const s of kommende) {
@@ -227,43 +224,9 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
       ziel: { art: 'todo', id: k.id },
     })
   }
-  demnaechst.push(...(await ladeAntragsfristen(userId, heuteEnde.getTime())))
   demnaechst.sort((a, b) => Date.parse(a.zeit) - Date.parse(b.zeit))
 
   return { seit, neu, demnaechst }
-}
-
-/** Einreichungsfristen eigener aktiver Anträge in den nächsten Tagen - gleiche
- *  Rechnung wie in AntraegeSection.tsx (computeAntragDeadline). */
-async function ladeAntragsfristen(userId: string, heuteEnde: number): Promise<Termin[]> {
-  const { data: antraege } = await supabase
-    .from('antraege')
-    .select('*')
-    .eq('user_id', userId)
-    .in('status', ANTRAG_STATUS_AKTIV)
-    .not('session_id', 'is', null)
-  if (!antraege || antraege.length === 0) return []
-  const [{ data: fristen }, { data: sitzungen }] = await Promise.all([
-    supabase.from('antrag_deadline_settings').select('*').eq('user_id', userId),
-    supabase.from('sessions').select('*').in('id', [...new Set(antraege.map((a) => a.session_id as string))]),
-  ])
-  const tageByEbene = new Map(((fristen ?? []) as AntragDeadlineSetting[]).map((f) => [f.ebene as Ebene, f.tage_vor_sitzung]))
-  const sitzungById = new Map(((sitzungen ?? []) as SessionRow[]).map((s) => [s.id, s]))
-  const termine: Termin[] = []
-  for (const a of antraege as AntragRow[]) {
-    const frist = computeAntragDeadline(sitzungById.get(a.session_id!), a.ebene, tageByEbene)
-    if (!frist || a.status !== 'entwurf') continue
-    if (frist.getTime() > inTagen(TAGE_FRISTEN) || frist.getTime() < Date.now() - 24 * 60 * 60 * 1000) continue
-    termine.push({
-      schluessel: `frist-${a.id}`,
-      zeit: frist.toISOString(),
-      symbol: '⏰',
-      text: `Antragsfrist: ${a.titel}`,
-      dringend: frist.getTime() <= heuteEnde,
-      ziel: { art: 'antrag', id: a.id },
-    })
-  }
-  return termine
 }
 
 /** "Alles gesehen": ab jetzt gilt nur noch Späteres als neu. */

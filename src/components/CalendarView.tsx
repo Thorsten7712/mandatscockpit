@@ -151,8 +151,7 @@ export function CalendarView() {
   // Filter-Chips: "Alle" immer, "Eigene Termine" nur wenn welche existieren,
   // je eine Ebene nur wenn sie unter den aktuellen Sitzungen vorkommt (grobe
   // Trennung, nützlich bei mehreren Mandats-Ebenen), plus ein Chip pro
-  // Gremium (feingranular, gleiches Muster wie in AntraegeSection.tsx bei
-  // "Meine Dokumente") - keine leeren/wirkungslosen Filter anzeigen.
+  // Gremium (feingranular, gleiches Muster wie in NotizenSection.tsx) - keine leeren/wirkungslosen Filter anzeigen.
   const EBENEN_ORDER: Ebene[] = ['kommune', 'kreis', 'land', 'bund']
   const ebenenPresent = new Set(
     sessions

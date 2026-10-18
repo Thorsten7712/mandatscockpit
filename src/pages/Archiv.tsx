@@ -1,22 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, CheckSquare, FileText, Gavel, History, Plus } from 'lucide-react'
+import { Archive, CheckSquare, FileText, History, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { ladeTermineMitNotizen } from '../lib/notizFlags'
-import type { AntragRow, CalendarSource, DokumentListenZeile, DokumentRow, Ebene, SessionRow, TodoRow } from '../lib/types'
+import type { CalendarSource, DokumentListenZeile, DokumentRow, Ebene, SessionRow, TodoRow } from '../lib/types'
 import { DOKUMENT_LISTEN_SPALTEN, ladeDokument } from '../lib/dokumentSpalten'
 import { TerminDetailModal } from '../components/TerminDetailModal'
 import { TodoDetailModal } from '../components/TodoDetailModal'
-import { AntragDetailModal } from '../components/AntragDetailModal'
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { fileNameFromPath } from '../lib/dateien'
 import { formatDate, formatDateTime, formatDayMonth, formatTime, startOfTodayIso } from '../lib/format'
 import { EBENE_COLOR, EBENE_LABEL, sourceColorById, tagColor } from '../lib/sourceColors'
 import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { alleZeilen } from '../lib/alleZeilen'
-import { ANTRAG_STATUS_ABGESCHLOSSEN, antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 
-type Tab = 'sitzungen' | 'aufgaben' | 'dokumente' | 'antraege'
+type Tab = 'sitzungen' | 'aufgaben' | 'dokumente'
 
 // Gleiche Liste wie in Settings.tsx (Kalenderquellen-Formular) und
 // TerminDetailPanel.tsx (Sitzung bearbeiten) - bewusst dupliziert, siehe
@@ -59,20 +57,6 @@ export default function Archiv() {
   const [hubDokumente, setHubDokumente] = useState<DokumentListenZeile[]>([])
   const [hubSitzungen, setHubSitzungen] = useState<SitzungenJeDokument>(new Map())
   const [openHubDoc, setOpenHubDoc] = useState<DokumentRow | null>(null)
-
-  const [entschiedeneAntraege, setEntschiedeneAntraege] = useState<AntragRow[]>([])
-  const [openAntragId, setOpenAntragId] = useState<string | null>(null)
-
-  async function loadEntschiedeneAntraege() {
-    const { data } = await supabase
-      .from('antraege')
-      .select('*')
-      .in('status', ANTRAG_STATUS_ABGESCHLOSSEN)
-      .order('created_at', { ascending: false })
-    const rows = data ?? []
-    setEntschiedeneAntraege(rows)
-
-  }
 
   // Sitzungen aus "sitzung"-Quellen (gremienweise gefiltert) und aus
   // "termin"-Quellen (reiner Terminkalender, ungefiltert) getrennt laden und
@@ -205,7 +189,6 @@ export default function Archiv() {
     loadNotizenFlags()
     loadCompletedTodos()
     loadHubDokumente()
-    loadEntschiedeneAntraege()
     supabase
       .from('calendar_sources')
       .select('*')
@@ -263,13 +246,6 @@ export default function Archiv() {
             className={tab === 'dokumente' ? 'mc-btn-primary' : 'mc-btn-ghost'}
           >
             <FileText size={16} /> Dokumente
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('antraege')}
-            className={tab === 'antraege' ? 'mc-btn-primary' : 'mc-btn-ghost'}
-          >
-            <Gavel size={16} /> Anträge
           </button>
         </div>
 
@@ -535,56 +511,10 @@ export default function Archiv() {
           </section>
         )}
 
-        {tab === 'antraege' && (
-          <section className="mc-animate-fade max-w-2xl">
-            <ul className="space-y-2">
-              {entschiedeneAntraege.map((a) => {
-                return (
-                  <li key={a.id}>
-                    <div
-                      onClick={() => setOpenAntragId(a.id)}
-                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
-                    >
-                      <span
-                        className={`shrink-0 rounded-sm px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
-                      >
-                        {antragStatusLabel(a.status, a.ergebnis)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-slate-900">{a.titel}</span>
-                        <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                          {a.ausschuss && (
-                            <span className="truncate rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-                              {a.ausschuss}
-                            </span>
-                          )}
-                          {a.eingereicht_am && <span>Eingereicht {formatDate(a.eingereicht_am)}</span>}
-                        </span>
-                      </span>
-                    </div>
-                  </li>
-                )
-              })}
-              {entschiedeneAntraege.length === 0 && (
-                <li className="mc-card p-6 text-center text-sm text-slate-400">
-                  Noch keine entschiedenen Anträge. Landen hier, sobald ein Antrag als beschlossen, abgelehnt oder
-                  zurückgezogen markiert wird.
-                </li>
-              )}
-            </ul>
-          </section>
-        )}
       </div>
 
       {openTodoId && (
         <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadCompletedTodos} />
-      )}
-      {openAntragId && (
-        <AntragDetailModal
-          id={openAntragId}
-          onClose={() => setOpenAntragId(null)}
-          onChanged={loadEntschiedeneAntraege}
-        />
       )}
       {openHubDoc && (
         <DokumentDetailModal

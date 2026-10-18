@@ -123,12 +123,11 @@ Lokal testen (Deno muss installiert sein): `deno check --config supabase/functio
 Über eine weitere Edge Function (`supabase/functions/mcp-server/index.ts`) lässt sich MandatsCockpit
 direkt aus Claude heraus per Chat bedienen (z. B. „Leg mir ein ToDo an: XY im nächsten
 Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initialize`, `tools/list`,
-`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 33 Tools:
+`tools/call`) über einen einzigen HTTP-Endpunkt. Aktuell 29 Tools:
 
 **Anlegen:**
 - `create_todo(titel, spalte, faellig_am?, session_id?)` – `spalte` ist eine der festen Spalten „Neu", „Geplant", „Ergebnis erstellt", „Fertig".
 - `create_event(titel, start, ende?)` – eigener Termin, `herkunft='privat'`.
-- `create_antrag(titel, inhalt?, ausschuss?, ebene?, session_id?)` – Status startet immer bei `entwurf`; `ausschuss`/`ebene` werden aus `session_id` übernommen, falls nicht explizit gesetzt.
 - `upload_presseschau(inhalt, datum, titel?, quelle?)` – speichert eine tägliche Presseschau (Markdown-Text); `datum` ist Pflicht (das tatsächliche Ausgabedatum, kein automatisches "heute" – ein früherer stiller Default hatte dazu geführt, dass mehrere Uploads am selben realen Kalendertag sich gegenseitig überschrieben haben), pro Tag ein Eintrag (erneuter Upload für denselben Tag ersetzt den bisherigen). Sichtbar im Dashboard nur, wenn „Presseschau" unter Einstellungen aktiviert ist.
 - `create_document(titel, sichtbarkeit, parent_id?, session_id?, ebene?, teilen_mit_namen?, tags?, inhalt?, dateiname?, datei_base64?, datei_pfad?)` – legt ein Dokument im Dokumenten-Hub an (`/dokumente`), optional als Notiz/Analyse-Anhang an ein bestehendes Dokument (`parent_id`, z. B. eine Einschätzung zu einer hochgeladenen Sitzungsvorlage) und/oder mit einer Sitzung verknüpft (`session_id`). Drei Kategorien: `sichtbarkeit="geteilt"` (sichtbar für alle Mitglieder der eigenen Partei auf der Ebene/Gliederung – bei einem Top-Level-Dokument über `ebene` gewählt, bei einem Anhang automatisch vom übergeordneten Dokument übernommen), `sichtbarkeit="persoenlich"` (nur der Nutzer selbst) oder `sichtbarkeit="einzelpersonen"` (nur die in `teilen_mit_namen` genannten Partei-/Ebenen-Kolleg\*innen zusätzlich, Namen werden per Teilstring-Suche gegen sichtbare Profile aufgelöst).
 
@@ -136,17 +135,14 @@ Verkehrsausschuss fragen"). Sie implementiert das MCP-JSON-RPC-Protokoll (`initi
 - `list_todos(status?, spalte?, session_id?, limit?)` – eigene + mit dem Nutzer geteilte Karten; die Ausgabe nennt zusätzlich eine verknüpfte Sitzung sowie über `link_todo_document` verknüpfte Dokumente.
 - `list_sessions(zeitraum?, gremium?, nur_meine_gremien?, limit?)` – `zeitraum`: `zukunft` (Standard)/`vergangenheit`/`alle`; `nur_meine_gremien` spiegelt die Gremien-Auswahl aus Einstellungen → Meine Gremien (analog Dashboard/Archiv). Gibt je Sitzung `ics_uid` und `quelle_url` mit aus: `ics_uid` ist bei ALLRIS-Quellen `ALLRIS-Sitzung-<SILFDNR>` und damit der einzige eindeutige Schlüssel für externe Importeure – dieselbe SILFDNR steht im Kopf der Tagesordnung. `quelle_url` ist dagegen meist nur die ALLRIS-Tagesansicht und für alle Sitzungen desselben Tages identisch.
 - `list_events(zeitraum?, limit?)` – eigene Termine, gleiche `zeitraum`-Semantik.
-- `list_antraege(status?, ausschuss?, session_id?, limit?)` – eigene + geteilte; `status` Standard `aktiv` (entwurf/gestellt/in_beratung/vertagt).
-- `list_antrag_fristen()` – errechnet Einreichungsfristen (Sitzungsdatum minus die unter Einstellungen → Antrags-Fristen konfigurierte Vorlaufzeit je Ebene) für aktive eigene Anträge mit Sitzungsbezug.
 - `list_notes(session_id?, event_id?, todo_id?, limit?)` – liest die Notizen an ToDo-Karten (eigene und geteilte); mit `session_id`/`event_id` die der mit dieser Sitzung bzw. diesem Termin verknüpften Karten, mit `todo_id` die einer Karte, ohne Filter die zuletzt geschriebenen. Notizen an Hub-Dokumenten liefert `get_document`.
 - `list_documents(parent_id?, sichtbarkeit?, ebene?, tag?, titel?, session_id?, archiv?, seit?, limit?)` – ohne `parent_id` nur Top-Level-Dokumente (z. B. Sitzungsvorlagen), mit `parent_id` die daran angehängten Notizen/Analysen. Eigene sowie sichtbare geteilte/individuell freigegebene Dokumente anderer Mitglieder – der MCP-Server läuft über den Service-Role-Client (RLS greift dort nicht), die Sichtbarkeitsprüfung passiert deshalb explizit im Tool-Code, nicht per RLS. Die Ausgabe nennt zusätzlich über `link_todo_document` verknüpfte ToDo-Karten. `archiv` steuert den Umgang mit archivierten Dokumenten (`ohne` = Standard wie in der Web-UI, `alle`, `nur`); archivierte Treffer sind in der Ausgabe mit `ARCHIV` markiert. Als archiviert gilt ein Dokument, dessen verknüpfte Sitzung vorbei ist **oder** das per `update_document_archiv` von Hand archiviert wurde. `seit` (Datum = ab Mitternacht deutscher Zeit, oder voller Zeitstempel) liefert nur seitdem hochgeladene Dokumente – für den täglichen Scan nach neuen Drucksachen, dann mit `archiv="alle"`. Gibt es mehr Treffer als `limit`, nennt die letzte Zeile die Gesamtzahl. Den Text der Dokumente liefert die Liste bewusst nicht.
 - `get_document(dokument_id, ab_zeichen?, max_zeichen?)` – ein Dokument mit seinem gespeicherten Markdown-Text (bei Drucksachen die ganze Vorlage) und Kopfdaten: Sichtbarkeit, Ersteller*in, Tags, Sitzungen mit TOP-Nummer, Archivstatus, Datei, Zahl der sichtbaren Notizen. Gleiche Sichtbarkeitsprüfung wie `list_documents`; ein nicht sichtbares Dokument wird wie ein nicht vorhandenes gemeldet. Lange Texte kommen in Abschnitten von höchstens 20.000 Zeichen, die Antwort nennt das nächste `ab_zeichen`.
-- `search(query, limit?)` – Volltextsuche über Titel/Beschreibung von ToDos, Titel/Inhalt von Anträgen und Notiz-Texten (eigene + geteilte). Durchsucht **nicht** den Dokumenten-Hub, dafür `list_documents` mit Filtern verwenden – und ebenso wenig die „Zahlen & Fakten"-Seite (`/fakten`, Tabelle `fakten`), für die es bislang keine MCP-Tools gibt.
+- `search(query, limit?)` – Volltextsuche über Titel/Beschreibung von ToDos und Notiz-Texten (eigene + geteilte). Durchsucht **nicht** den Dokumenten-Hub, dafür `list_documents` mit Filtern verwenden – und ebenso wenig die „Zahlen & Fakten"-Seite (`/fakten`, Tabelle `fakten`), für die es bislang keine MCP-Tools gibt.
 
 **Bearbeiten:**
 - `complete_todo(todo_id, erledigt?)` – abhaken/rückgängig machen.
 - `update_todo(todo_id, titel?, beschreibung?, faellig_am?, zustaendig?, session_id?, spalte?)` – `zustaendig` ist ein Name (oder „ich", leer = niemand) einer Person, die die Karte schon hat – sie sieht sie dann auf ihrem Board und kann sie bearbeiten; `session_id` verknüpft/löst die Karte nachträglich mit einer Sitzung (leerer String entfernt eine bestehende Verknüpfung); `spalte` verschiebt nur die eigene Platzierung des aufrufenden Nutzers.
-- `update_antrag_status(antrag_id, status, ergebnis?, eingereicht_am?, session_id?)` – `ergebnis` (`positiv`/`negativ`) ist bei `status="abgestimmt"` Pflicht; `eingereicht_am` wird beim Übergang auf `gestellt` automatisch auf heute gesetzt, falls nicht angegeben; `session_id` verknüpft/löst den Antrag nachträglich mit einer Sitzung.
 - `update_document_titel(dokument_id, titel)` – ändert den Titel eines eigenen Dokuments/einer eigenen Notiz im Dokumenten-Hub (nicht den Dateinamen eines angehängten Datei-Uploads). Nur der/die Ersteller\*in darf das.
 - `link_document_session(dokument_id, session_id, top_nummer?, top_titel?, reihenfolge?, ergebnis?)` / `unlink_document_session(dokument_id, session_id)` – verknüpft ein eigenes Dokument zusätzlich mit einer Sitzung bzw. löst die Verknüpfung wieder (n:m, Tabelle `sitzung_dokumente` – eine Vorlage durchläuft erst den Fachausschuss, dann den Rat). Die Verknüpfungszeile trägt zugleich den Tagesordnungspunkt. Idempotent; ein erneuter Aufruf frischt die Tagesordnungs-Angaben auf. Nur der/die Ersteller\*in darf das.
 - `set_session_agenda(session_id | ics_uid | gremium+datum, punkte[], modus?)` – schreibt die **ganze** Tagesordnung einer Sitzung: alle Punkte in ihrer Reihenfolge, einschließlich der Punkte ohne Drucksache, mit Beratungsergebnis. Drucksachen werden über ihre Nummer (`DS11/0108`) zum Dokument im Hub aufgelöst; welche Nummern fehlen, nennt die Antwort – die herunterladen, mit `create_document` hochladen, erneut aufrufen. Schlüssel ist die TOP-Nummer, ein zweiter Lauf aktualisiert also statt zu verdoppeln. `modus="anhaengen"` für lange Tagesordnungen in Teilstücken (ab ca. 13 KB pro Aufruf wird es unzuverlässig; eine Ratstagesordnung mit 84 Punkten ergibt rund 17 KB). Von Hand im Cockpit gesetzte Verknüpfungen ohne TOP-Nummer bleiben unberührt.
@@ -180,7 +176,18 @@ separates Bearer-Token-/API-Key-Feld (nur eine optionale OAuth-Client-ID für Se
 OAuth sprechen). Das Token wird deshalb direkt **als Teil der URL** übergeben
 (`...?token=<token>`) – die Edge Function liest es dort per Query-Parameter aus (zusätzlich wird,
 falls vorhanden, weiterhin auch ein `Authorization: Bearer`-Header akzeptiert, falls ein anderer
-MCP-Client das unterstützt). Zwei weitere Stolpersteine, die dabei aufgetreten sind:
+MCP-Client das unterstützt). Header hat Vorrang vor dem Query-Parameter.
+
+**Header statt URL (Stand 18.10.2026 geprüft):** Der Custom-Connector-Dialog von claude.ai kennt nur
+die URL und optional OAuth-Client-ID/-Secret, aber keine eigenen Header – dort bleibt nur
+`?token=`. Wo der Client Header setzen kann, gehört das Token in den Header und die URL bleibt ohne
+Token: Claude Code (`claude mcp add --transport http mandatscockpit <url> --header "Authorization:
+Bearer <token>"`), die Claude-API (`mcp_servers[].authorization_token`) und eigene Skripte wie die
+GitHub-Action von dailyallris. Vorteil: Die URL mit Token taucht dann weder in Logs der
+Edge Function noch in Verläufen auf. Ohne Token in der URL für claude.ai ginge es nur mit OAuth in
+der Function – das ist bislang nicht gebaut.
+
+Zwei weitere Stolpersteine, die dabei aufgetreten sind:
 
 - Die Function muss mit `verify_jwt = false` deployt sein (siehe `supabase/config.toml`), sonst weist
   Supabases eigenes API-Gateway jede Anfrage schon vor Erreichen der Function mit

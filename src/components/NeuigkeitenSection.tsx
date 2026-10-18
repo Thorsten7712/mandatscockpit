@@ -4,7 +4,6 @@ import { ladeNeuigkeiten, neuigkeitenGesehen, type Neuigkeiten, type Ziel } from
 import { formatDateTime } from '../lib/format'
 import { TodoDetailModal } from './TodoDetailModal'
 import { TerminDetailModal } from './TerminDetailModal'
-import { AntragDetailModal } from './AntragDetailModal'
 
 // Neuigkeiten im Cockpit statt Mails (0057): links, was seit dem letzten
 // "Alles gesehen" neu ist, rechts, was in den nächsten Tagen ansteht. Bleibt
@@ -118,7 +117,6 @@ export function NeuigkeitenSection() {
 
       {offen?.art === 'todo' && <TodoDetailModal id={offen.id} onClose={schliessen} onChanged={() => {}} />}
       {offen?.art === 'sitzung' && <TerminDetailModal kind="session" id={offen.id} onClose={schliessen} />}
-      {offen?.art === 'antrag' && <AntragDetailModal id={offen.id} onClose={schliessen} onChanged={() => {}} />}
     </section>
   )
 }
