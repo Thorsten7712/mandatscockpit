@@ -7,8 +7,6 @@ export type EventHerkunft = 'privat' | 'uebernommene_sitzung' | 'fraktionsbuero'
 export type SessionStatus = 'geplant' | 'aktiv' | 'abgeschlossen' | 'abgesagt'
 export type EventStatus = 'geplant' | 'abgesagt'
 export type Sichtbarkeit = 'privat' | 'geteilt'
-export type AntragStatus = 'entwurf' | 'gestellt' | 'in_beratung' | 'vertagt' | 'abgestimmt' | 'zurueckgezogen'
-export type AntragErgebnis = 'positiv' | 'negativ'
 /** 'sitzung' = Sitzungs-/Gremienkalender (gremienweise Auswahl via user_gremien), 'termin' = reiner Terminkalender (alle Einträge werden ungefiltert übernommen) */
 export type CalendarSourceArt = 'sitzung' | 'termin'
 
@@ -199,16 +197,6 @@ export interface SessionRow {
   erstellt_von: string | null
 }
 
-export interface DocumentRow {
-  id: string
-  titel: string
-  quelle_url: string | null
-  ausschuss: string | null
-  session_id: string | null
-  tags: string[] | null
-  created_at: string
-}
-
 /** Notiz an einer ToDo-Karte - seit 0060 nur noch Text an genau einer Karte. */
 export interface SummaryRow {
   id: string
@@ -290,34 +278,6 @@ export interface McpToken {
   user_id: string
   token_hash: string
   created_at: string
-}
-
-export interface AntragRow {
-  id: string
-  user_id: string
-  titel: string
-  inhalt: string | null
-  status: AntragStatus
-  ergebnis: AntragErgebnis | null
-  ausschuss: string | null
-  /** Dient dem Fristen-Nachschlag UND dem Teilen-Kandidatenfilter (analog todos.ebene) */
-  ebene: Ebene | null
-  session_id: string | null
-  eingereicht_am: string | null
-  created_at: string
-}
-
-/** Teilen-Freigabe eines Antrags mit einer Kollegin/einem Kollegen (analog TodoPlacement, ohne Board-Position) */
-export interface AntragShare {
-  id: string
-  antrag_id: string
-  user_id: string
-}
-
-export interface AntragDeadlineSetting {
-  user_id: string
-  ebene: Ebene
-  tage_vor_sitzung: number
 }
 
 /** Eingang über das Kontaktformular auf der öffentlichen Impressum-Seite. */

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 
 /**
- * Gemeinsame Hülle für breite 2-Spalten-Detail-Modals (ToDo, Antrag).
+ * Gemeinsame Hülle für breite 2-Spalten-Detail-Modals (ToDo).
  * Linke Spalte = Kernfelder/Metadaten, rechte Spalte = Aktivität
  * (Kommentare/Dokumente) - beide unabhängig scrollend, damit nicht mehr
  * alles seriell in einem einzigen schmalen Scroll-Bereich steht.

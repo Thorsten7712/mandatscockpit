@@ -202,93 +202,6 @@ export const TOOLS = [
     },
   },
   {
-    name: 'create_antrag',
-    description:
-      'Legt einen neuen eigenen Antrag an (Status startet immer bei "entwurf"). Wird eine session_id angegeben, werden ausschuss und ebene automatisch aus deren Gremium/Ebene übernommen, sofern nicht explizit gesetzt (wie im "+ Antrag"-Formular der Web-App).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        titel: { type: 'string', description: 'Titel des Antrags' },
-        inhalt: { type: 'string', description: 'Antragstext (optional).' },
-        ausschuss: { type: 'string', description: 'Vorgesehener Ausschuss (optional, sonst aus session_id übernommen).' },
-        ebene: {
-          type: 'string',
-          enum: ['kommune', 'kreis', 'land', 'bund'],
-          description: 'Ebene, für Fristen-Nachschlag und Teilen-Filter (optional, sonst aus session_id übernommen).',
-        },
-        session_id: {
-          type: 'string',
-          description: 'UUID der vorgesehenen Sitzung, an die der Antrag geknüpft werden soll (optional).',
-        },
-      },
-      required: ['titel'],
-    },
-  },
-  {
-    name: 'list_antraege',
-    description:
-      'Listet Anträge auf - eigene und mit dem Nutzer geteilte. Liefert je Antrag auch die id, die für update_antrag_status gebraucht wird.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        status: {
-          type: 'string',
-          enum: ['aktiv', 'entwurf', 'gestellt', 'in_beratung', 'vertagt', 'abgestimmt', 'zurueckgezogen', 'alle'],
-          description:
-            '"aktiv" (Standard) = entwurf/gestellt/in_beratung/vertagt (noch nicht final entschieden), ein einzelner Status, oder "alle".',
-        },
-        ausschuss: {
-          type: 'string',
-          description: 'Filtert per Teilstring-Suche nach Ausschuss (optional).',
-        },
-        session_id: {
-          type: 'string',
-          description: 'Filtert auf Anträge, die mit dieser Sitzung verknüpft sind (optional).',
-        },
-        limit: {
-          type: 'number',
-          description: 'Maximale Anzahl Anträge (Standard 20, Maximum 100).',
-        },
-      },
-    },
-  },
-  {
-    name: 'update_antrag_status',
-    description:
-      'Ändert den Status eines Antrags (z. B. von "entwurf" auf "gestellt", oder auf "abgestimmt" mit Ergebnis) und optional dessen Sitzungs-Verknüpfung. Für Anträge, die dem Nutzer gehören oder mit ihm geteilt sind. Beim Übergang auf "gestellt" wird eingereicht_am automatisch auf heute gesetzt, falls nicht bereits vorhanden oder explizit angegeben.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        antrag_id: { type: 'string', description: 'UUID des Antrags.' },
-        status: {
-          type: 'string',
-          enum: ['entwurf', 'gestellt', 'in_beratung', 'vertagt', 'abgestimmt', 'zurueckgezogen'],
-          description: 'Neuer Status.',
-        },
-        ergebnis: {
-          type: 'string',
-          enum: ['positiv', 'negativ'],
-          description: 'Erforderlich, wenn status="abgestimmt" gesetzt wird.',
-        },
-        eingereicht_am: {
-          type: 'string',
-          description: 'Einreichungsdatum im Format YYYY-MM-DD, überschreibt die Automatik (optional).',
-        },
-        session_id: {
-          type: 'string',
-          description: 'UUID einer Sitzung, mit der der Antrag nachträglich verknüpft (oder neu verknüpft) werden soll (optional, leerer String entfernt eine bestehende Verknüpfung).',
-        },
-      },
-      required: ['antrag_id', 'status'],
-    },
-  },
-  {
-    name: 'list_antrag_fristen',
-    description:
-      'Berechnet die Einreichungsfristen (Sitzungsdatum minus die für die Ebene konfigurierte Vorlaufzeit aus Einstellungen -> Antrags-Fristen) für die eigenen aktiven Anträge mit verknüpfter Sitzung, sortiert nach Frist. Nur berechenbar, wenn Antrag, verknüpfte Sitzung UND eine Fristen-Einstellung für die jeweilige Ebene vorhanden sind.',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
     name: 'upload_presseschau',
     description:
       'Speichert eine tägliche Presseschau (Markdown-Text, z. B. eine extern erstellte Übersicht relevanter Presseartikel) im MandatsCockpit-Account des angemeldeten Nutzers. Erscheint dort im Presseschau-Abschnitt des Dashboards, sofern der Nutzer diesen in seinen eigenen Einstellungen aktiviert hat - der Upload funktioniert unabhängig davon immer. Pro Kalendertag (datum) ist genau ein Eintrag möglich; ein erneuter Upload für dasselbe datum ERSETZT den bisherigen Inhalt (Korrektur statt Duplikat) - für unterschiedliche Presseschauen deshalb immer das tatsächliche Datum der jeweiligen Ausgabe angeben, niemals das aktuelle Tagesdatum raten oder weglassen, sonst überschreiben sich mehrere Ausgaben gegenseitig.',
@@ -723,7 +636,7 @@ export const TOOLS = [
   {
     name: 'search',
     description:
-      'Durchsucht Titel/Inhalte von ToDo-Karten, Anträgen und Notizen (Freitext-Suche, Groß-/Kleinschreibung egal) - berücksichtigt dabei nur für den Nutzer sichtbare Einträge (eigene und geteilte). Für Fragen wie "wo ging es um XY".',
+      'Durchsucht Titel/Inhalte von ToDo-Karten und Notizen (Freitext-Suche, Groß-/Kleinschreibung egal) - berücksichtigt dabei nur für den Nutzer sichtbare Einträge (eigene und geteilte). Für Fragen wie "wo ging es um XY".',
     inputSchema: {
       type: 'object',
       properties: {

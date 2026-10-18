@@ -4,7 +4,7 @@ import { ChevronDown, LogOut, Settings } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { CalendarView } from '../components/CalendarView'
 import { TodoBoard } from '../components/TodoBoard'
-import { AntraegeSection } from '../components/AntraegeSection'
+import { NotizenSection } from '../components/NotizenSection'
 import { PresseschauSection } from '../components/PresseschauSection'
 import { NeuigkeitenSection } from '../components/NeuigkeitenSection'
 import { logoUrl, themeById } from '../lib/themes'
@@ -193,7 +193,7 @@ export default function Dashboard() {
         </section>
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           <CalendarView />
-          <AntraegeSection />
+          <NotizenSection />
         </div>
       </main>
       <footer className="mx-auto max-w-7xl px-6 pb-8 text-xs text-slate-400">

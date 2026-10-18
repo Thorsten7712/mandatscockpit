@@ -42,7 +42,6 @@ import { createTodo, listTodos, completeTodo, updateTodo } from './tools/todos.t
 import { createEvent, listEvents } from './tools/events.ts'
 import { listSessions } from './tools/sessions.ts'
 import { listSessionAgenda, setSessionAgenda } from './tools/tagesordnung.ts'
-import { createAntrag, listAntraege, updateAntragStatus, listAntragFristen } from './tools/antraege.ts'
 import { listNotes, createTodoNote } from './tools/notes.ts'
 import { uploadPresseschau } from './tools/presseschau.ts'
 import { startFileUpload, appendFileChunk, finishFileUpload } from './tools/uploads.ts'
@@ -157,7 +156,7 @@ Deno.serve(async (req) => {
           protocolVersion,
           capabilities: { tools: {} },
           serverInfo: { name: 'mandatscockpit-mcp', version: '1.0.0' },
-          instructions: `Verwaltet ToDos, eigene Termine, Sitzungen, Anträge, Notizen, Presseschauen und den Dokumenten-Hub im MandatsCockpit-Account von ${user.name ?? 'diesem Nutzer'}.`,
+          instructions: `Verwaltet ToDos, eigene Termine, Sitzungen, Notizen, Presseschauen und den Dokumenten-Hub im MandatsCockpit-Account von ${user.name ?? 'diesem Nutzer'}.`,
         }),
       )
     }
@@ -205,18 +204,6 @@ Deno.serve(async (req) => {
           break
         case 'update_todo':
           result = await updateTodo(db, user.id, args)
-          break
-        case 'create_antrag':
-          result = await createAntrag(db, user.id, args)
-          break
-        case 'list_antraege':
-          result = await listAntraege(db, user.id, args)
-          break
-        case 'update_antrag_status':
-          result = await updateAntragStatus(db, user.id, args)
-          break
-        case 'list_antrag_fristen':
-          result = await listAntragFristen(db, user.id)
           break
         case 'upload_presseschau':
           result = await uploadPresseschau(db, user.id, args)

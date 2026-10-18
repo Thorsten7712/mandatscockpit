@@ -1,13 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
-import type { AntragRow, CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
+import type { CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
-import { AntragDetailModal } from './AntragDetailModal'
 import { DokumentDetailModal } from './DokumentDetailModal'
 import { useLoeschDialog } from './LoeschDialog'
 import { formatDateTime } from '../lib/format'
-import { antragBadgeClasses, antragStatusLabel } from '../lib/antragStatus'
 import { inStuecken } from '../lib/alleZeilen'
 import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
 
@@ -85,8 +83,6 @@ export function TerminDetailPanel({
   const [linkedTodos, setLinkedTodos] = useState<TodoRow[]>([])
   const [openTodoId, setOpenTodoId] = useState<string | null>(null)
 
-  const [linkedAntraege, setLinkedAntraege] = useState<AntragRow[]>([])
-  const [openAntragId, setOpenAntragId] = useState<string | null>(null)
 
   const [linkedDokumente, setLinkedDokumente] = useState<DokumentRow[]>([])
   const [openDokument, setOpenDokument] = useState<DokumentRow | null>(null)
@@ -124,15 +120,6 @@ export function TerminDetailPanel({
     // Erstellungsreihenfolge.
     const { data } = await supabase.from('todos').select('*').eq(column, id).order('created_at')
     setLinkedTodos(data ?? [])
-  }
-
-  async function loadLinkedAntraege() {
-    if (kind !== 'session') {
-      setLinkedAntraege([])
-      return
-    }
-    const { data } = await supabase.from('antraege').select('*').eq('session_id', id).order('created_at')
-    setLinkedAntraege(data ?? [])
   }
 
   /** autoOeffnen: beim ersten Laden einer Sitzung mit Tagesordnung gleich den
@@ -195,12 +182,10 @@ export function TerminDetailPanel({
   useEffect(() => {
     setEditing(false)
     setOpenTodoId(null)
-    setOpenAntragId(null)
     setOpenDokument(null)
     setDokumenteGeladen(false)
     loadTermin()
     loadLinkedTodos()
-    loadLinkedAntraege()
     // Nur im Modal direkt in den Leser springen. Auf der eigenen Seite
     // (/termin/:kind/:id) läge sonst sofort ein Overlay über der Seite, die
     // man gerade aufgerufen hat.
@@ -580,33 +565,6 @@ export function TerminDetailPanel({
         )}
       </ul>
 
-      {kind === 'session' && (
-        <>
-          <h3 className="mb-2 text-sm font-semibold text-slate-900">Verknüpfte Anträge</h3>
-          <ul className="mb-6 space-y-2">
-            {linkedAntraege.map((a) => (
-              <li key={a.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenAntragId(a.id)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
-                >
-                  <span
-                    className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${antragBadgeClasses(a.status, a.ergebnis)}`}
-                  >
-                    {antragStatusLabel(a.status, a.ergebnis)}
-                  </span>
-                  <span className="truncate text-sm font-medium text-slate-800">{a.titel}</span>
-                </button>
-              </li>
-            ))}
-            {linkedAntraege.length === 0 && (
-              <li className="text-slate-400 text-sm">Keine verknüpften Anträge.</li>
-            )}
-          </ul>
-
-        </>
-      )}
     </>
   )
 
@@ -694,7 +652,7 @@ export function TerminDetailPanel({
   )
 
   /** Die Sitzung selbst, wie sie im Leser als erster Punkt der Tagesordnung
-   *  erscheint: Kopfdaten, verknüpfte Aufgaben und Anträge und die Notizen
+   *  erscheint: Kopfdaten, verknüpfte Aufgaben und die Notizen
    *  daran. Ohne die Tagesordnungsliste - die steht links daneben. */
   const uebersichtBlock = (
     <>
@@ -708,9 +666,6 @@ export function TerminDetailPanel({
     <>
       {openTodoId && (
         <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadLinkedTodos} />
-      )}
-      {openAntragId && (
-        <AntragDetailModal id={openAntragId} onClose={() => setOpenAntragId(null)} onChanged={loadLinkedAntraege} />
       )}
       {openDokument && (
         // key erzwingt beim Wechsel über die Tagesordnung einen Remount: die

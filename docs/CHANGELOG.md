@@ -3206,3 +3206,46 @@ nehmen für `spalte` nur die vier Namen (`festeSpalte()`), legen keine Spalten m
 `checkout@v7`, `setup-node@v7`, `upload-artifact@v7`, `upload-pages-artifact@v5`,
 `deploy-pages@v5`, `supabase/setup-cli@v3`. Die Breaking Changes (setup-node: Caching-Vorgaben,
 entfallenes `always-auth`) betreffen die Workflows nicht – sie setzen `cache: npm` ausdrücklich.
+
+## 18.10.2026 – Anträge und `documents` entfernt, Konten löschen mit Dokumenten
+
+Nutzerwunsch: „5 löschen, 6 abbauen, 8 prüf ob das im Header übergeben werden kann. Zu 9: wenn
+Nutzer gelöscht werden, sollen auch seine Dokumente gelöscht werden. Außer technische Nutzer, die
+Dokumente des ALLRIS-Nutzers sind für alle Nutzer relevant."
+
+**`0061_antraege_documents_entfernen.sql`** (über `migrationen.yml`, enthält DROP):
+- `antraege`, `antrag_shares`, `antrag_deadline_settings` und die Helfer
+  `private.antrag_gehoert_nutzer`/`antrag_ist_geteilt_mit` entfernt. Vorher geprüft: 0 Anträge,
+  0 Freigaben, 4 Fristen-Einstellungen (reine Einstellungen, ohne Anträge wertlos). Die Migration
+  bricht ab, falls doch noch Anträge da sind.
+- `documents` (0001, für einen RIS-Import gedacht, den heute dailyallris in `dokumente` macht)
+  entfernt, war leer.
+- Trigger `technisches_konto_schuetzen` (`before delete on profiles`): ein Konto mit
+  `technisch = true` lässt sich nicht löschen, auch nicht über `auth.users` oder das
+  Supabase-Dashboard. Grund: `dokumente.user_id` ist `on delete cascade`, mit dem ALLRIS-Konto
+  verschwänden alle 1.141 Drucksachen für alle Mitglieder.
+
+**Oberfläche:** „Meine Dokumente" heißt jetzt „Meine Notizen" (`NotizenSection.tsx`, nur noch
+ToDo-Karten mit Notizen). Entfallen: `AntraegeSection`, `AntragDetailModal`, Archiv-Reiter
+„Anträge", „Verknüpfte Anträge" in der Sitzung, Antragsfristen in „Demnächst", Einstellungsseite
+„Antrags-Fristen", `antragStatus.ts`/`antragDeadline.ts` samt Test.
+
+**MCP-Server:** `create_antrag`, `list_antraege`, `update_antrag_status`, `list_antrag_fristen`
+entfernt (29 statt 33 Tools); `search` durchsucht keine Anträge mehr. Offene Claude-Chats sehen die
+alten Tools noch, bis ein neuer Chat beginnt.
+
+**Konto löschen (`admin-users`):** lehnt technische Konten ab (zusätzlich zum Trigger). Bei
+normalen Konten löscht es vorher die Dateien unter `<user_id>/` in `profilbilder` **und
+`dokumente`** (seitenweise, je 100), die Dokument-Zeilen gehen per Cascade – samt fremder Notizen
+daran, das sagt der Bestätigungsdialog jetzt auch. Der Löschknopf ist bei technischen Konten
+ausgegraut. Die Schleife über den entfernten Bucket `zusammenfassungen` ist raus.
+
+**MCP-Token im Header (geprüft):** Der Server nimmt `Authorization: Bearer` schon immer an, Header
+vor Query-Parameter. Der Custom-Connector-Dialog von claude.ai kann aber keine Header setzen (nur
+URL und OAuth), dort bleibt `?token=`. Für Clients mit Header-Unterstützung (Claude Code, API,
+dailyallris) steht die Header-Variante jetzt in README Abschnitt 9. Ganz ohne Token in der URL ginge
+es für claude.ai nur mit OAuth in der Function.
+
+**CLAUDE.md:** veralteter Punkt „RIS-Dokumenten-Import in `documents`" aus den nächsten Schritten
+gestrichen.
+

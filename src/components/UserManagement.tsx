@@ -157,7 +157,7 @@ function UserForm({
         <span>
           Technisches Konto (z. B. automatischer Import)
           <span className="block text-xs text-slate-400">
-            Taucht nicht in den Teilen-Listen auf. Rechte bleiben die eines normalen Mitglieds.
+            Taucht nicht in den Teilen-Listen auf und lässt sich nicht löschen (seine Dokumente sind für alle da). Rechte bleiben die eines normalen Mitglieds.
           </span>
         </span>
       </label>
@@ -282,7 +282,8 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
       was: 'Das Konto',
       folgen: [
         'Das Konto dieser Person wird endgültig entfernt - sie kann sich danach nicht mehr anmelden.',
-        'Alle Termine, Karten, Notizen, Anträge und hochgeladenen Dateien dieses Kontos werden mitgelöscht.',
+        'Alle Termine, Karten, Notizen, Dokumente und Dateien dieses Kontos werden mitgelöscht.',
+        'Auch Notizen anderer an seinen Dokumenten gehen mit.',
         'Von dieser Person geteilte Inhalte verschwinden auch bei allen anderen.',
         'Das lässt sich nicht rückgängig machen.',
       ],
@@ -430,9 +431,15 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
                 <button
                   type="button"
                   onClick={() => loeschRueckfrage(loeschAnfrageFuer(u))}
-                  disabled={isSelf}
+                  disabled={isSelf || u.technisch}
                   className="mc-btn-danger px-2! py-2!"
-                  title={isSelf ? 'Du kannst dich nicht selbst löschen' : 'Löschen'}
+                  title={
+                    isSelf
+                      ? 'Du kannst dich nicht selbst löschen'
+                      : u.technisch
+                        ? 'Technische Konten lassen sich nicht löschen - ihre Dokumente sind für alle da'
+                        : 'Löschen'
+                  }
                 >
                   <Trash2 size={15} />
                 </button>
