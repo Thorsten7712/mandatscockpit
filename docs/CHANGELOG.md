@@ -3378,3 +3378,29 @@ jetzt ein Kurzüberblick und drei gleich breite Karten.
   `NeuigkeitenSection.tsx` entfällt.
 - Zeitabhängiges (überfällig, „vorbei", „diese Woche") wird beim Laden berechnet, nicht beim
   Rendern – die React-Compiler-Regel `react-hooks/purity` verbietet `Date.now()` im Render.
+
+## 18.10.2026 – UI-Umbau, Schritt 3: Sitzungsansicht
+
+Nach dem freigegebenen Entwurf B, mit Thorstens Vorgabe aus der Abstimmung: Ein
+Tagesordnungspunkt öffnet sich **übergangslos in derselben Karte**, nicht als Fenster darüber
+(„wirkt wie ein separates Fenster, das da nicht hingehört").
+
+- **`/sitzungen` und `/sitzungen/:id`**: oben die kommenden Sitzungen der eigenen Gremien als
+  Kachelleiste (Datum, Gremium, Zahl der Punkte), darunter die gewählte Sitzung.
+- **`TerminDetailPanel layout="eingebettet"`**: Kopf mit Gremium, Datum, Ort, Punktzahl und den
+  Filtern „Nur mit Drucksache"/„Ungelesen"; links die Tagesordnung mit Kennzeichen je Punkt
+  (Drucksachennummer aus dem Titel, „neu" nach `istDokumentUngelesen()`, Zahl der verknüpften
+  Karten über `todo_dokumente`, „Enthält Bilder", Zahl der Notizen), rechts Übersicht oder Punkt.
+  Die Übersicht bündelt „Meine Vorbereitung" (Karten mit `session_id`, Fortschritt, neue Karte
+  direkt in „Neu"), die Kopfdaten und die Notizen. Die Spalten scrollen ab `md` getrennt.
+- **`DokumentDetailModal eingebettet`**: dieselbe Komponente ohne Overlay, Schließen und
+  Umschalter – Notizen, Verknüpfungen, Gelesen, Archivieren, Original-PDF bleiben, es gibt keine
+  zweite Leseansicht zu pflegen.
+- **Kein Sitzungsfenster mehr**: `TerminDetailModal` leitet Sitzungen auf `/sitzungen/:id` um
+  (Kalender, Heute, Archiv, Neuigkeiten), `/termin/session/:id` ebenso; Links aus Dokument und
+  Karte zeigen direkt dorthin. Der bisherige Sitzungs-Leser im Fenster ist entfernt: `imLeser`,
+  `uebersicht`/`uebersichtTitel`/`starteInUebersicht`/`tagesordnung`/`onAuswahl` am Modal und das
+  Layout B (Tagesordnung links). Ein gemerktes „b" gilt als „a", `mc.sitzung.variante` wird
+  nicht mehr gelesen.
+- „Passende Zahlen & Fakten" aus dem Entwurf ist nicht gebaut: Fakten sind nicht mit Sitzungen
+  oder Gremien verknüpft, eine Auswahl wäre geraten.

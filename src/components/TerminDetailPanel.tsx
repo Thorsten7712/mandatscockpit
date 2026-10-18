@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { ArrowLeft, ChevronDown, ChevronUp, ListChecks, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
@@ -8,6 +8,7 @@ import { useLoeschDialog } from './LoeschDialog'
 import { formatDateTime } from '../lib/format'
 import { inStuecken } from '../lib/alleZeilen'
 import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
+import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
 
 // Gleiche Liste wie in Settings.tsx/Archiv.tsx (Kalenderquellen- bzw.
 // Sitzung-nachtragen-Formular) - bewusst dupliziert, siehe CLAUDE.md.
@@ -47,16 +48,15 @@ export function TerminDetailPanel({
   kind: 'event' | 'session'
   id: string
   onDeleted?: () => void
-  /** Schließt die gesamte Termin-/Sitzungsansicht, nicht nur das Dokument.
-   *  Eine Sitzung mit Tagesordnung geht direkt im Leser auf - das X dort
-   *  bedeutet dann "fertig mit der Sitzung" und darf nicht die Listenansicht
-   *  freilegen, die man gerade übersprungen hat. Der Rückweg dorthin steht
-   *  als Sitzungstitel über der Tagesordnung. Auf der eigenen Seite
+  /** Schließt das Fenster (layout="modal"). Auf der eigenen Seite
    *  (/termin/:kind/:id) gibt es nichts zu schließen, dort bleibt es leer. */
   onCloseAll?: () => void
   /** 'modal' bringt das eigene Overlay samt Kopfzeile mit (TerminDetailModal),
-   *  'stacked' rendert nur den Inhalt für die eigene Seite. */
-  layout?: 'stacked' | 'modal'
+   *  'stacked' rendert nur den Inhalt für die eigene Seite. 'eingebettet' ist
+   *  die Sitzungsansicht auf /sitzungen (UI-Umbau 18.10.2026): eine Karte mit
+   *  der Tagesordnung links und rechts der Übersicht oder dem gewählten
+   *  Tagesordnungspunkt – ohne Fenster darüber. Nur für Sitzungen. */
+  layout?: 'stacked' | 'modal' | 'eingebettet'
 }) {
   const [userId, setUserId] = useState<string | null>(null)
   const [event, setEvent] = useState<EventRow | null>(null)
@@ -92,6 +92,17 @@ export function TerminDetailPanel({
   // zeigen - sonst blitzt die Liste auf und der Leser legt sich darüber.
   const [dokumenteGeladen, setDokumenteGeladen] = useState(false)
 
+  // Nur für layout="eingebettet": Kennzeichen an den Tagesordnungspunkten.
+  const [kartenJeDokument, setKartenJeDokument] = useState<Map<string, number>>(new Map())
+  const [gelesenJeDokument, setGelesenJeDokument] = useState<Map<string, string>>(new Map())
+  const [nurMitDrucksache, setNurMitDrucksache] = useState(false)
+  const [nurUngelesen, setNurUngelesen] = useState(false)
+  // Auf dem Handy steht entweder die Tagesordnung oder der gewählte Punkt da.
+  const [mobilDetail, setMobilDetail] = useState(false)
+  const [neueKarte, setNeueKarte] = useState('')
+  const [karteFehler, setKarteFehler] = useState<string | null>(null)
+  const karteRef = useRef<HTMLElement | null>(null)
+
   async function loadTermin() {
     setEvent(null)
     setSession(null)
@@ -122,12 +133,7 @@ export function TerminDetailPanel({
     setLinkedTodos(data ?? [])
   }
 
-  /** autoOeffnen: beim ersten Laden einer Sitzung mit Tagesordnung gleich den
-   *  ersten Punkt mit Dokument aufschlagen - der Leser ist der Zweck der
-   *  Sitzungsansicht, nicht die Liste davor. Beim Neuladen nach einer Änderung
-   *  (z. B. Löschen eines Dokuments) bleibt es aus, sonst spränge das Modal
-   *  dem Nutzer wieder vor die Nase. */
-  async function loadLinkedDokumente(autoOeffnen = false) {
+  async function loadLinkedDokumente() {
     if (kind !== 'session') {
       setLinkedDokumente([])
       setTagesordnung([])
@@ -168,14 +174,6 @@ export function TerminDetailPanel({
         return (a.top_titel || a.titel).localeCompare(b.top_titel || b.titel, 'de')
       })
     setTagesordnung(sortiert)
-
-    // Nur bei einer echten Tagesordnung (TOP-Nummern aus dem Import). Ohne sie
-    // sind es lose Verknüpfungen, und eine davon aufzuschlagen wäre Willkür.
-    if (autoOeffnen) {
-      const erster = sortiert.find((t) => t.dokument_id !== null)
-      const dok = erster ? dokumente.find((d) => d.id === erster.dokument_id) : undefined
-      if (dok) setOpenDokument(dok)
-    }
     setDokumenteGeladen(true)
   }
 
@@ -184,12 +182,10 @@ export function TerminDetailPanel({
     setOpenTodoId(null)
     setOpenDokument(null)
     setDokumenteGeladen(false)
+    setMobilDetail(false)
     loadTermin()
     loadLinkedTodos()
-    // Nur im Modal direkt in den Leser springen. Auf der eigenen Seite
-    // (/termin/:kind/:id) läge sonst sofort ein Overlay über der Seite, die
-    // man gerade aufgerufen hat.
-    loadLinkedDokumente(layout === 'modal')
+    loadLinkedDokumente()
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id)
     })
@@ -214,18 +210,6 @@ export function TerminDetailPanel({
   // "Tagesordnung" als Überschrift zu viel behauptet.
   const hatTagesordnung = tagesordnung.some((t) => t.top_nummer !== null)
 
-  // Eine Sitzung hat nur noch EINE Ansicht: den Leser. Die frühere
-  // Listenansicht darunter gibt es nicht mehr - sie lag nach dem Schließen
-  // des Lesers wieder frei, obwohl sie gerade übersprungen worden war. Die
-  // Sitzung selbst ist dort der erste Eintrag über der Tagesordnung.
-  //
-  // Es braucht nur irgendein Dokument, nicht zwingend eine importierte
-  // Tagesordnung: Der Leser öffnet mit einem Dokument und zeigt links alles
-  // Verknüpfte. Ohne TOP-Nummern startet er in der Übersicht, weil "das erste
-  // Dokument" dort keine Bedeutung hätte. Rückfall auf die Liste bleibt nur,
-  // wo es nichts zu lesen gibt: eigene Termine und Sitzungen ganz ohne
-  // verknüpftes Dokument.
-  const imLeser = kind === 'session' && openDokument !== null
 
   function startEdit() {
     if (kind === 'event' && event) {
@@ -364,6 +348,62 @@ export function TerminDetailPanel({
       abgebrochen = true
     }
   }, [linkedTodos, linkedDokumente])
+
+  // Kennzeichen der Tagesordnungspunkte in der eingebetteten Ansicht: an wie
+  // vielen (für mich sichtbaren) Karten das Dokument hängt und wann ich es
+  // zuletzt gelesen habe. RLS liefert nur, was ich sehen darf.
+  useEffect(() => {
+    if (layout !== 'eingebettet' || !userId) return
+    let abgebrochen = false
+    async function ladeKennzeichen() {
+      const karten = new Map<string, number>()
+      const gelesen = new Map<string, string>()
+      for (const ids of inStuecken(linkedDokumente.map((d) => d.id))) {
+        const [verknuepft, lesestand] = await Promise.all([
+          supabase.from('todo_dokumente').select('dokument_id').in('dokument_id', ids),
+          supabase.from('dokument_gelesen').select('dokument_id, gelesen_am').eq('user_id', userId!).in('dokument_id', ids),
+        ])
+        for (const z of verknuepft.data ?? []) karten.set(z.dokument_id, (karten.get(z.dokument_id) ?? 0) + 1)
+        for (const z of lesestand.data ?? []) gelesen.set(z.dokument_id, z.gelesen_am)
+      }
+      if (abgebrochen) return
+      setKartenJeDokument(karten)
+      setGelesenJeDokument(gelesen)
+    }
+    ladeKennzeichen()
+    return () => {
+      abgebrochen = true
+    }
+  }, [layout, userId, linkedDokumente])
+
+  /** Neue Karte zu dieser Sitzung, in die eigene Spalte „Neu". */
+  async function karteAnlegen(e: FormEvent) {
+    e.preventDefault()
+    const titel = neueKarte.trim()
+    if (!titel || !userId) return
+    setKarteFehler(null)
+    const { data: spalten } = await supabase.from('todo_columns').select('id, titel').eq('user_id', userId)
+    const neu = (spalten ?? []).find((c) => c.titel.trim().toLowerCase() === 'neu')
+    if (!neu) {
+      setKarteFehler('Spalte „Neu" nicht gefunden.')
+      return
+    }
+    const { data: todo, error } = await supabase
+      .from('todos')
+      .insert({ user_id: userId, titel, session_id: id })
+      .select('id')
+      .single()
+    if (error || !todo) {
+      setKarteFehler(error?.message ?? 'Karte konnte nicht angelegt werden.')
+      return
+    }
+    const { error: platzFehler } = await supabase
+      .from('todo_placements')
+      .insert({ todo_id: todo.id, user_id: userId, column_id: neu.id, position: 0 })
+    if (platzFehler) setKarteFehler(platzFehler.message)
+    setNeueKarte('')
+    await loadLinkedTodos()
+  }
 
   function oeffneBezug(n: IndirekteNotiz) {
     if (n.quelle === 'todo') {
@@ -568,58 +608,6 @@ export function TerminDetailPanel({
     </>
   )
 
-  /** Die Tagesordnung als Liste - nur für den Rückfall ohne Leser (Termine und
-   *  Sitzungen ohne Tagesordnung). Mit Tagesordnung übernimmt die
-   *  Navigationsspalte im Leser diese Rolle. */
-  const tagesordnungBlock = kind === 'session' && (
-    <>
-          <h3 className="mb-2 text-sm font-semibold text-slate-900">
-            {hatTagesordnung ? 'Tagesordnung' : 'Verknüpfte Dokumente'}
-          </h3>
-          <ul className="mb-6 space-y-1.5">
-            {tagesordnung.map((t) => {
-              const dok = t.dokument_id ? linkedDokumente.find((d) => d.id === t.dokument_id) : null
-              const inhalt = (
-                <>
-                  {t.top_nummer && (
-                    <span className="shrink-0 font-mono text-[11px] text-slate-400">{t.top_nummer}</span>
-                  )}
-                  <span className="min-w-0 flex-1 truncate">{t.top_titel || t.titel || '(ohne Titel)'}</span>
-                  {t.ergebnis && (
-                    <span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                      {t.ergebnis}
-                    </span>
-                  )}
-                </>
-              )
-              return (
-                <li key={`${t.top_nummer ?? ''}|${t.dokument_id ?? ''}`}>
-                  {dok ? (
-                    <button
-                      type="button"
-                      onClick={() => setOpenDokument(dok)}
-                      className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-800 shadow-xs transition-shadow duration-150 hover:shadow-md"
-                    >
-                      {inhalt}
-                    </button>
-                  ) : (
-                    // Punkt ohne Drucksache: sichtbar, aber nicht anklickbar -
-                    // es gibt kein Dokument zum Öffnen. Gestrichelter Rahmen
-                    // statt Karte, damit das auf einen Blick klar ist.
-                    <div className="flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
-                      {inhalt}
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-            {tagesordnung.length === 0 && (
-              <li className="text-slate-400 text-sm">Keine verknüpften Dokumente.</li>
-            )}
-          </ul>
-    </>
-  )
-
   const notesBlock = (
     <>
       <h3 className="mb-1 text-sm font-semibold text-slate-900">Notizen</h3>
@@ -651,65 +639,297 @@ export function TerminDetailPanel({
     </>
   )
 
-  /** Die Sitzung selbst, wie sie im Leser als erster Punkt der Tagesordnung
-   *  erscheint: Kopfdaten, verknüpfte Aufgaben und die Notizen
-   *  daran. Ohne die Tagesordnungsliste - die steht links daneben. */
-  const uebersichtBlock = (
-    <>
-      {detailsBlock}
-      {linkedBlock}
-      {notesBlock}
-    </>
-  )
+  /** Sitzungsansicht für /sitzungen: Kopf, links die Tagesordnung, rechts
+   *  Übersicht oder gewählter Punkt – alles in einer Karte. */
+  function eingebetteteAnsicht() {
+    if (loadError) return <p className="text-red-600">{loadError}</p>
+    if (!session || !dokumenteGeladen) {
+      return <div className="mc-card p-6 text-sm text-slate-400">Lade Sitzung …</div>
+    }
+    const notizenJeDokument = new Map<string, IndirekteNotiz[]>()
+    for (const n of notizen) {
+      if (n.quelle !== 'dokument') continue
+      notizenJeDokument.set(n.bezugId, [...(notizenJeDokument.get(n.bezugId) ?? []), n])
+    }
+    const dokById = new Map(linkedDokumente.map((d) => [d.id, d]))
+    const ungelesen = (dokId: string) => {
+      const d = dokById.get(dokId)
+      return d ? istDokumentUngelesen(d, notizenJeDokument.get(dokId) ?? [], gelesenJeDokument.get(dokId)) : false
+    }
+    const sichtbar = tagesordnung.filter((t) => {
+      if (nurMitDrucksache && !t.dokument_id) return false
+      if (nurUngelesen && !(t.dokument_id && ungelesen(t.dokument_id))) return false
+      return true
+    })
+    const mitDokument = sichtbar.filter((t) => t.dokument_id !== null)
+    const aktivIndex = openDokument ? mitDokument.findIndex((t) => t.dokument_id === openDokument.id) : -1
+    const aktiverPunkt = aktivIndex >= 0 ? mitDokument[aktivIndex] : null
+    const waehle = (dokId: string | null) => {
+      setOpenDokument(dokId ? dokById.get(dokId) ?? null : null)
+      // Das Dokument markiert sich beim Öffnen selbst als gelesen; hier nur
+      // das Kennzeichen sofort nachziehen, statt alles neu zu laden.
+      if (dokId) setGelesenJeDokument((vorher) => new Map(vorher).set(dokId, new Date().toISOString()))
+      setMobilDetail(true)
+      // Auf dem Handy ersetzt der Punkt die Liste – an den Kartenanfang
+      // springen, sonst steht man mitten in einem Text, der weiter oben beginnt.
+      if (window.matchMedia('(max-width: 767px)').matches) karteRef.current?.scrollIntoView({ block: 'start' })
+    }
+    const erledigt = linkedTodos.filter((t) => t.erledigt).length
+    const datum = new Date(session.datum)
+
+    const filterKnopf = (aktiv: boolean, umschalten: () => void, text: string) => (
+      <button
+        type="button"
+        aria-pressed={aktiv}
+        onClick={umschalten}
+        className={`min-h-10 rounded-lg border px-3 text-sm transition-colors ${
+          aktiv ? 'border-primary bg-primary text-white' : 'border-slate-300 bg-white hover:bg-slate-50'
+        }`}
+      >
+        {text}
+      </button>
+    )
+
+    const uebersichtFlaeche = (
+      <div className="flex flex-wrap items-start gap-4 p-5">
+        <section className="flex min-w-0 flex-[1_1_280px] flex-col gap-3 rounded-xl border border-slate-100 p-4">
+          <h2 className="text-base font-semibold">Meine Vorbereitung</h2>
+          {linkedTodos.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[13px] text-slate-600">
+                <span>
+                  {erledigt} von {linkedTodos.length} {linkedTodos.length === 1 ? 'Karte' : 'Karten'} erledigt
+                </span>
+                <span>{Math.round((erledigt / linkedTodos.length) * 100)} %</span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-100">
+                <div
+                  className="h-2 rounded-full bg-primary"
+                  style={{ width: `${Math.round((erledigt / linkedTodos.length) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+          <ul className="flex flex-col">
+            {linkedTodos.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenTodoId(t.id)}
+                  className="flex w-full items-start gap-2.5 py-1.5 text-left text-[15px] hover:underline"
+                >
+                  <ListChecks size={18} className={`mt-0.5 shrink-0 ${t.erledigt ? 'text-slate-300' : 'text-primary'}`} />
+                  <span className={t.erledigt ? 'text-slate-400 line-through' : ''}>{t.titel}</span>
+                </button>
+              </li>
+            ))}
+            {linkedTodos.length === 0 && <li className="text-sm text-slate-500">Noch keine Karte zu dieser Sitzung.</li>}
+          </ul>
+          <form onSubmit={karteAnlegen} className="flex gap-2">
+            <input
+              type="text"
+              value={neueKarte}
+              onChange={(e) => setNeueKarte(e.target.value)}
+              placeholder="Karte zu dieser Sitzung …"
+              className="mc-input min-w-0 flex-1"
+            />
+            <button type="submit" disabled={!neueKarte.trim()} className="mc-btn-primary">
+              Anlegen
+            </button>
+          </form>
+          {karteFehler && <p className="text-sm text-red-600">{karteFehler}</p>}
+        </section>
+        <section className="flex min-w-0 flex-[1_1_280px] flex-col rounded-xl border border-slate-100 p-4">
+          {detailsBlock}
+        </section>
+        <section className="min-w-0 flex-[1_1_100%] rounded-xl border border-slate-100 p-4">{notesBlock}</section>
+      </div>
+    )
+
+    return (
+      <section ref={karteRef} aria-labelledby="sitzung-titel" className="mc-card scroll-mt-2 overflow-hidden">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-5 py-4">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h1 id="sitzung-titel" className="text-[22px] font-bold tracking-tight">
+              {session.gremium ?? session.titel}
+            </h1>
+            <span className="text-sm text-slate-500">
+              {datum.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} ·{' '}
+              {datum.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+              {session.ort ? ` · ${session.ort}` : ''}
+              {tagesordnung.length > 0 ? ` · ${tagesordnung.length} Punkte` : ''}
+              {session.status === 'abgesagt' ? ' · abgesagt' : ''}
+            </span>
+          </div>
+          {tagesordnung.length > 0 && (
+            <div className="flex gap-1.5">
+              {filterKnopf(nurMitDrucksache, () => setNurMitDrucksache((v) => !v), 'Nur mit Drucksache')}
+              {filterKnopf(nurUngelesen, () => setNurUngelesen((v) => !v), 'Ungelesen')}
+            </div>
+          )}
+        </div>
+
+        <div className="flex md:h-[calc(100vh-15rem)] md:min-h-[560px]">
+          <nav
+            aria-label="Tagesordnung"
+            className={`min-w-0 overflow-y-auto border-slate-100 md:block md:w-[320px] md:shrink-0 md:border-r lg:w-[360px] ${
+              mobilDetail ? 'hidden' : 'block w-full'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => waehle(null)}
+              aria-pressed={!openDokument}
+              className={`flex min-h-13 w-full items-center gap-3 border-b border-slate-100 px-5 text-left text-[15px] font-semibold ${
+                openDokument ? 'hover:bg-slate-50' : 'bg-primary/10 text-primary'
+              }`}
+            >
+              <ListChecks size={18} />
+              Übersicht &amp; Vorbereitung
+            </button>
+            {tagesordnung.length === 0 && (
+              <p className="px-5 py-4 text-sm text-slate-500">Noch keine Tagesordnung veröffentlicht.</p>
+            )}
+            {tagesordnung.length > 0 && !hatTagesordnung && (
+              <p className="px-5 pb-1 pt-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Verknüpfte Dokumente
+              </p>
+            )}
+            <ol>
+              {sichtbar.map((t) => {
+                const beschriftung = t.top_titel || t.titel || '(ohne Titel)'
+                const nummer = (
+                  <span className="w-9 shrink-0 pt-0.5 font-mono text-[13px] text-slate-400">{t.top_nummer ?? ''}</span>
+                )
+                if (!t.dokument_id) {
+                  return (
+                    <li key={`${t.top_nummer ?? ''}|`} className="flex gap-2 border-b border-slate-100 px-5 py-3">
+                      {nummer}
+                      <span className="text-[15px] italic text-slate-500">{beschriftung}</span>
+                    </li>
+                  )
+                }
+                const dok = dokById.get(t.dokument_id)
+                const aktiv = openDokument?.id === t.dokument_id
+                const anzahlNotizen = notizenJeDokument.get(t.dokument_id)?.length ?? 0
+                const anzahlKarten = kartenJeDokument.get(t.dokument_id) ?? 0
+                const neu = ungelesen(t.dokument_id)
+                const ds = dok?.titel.match(/^DS[\w/.-]+/)?.[0]
+                return (
+                  <li key={`${t.top_nummer ?? ''}|${t.dokument_id}`} className="border-b border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => waehle(t.dokument_id)}
+                      aria-pressed={aktiv}
+                      className={`flex w-full gap-2 px-5 py-3 text-left ${aktiv ? 'bg-primary/10' : 'hover:bg-slate-50'}`}
+                    >
+                      {nummer}
+                      <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <span className={`line-clamp-3 text-[15px] leading-snug ${neu ? 'font-semibold' : 'font-medium'}`}>
+                          {beschriftung}
+                        </span>
+                        <span className="flex flex-wrap gap-1.5">
+                          {ds && <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs">{ds}</span>}
+                          {neu && <span className="rounded-md bg-primary px-2 py-0.5 text-xs text-white">neu</span>}
+                          {anzahlKarten > 0 && (
+                            <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                              {anzahlKarten === 1 ? 'Karte' : `${anzahlKarten} Karten`}
+                            </span>
+                          )}
+                          {dok?.tags.includes('Enthält Bilder') && (
+                            <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs text-amber-800">Enthält Bilder</span>
+                          )}
+                          {anzahlNotizen > 0 && (
+                            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs">
+                              {anzahlNotizen} {anzahlNotizen === 1 ? 'Notiz' : 'Notizen'}
+                            </span>
+                          )}
+                          {t.ergebnis && <span className="px-0.5 text-xs text-slate-500">{t.ergebnis}</span>}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+              {tagesordnung.length > 0 && sichtbar.length === 0 && (
+                <li className="px-5 py-4 text-sm text-slate-500">Kein Punkt passt zum Filter.</li>
+              )}
+            </ol>
+          </nav>
+
+          <div className={`min-w-0 flex-1 flex-col md:flex ${mobilDetail ? 'flex' : 'hidden'}`}>
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-5 py-2">
+              <button type="button" onClick={() => setMobilDetail(false)} className="mc-btn-ghost md:hidden">
+                <ArrowLeft size={16} />
+                Tagesordnung
+              </button>
+              <span className="hidden font-mono text-[13px] text-slate-500 md:inline">
+                {aktiverPunkt
+                  ? `${aktiverPunkt.top_nummer ? `TOP ${aktiverPunkt.top_nummer}` : 'Dokument'} · ${aktivIndex + 1} von ${mitDokument.length}`
+                  : 'Übersicht'}
+              </span>
+              {aktiverPunkt && (
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    aria-label="Vorheriger Punkt"
+                    disabled={aktivIndex <= 0}
+                    onClick={() => waehle(mitDokument[aktivIndex - 1].dokument_id)}
+                    className="mc-btn h-9 w-9 border border-slate-300 bg-white"
+                  >
+                    <ChevronUp size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Nächster Punkt"
+                    disabled={aktivIndex >= mitDokument.length - 1}
+                    onClick={() => waehle(mitDokument[aktivIndex + 1].dokument_id)}
+                    className="mc-btn h-9 w-9 border border-slate-300 bg-white"
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {openDokument ? (
+                <DokumentDetailModal
+                  key={openDokument.id}
+                  document={openDokument}
+                  eingebettet
+                  onClose={() => setOpenDokument(null)}
+                  onDeleted={() => {
+                    setOpenDokument(null)
+                    loadLinkedDokumente()
+                  }}
+                />
+              ) : (
+                uebersichtFlaeche
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   const nestedModals = (
     <>
       {openTodoId && (
         <TodoDetailModal id={openTodoId} onClose={() => setOpenTodoId(null)} onChanged={loadLinkedTodos} />
       )}
-      {openDokument && (
-        // key erzwingt beim Wechsel über die Tagesordnung einen Remount: die
-        // lokalen Spiegel im Modal (Tags, Archiv-Status, Freigaben) werden nur
-        // beim Mounten aus der Prop aufgesetzt.
-        <DokumentDetailModal
-          key={openDokument.id}
-          document={openDokument}
-          tagesordnung={kind === 'session' ? tagesordnung : undefined}
-          uebersicht={imLeser ? uebersichtBlock : undefined}
-          uebersichtTitel={session?.titel}
-          starteInUebersicht={!hatTagesordnung}
-          onAuswahl={(dokumentId) => {
-            const naechstes = linkedDokumente.find((d) => d.id === dokumentId)
-            if (naechstes) setOpenDokument(naechstes)
-          }}
-          onClose={() => {
-            setOpenDokument(null)
-            onCloseAll?.()
-          }}
-          onDeleted={() => {
-            setOpenDokument(null)
-            loadLinkedDokumente()
-          }}
-        />
-      )}
     </>
   )
 
-  // Sitzung mit Tagesordnung: nur der Leser, kein eigenes Chrome. Er bringt
-  // sein eigenes Overlay mit, und die Sitzung selbst ist dort der erste Punkt
-  // der Tagesordnung.
-  if (imLeser) {
+  if (layout === 'eingebettet') {
     return (
       <>
+        {eingebetteteAnsicht()}
         {nestedModals}
         {loeschDialog}
       </>
     )
   }
-
-  // Noch nicht entschieden, ob Leser oder Liste - lieber kurz nichts als ein
-  // Aufblitzen der Liste.
-  if (layout === 'modal' && kind === 'session' && !dokumenteGeladen) return null
 
   if (layout === 'modal') {
     return (
@@ -739,7 +959,6 @@ export function TerminDetailPanel({
             <div className="min-h-0 overflow-y-auto border-b border-slate-200 p-6 md:border-b-0 md:border-r">
               {detailsBlock}
               {linkedBlock}
-              {tagesordnungBlock}
             </div>
             <div className="min-h-0 overflow-y-auto p-6">{notesBlock}</div>
           </div>
@@ -756,7 +975,6 @@ export function TerminDetailPanel({
     <div>
       {detailsBlock}
       {linkedBlock}
-      {tagesordnungBlock}
       {notesBlock}
       {nestedModals}
       {loeschDialog}

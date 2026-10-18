@@ -135,34 +135,25 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   `prosaGlaetten()` entfernt dort nur noch Mehrfach-Leerzeichen und führt **keine Absätze mehr
   zusammen** – seit dailyallris die Prosa bei der Extraktion normalisiert, verklebte diese
   Heuristik Feldwerte („## Verfasser") mit dem Folgeabsatz.
-  **Drei Leselayouts**, umschaltbar im Kopf des Modals und pro Gerät in
-  `localStorage` gemerkt: A = Dokument + Notizen, B = zusätzlich eine linke Spalte, C = Lesemodus
-  (68 Zeichen Zeilenbreite, Notizen einklappbar). In B steht links die **Tagesordnung** der Sitzung,
-  aus der heraus geöffnet wurde – ein Klick wechselt das Dokument. Eine **Sitzung** hat nur noch
-  **diese eine Ansicht**: `TerminDetailPanel` schlägt beim Laden ein Dokument auf und rendert dann
-  *kein eigenes Chrome mehr* (`imLeser` – es genügt irgendein verknüpftes Dokument, eine
-  importierte Tagesordnung ist nicht nötig) – die frühere Listenansicht
-  lag sonst nach dem Schließen wieder frei, obwohl sie gerade übersprungen worden war. Die Sitzung
-  selbst – Kopfdaten, Aufgaben und die Notizen der verknüpften Karten und Dokumente – ist dort der **erste Eintrag über der
-  Tagesordnung** (`uebersicht`/`uebersichtTitel`); im Übersichts-Modus zeigt der Kopf den
-  Sitzungstitel und nur noch das Schließen-X, die Spalten werden zu Navigation + Sitzung.
-  Ohne TOP-Nummern startet der Leser in der **Übersicht** (`starteInUebersicht`) und beschriftet
-  die Spalte „Verknüpfte Dokumente" – „das erste Dokument" hätte dort keine Bedeutung. Rückfall
-  auf die Liste bleibt nur, wo es nichts zu lesen gibt: eigene Termine und Sitzungen ganz ohne
-  verknüpftes Dokument. Bis die Verknüpfungen geladen sind, rendert das Modal **nichts**
-  (`dokumenteGeladen`) – sonst blitzt die Liste auf und der Leser legt sich darüber. Das Modal-Chrome (Overlay, Kopfzeile, Schließen) liegt deshalb in
-  `TerminDetailPanel` (`layout="modal"`) statt in `TerminDetailModal` – nur die Komponente weiß,
-  ob sie überhaupt eines braucht; `TerminDetailModal` ist nur noch der Einstiegspunkt für die drei
-  Aufrufer. Auf der eigenen Seite `/termin/:kind/:id` springt nichts automatisch auf, sonst läge
-  sofort ein Overlay über der gerade aufgerufenen Seite; Punkte ohne Drucksache stehen
-  kursiv und grau da, es gibt nichts zu öffnen. Zwei `localStorage`-Schlüssel, weil die beiden
-  Aufrufwege verschiedene Vorlieben haben: aus dem Hub heraus (`mc.dokument.variante`) wäre die
-  linke Spalte leer, Standard sind dort zwei Spalten; aus einer Sitzung heraus
-  (`mc.sitzung.variante`) ist die Tagesordnung der Einstieg, Standard sind drei Spalten. Beim
-  Wechsel über die Tagesordnung scrollt der aktive Punkt wieder in den sichtbaren Bereich – der
-  Remount setzt die Spalte sonst an den Anfang zurück, was bei 84 Punkten stört. Die Auswahl besitzt der Aufrufer
-  (`TerminDetailPanel`) und remountet das Modal per `key`: die lokalen Spiegel im Modal (Tags,
-  Archiv-Status, Freigaben) werden nur beim Mounten aus der Prop aufgesetzt.
+  **Zwei Leselayouts** im Hub, umschaltbar im Kopf des Modals und pro Gerät in `localStorage`
+  (`mc.dokument.variante`) gemerkt: A = Dokument + Notizen, C = Lesemodus (68 Zeichen
+  Zeilenbreite, Notizen einklappbar). Das frühere B mit der Tagesordnung links ist seit dem
+  UI-Umbau die **Sitzungsansicht** selbst: `/sitzungen/:id` (`src/pages/Sitzungen.tsx`) zeigt oben
+  die kommenden Sitzungen der eigenen Gremien als Leiste und darunter **eine Karte**
+  (`TerminDetailPanel`, `layout="eingebettet"`): links „Übersicht & Vorbereitung" und die
+  Tagesordnung (Kennzeichen je Punkt: Drucksachennummer, neu/ungelesen, Karten, „Enthält Bilder",
+  Notizen; Filter „Nur mit Drucksache" und „Ungelesen"), rechts entweder die Übersicht (Karten
+  der Sitzung samt Fortschritt und „Karte zu dieser Sitzung", Kopfdaten mit Bearbeiten/Löschen
+  bei nachgetragenen Sitzungen, Notizen der verknüpften Karten und Dokumente) oder der gewählte
+  Punkt – `DokumentDetailModal` mit `eingebettet`: ohne Overlay, ohne Schließen, ohne
+  Layout-Umschalter, Notizen ab `xl` daneben. Vor/zurück springt zwischen Punkten mit Drucksache.
+  Auf dem Handy steht entweder die Tagesordnung oder der Punkt da (Zurück-Knopf). **Eine Sitzung
+  öffnet sich nirgends mehr als Fenster**: `TerminDetailModal` mit `kind="session"` leitet auf
+  `/sitzungen/:id` um, `/termin/session/:id` ebenso; Fenster gibt es nur noch für eigene Termine.
+  Ohne `:id` ist die nächste nicht abgesagte Sitzung gewählt; eine vergangene (aus Archiv oder
+  Kalender) steht dann vorn in der Leiste. Das Dokument wird per `key` remountet, wenn der Punkt
+  wechselt: die lokalen Spiegel im Modal (Tags, Archiv-Status, Freigaben) werden nur beim Mounten
+  aus der Prop aufgesetzt.
   **Bilder** aus den Original-PDFs (Lagepläne, Karten, Diagramme, Scans) gibt es im Markdown nicht;
   stattdessen trägt ein Dokument den Tag **„Enthält Bilder"**, wenn sich der Blick ins PDF lohnt
   (Entscheidung 18.10.2026 statt eines Anhang-Systems). Gesetzt einmalig für den Bestand von
@@ -378,6 +369,11 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   dazu Sperre in `admin-users`): `dokumente.user_id` cascaded, mit dem ALLRIS-Konto verschwände der
   ganze Hub. Beim Löschen eines normalen Kontos gehen seine Dokumente mit (Zeilen per Cascade,
   Dateien im Bucket `dokumente` räumt `admin-users` vorher ab).
+- **Harness für Seiten hinter dem Login**: `.harness/` (nicht eingecheckt, in
+  `.git/info/exclude`) – eigene Vite-Konfiguration, die `supabaseClient` durch ein Mock mit
+  Beispieldaten ersetzt, damit sich Layouts im Browser per Playwright ansehen lassen, ohne
+  Passwort-Eingabe. Gibt es in einer neuen Sitzung nicht – bei Bedarf nach dem Muster neu anlegen
+  (Proxy-Builder, der je Tabelle Fixtures liefert und Filter ignoriert).
 - **Detail-Modals**: gemeinsame Hülle `src/components/DetailModalShell.tsx` (2-Spalten-Layout,
   `headerActions`-Slot) – für neue Entity-Detail-Modals wiederverwenden statt eigenes Chrome zu bauen.
 - **Formularblöcke vs. Blocksatz unterscheiden sich an der Lückenbreite**: Beim PDF-Auszug der

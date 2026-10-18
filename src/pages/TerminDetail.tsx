@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { TerminDetailPanel } from '../components/TerminDetailPanel'
 
 export default function TerminDetail() {
@@ -17,11 +17,14 @@ export default function TerminDetail() {
     )
   }
 
+  // Sitzungen haben ihre eigene Ansicht; alte Links führen dorthin.
+  if (kind === 'session') return <Navigate to={`/sitzungen/${id}`} replace />
+
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="mc-page-title">{kind === 'session' ? 'Sitzung' : 'Termin'}</h1>
+      <h1 className="mc-page-title">Termin</h1>
       <div className="mc-card mc-animate-pop max-w-lg p-5">
-        <TerminDetailPanel kind={kind} id={id} onDeleted={() => navigate(kind === 'session' ? '/sitzungen' : '/kalender')} />
+        <TerminDetailPanel kind={kind} id={id} onDeleted={() => navigate('/kalender')} />
       </div>
     </div>
   )
