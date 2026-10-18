@@ -3420,3 +3420,19 @@ Tagesordnungspunkt öffnet sich **übergangslos in derselben Karte**, nicht als 
   zugewiesen" (`nurMir`, nach `zustaendig_user_id`). Spalten des Boards ab 220 px statt 272 px,
   damit neben der Karte noch zwei nebeneinander passen. Der Gremienfilter aus dem Entwurf fehlt:
   Karten tragen kein Gremium, nur über eine Sitzung – das wäre eine eigene Ableitung.
+
+## 18.10.2026 – UI-Umbau, Schritt 4b: Dokumente, Fakten, Archiv, Einstellungen
+
+- **Dokumente:** Kopf mit Bestand und Zahl der ungelesenen, Suchfeld rechts daneben. Ab 1024 px
+  stehen Liste und Leser in **einer Karte** (Liste 400–440 px, scrollt für sich, Blättern unten
+  in der Liste; rechts `DokumentDetailModal eingebettet`, ohne Auswahl ein Hinweis statt eines
+  automatisch geöffneten Dokuments – Öffnen markiert als gelesen). Schmaler bleibt es beim
+  Fenster. Die Zeilen zeigen die Drucksachennummer aus dem Titel in Mono über dem Rest des
+  Titels, Datum, Vorschau und Tags; das Dateityp-Symbol (`docIcon`) ist entfallen, es gibt
+  praktisch nur PDFs. Neu am Modal: `onGelesenGeaendert`, damit der Punkt in der Liste beim
+  Öffnen und beim Umschalten sofort nachzieht.
+- **Filter-Chips** (Dokumente wie Kalender): aktiv schwarz, sonst weiß mit Rahmen.
+- **Archiv, Zahlen & Fakten:** Reiter als Unterstrich-Leiste (`mc-tab`, `aria-selected`) statt
+  gefüllter Knöpfe.
+- **Einstellungen:** bleibt bei der Unternavigation links (entsprach schon dem Entwurf). Name und
+  Foto erscheinen nach dem Speichern sofort in der Leiste (`PROFIL_GEAENDERT`).

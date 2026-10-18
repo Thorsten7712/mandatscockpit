@@ -216,25 +216,31 @@ export default function Archiv() {
     <div>
       <h1 className="mc-page-title mb-5">Archiv</h1>
       <div>
-        <div className="mb-6 flex gap-2">
+        <div role="tablist" aria-label="Bereich" className="mb-6 flex flex-wrap gap-1 border-b border-slate-200">
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'sitzungen'}
             onClick={() => setTab('sitzungen')}
-            className={tab === 'sitzungen' ? 'mc-btn-primary' : 'mc-btn-ghost'}
+            className="mc-tab"
           >
             <History size={16} /> Vergangene Sitzungen
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'aufgaben'}
             onClick={() => setTab('aufgaben')}
-            className={tab === 'aufgaben' ? 'mc-btn-primary' : 'mc-btn-ghost'}
+            className="mc-tab"
           >
             <CheckSquare size={16} /> Erledigte Aufgaben
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'dokumente'}
             onClick={() => setTab('dokumente')}
-            className={tab === 'dokumente' ? 'mc-btn-primary' : 'mc-btn-ghost'}
+            className="mc-tab"
           >
             <FileText size={16} /> Dokumente
           </button>

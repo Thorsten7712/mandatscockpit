@@ -47,6 +47,9 @@ const ZIELE: NavZiel[] = [
   { to: '/archiv', label: 'Archiv', icon: Archive },
 ]
 
+/** Ereignis auf window, wenn die Einstellungen Name, Foto oder Partei ändern. */
+export const PROFIL_GEAENDERT = 'mc:profil-geaendert'
+
 // Die Tab-Leiste auf dem Handy hat Platz für fünf Ziele, der Rest liegt hinter „Mehr".
 const HANDY_TABS = ['/', '/sitzungen', '/aufgaben', '/dokumente']
 
@@ -98,21 +101,29 @@ export function AppLayout() {
   const [ungelesen, setUngelesen] = useState(0)
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return
-      setUserId(data.user.id)
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('name, foto_url, partei')
-        .eq('id', data.user.id)
-        .single()
-      setName(profile?.name ?? '')
-      setPartei(profile?.partei ?? null)
-      if (profile?.foto_url) {
-        const { data: signed } = await supabase.storage.from('profilbilder').createSignedUrl(profile.foto_url, 3600)
-        setFotoUrl(signed?.signedUrl ?? null)
-      }
-    })
+    function ladeProfil() {
+      supabase.auth.getUser().then(async ({ data }) => {
+        if (!data.user) return
+        setUserId(data.user.id)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name, foto_url, partei')
+          .eq('id', data.user.id)
+          .single()
+        setName(profile?.name ?? '')
+        setPartei(profile?.partei ?? null)
+        if (profile?.foto_url) {
+          const { data: signed } = await supabase.storage.from('profilbilder').createSignedUrl(profile.foto_url, 3600)
+          setFotoUrl(signed?.signedUrl ?? null)
+        } else {
+          setFotoUrl(null)
+        }
+      })
+    }
+    ladeProfil()
+    // Name, Foto oder Partei in den Einstellungen geändert: Leiste nachziehen.
+    window.addEventListener(PROFIL_GEAENDERT, ladeProfil)
+    return () => window.removeEventListener(PROFIL_GEAENDERT, ladeProfil)
   }, [])
 
   // Neu zählen bei jedem Seitenwechsel: wer im Hub Dokumente gelesen hat,

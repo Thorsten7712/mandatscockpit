@@ -83,7 +83,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **Dokumente** (`/dokumente`, eigener Reiter neben dem Archiv): Top-Level-Dokumente sind immer
   "geteilt" (sichtbar für alle Mitglieder derselben Partei UND derselben Ebene/Gliederung, z. B.
   "Kommune Iserlohn", getaggt mit Ebene + freien Tags, z. B. hochgeladene Sitzungsvorlagen). Klick auf
-  ein Dokument öffnet `DokumentDetailModal.tsx`: dort lassen sich eigene Notizen/Analysen anhängen
+  ein Dokument öffnet `DokumentDetailModal.tsx` (ab 1024 px rechts neben der Liste in derselben
+  Karte, `eingebettet`; die Liste zieht „ungelesen" über `onGelesenGeaendert` nach): dort lassen sich eigene Notizen/Analysen anhängen
   (`dokumente.parent_id`), wahlweise "persönlich", Ebene-weit geteilt oder mit einzelnen ausgewählten
   Personen geteilt (`dokument_shares`-Tabelle). Alles auch über den
   MCP-Server befüllbar (`create_document`/`list_documents` - der Server läuft über den
@@ -189,7 +190,12 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   1440 px breit, oben ein 4-px-Streifen in der Parteifarbe (`bg-topbar`). Seiten bringen **kein
   eigenes Chrome** mit, nur ein `h1` mit `mc-page-title` und ihren Inhalt. Schrift IBM Plex Sans,
   Datum/Uhrzeit/Drucksachennummern in IBM Plex Mono (`font-mono`). Freigegebener Entwurf:
-  Design-Canvas „MandatsCockpit – UI-Struktur" (A+B kombiniert).
+  Design-Canvas „MandatsCockpit – UI-Struktur" (A+B kombiniert). Reiter mit Unterstrich über
+  `mc-tab` + `aria-selected` (Archiv, Zahlen & Fakten); Filter-Chips aktiv schwarz, sonst weiß
+  mit Rahmen (Kalender, Dokumente). Ändern die Einstellungen Name oder Foto, feuern sie
+  `PROFIL_GEAENDERT` auf `window`, die Leiste lädt nach. **Muster „Liste + Detail in einer
+  Karte"** ab 1024 px, darunter Fenster: Sitzungen (TOP), Aufgaben (Karte), Dokumente (Leser) –
+  jeweils dieselbe Detailkomponente mit `eingebettet`, keine zweite Ansicht.
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),

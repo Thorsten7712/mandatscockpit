@@ -59,6 +59,7 @@ export function DokumentDetailModal({
   onClose,
   onDeleted,
   eingebettet = false,
+  onGelesenGeaendert,
 }: {
   document: DokumentRow
   onClose: () => void
@@ -69,6 +70,9 @@ export function DokumentDetailModal({
    *  Tagesordnung, statt ein Fenster darüberzulegen. Füllt die Höhe des
    *  Elternelements. */
   eingebettet?: boolean
+  /** Nach dem Lesestand-Wechsel (beim Öffnen und von Hand) – damit eine
+   *  danebenstehende Liste ihren Punkt „ungelesen" nachzieht. */
+  onGelesenGeaendert?: () => void
 }) {
   const [variante, setVariante] = useState<LeseVariante>(() => (eingebettet ? 'a' : ladeVariante(VARIANTE_KEY_HUB, 'a')))
   const [notizenOffen, setNotizenOffen] = useState(true)
@@ -283,6 +287,7 @@ export function DokumentDetailModal({
           { dokument_id: document.id, user_id: data.user.id, gelesen_am: new Date().toISOString() },
           { onConflict: 'dokument_id,user_id' },
         )
+      onGelesenGeaendert?.()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [document.id])
@@ -475,6 +480,7 @@ export function DokumentDetailModal({
       await markiereGelesen(supabase, document.id, userId)
       setIstGelesen(true)
     }
+    onGelesenGeaendert?.()
   }
 
   async function handleUpdateTopLevelTags(tags: string[]) {

@@ -311,7 +311,7 @@ export default function ZahlenUndFakten() {
     <div>
       <h1 className="mc-page-title mb-5">Zahlen &amp; Fakten</h1>
       <div>
-        <div className="mb-2 flex flex-wrap gap-2">
+        <div role="tablist" aria-label="Kategorie" className="mb-3 flex flex-wrap gap-1 border-b border-slate-200">
           {KATEGORIEN.map((k) => {
             const Icon = k.icon
             const anzahl = fakten.filter((f) => f.kategorie === k.value).length
@@ -319,14 +319,16 @@ export default function ZahlenUndFakten() {
               <button
                 key={k.value}
                 type="button"
+                role="tab"
+                aria-selected={kategorie === k.value}
                 onClick={() => {
                   setKategorie(k.value)
                   setTagFilter(null)
                 }}
-                className={kategorie === k.value ? 'mc-btn-primary' : 'mc-btn-ghost'}
+                className="mc-tab"
               >
                 <Icon size={16} /> {k.label}
-                {anzahl > 0 && <span className="ml-1 opacity-70">({anzahl})</span>}
+                {anzahl > 0 && <span className="font-normal text-slate-500">{anzahl}</span>}
               </button>
             )
           })}

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Bot, CalendarDays, HardDrive, Landmark, Mail, Newspaper, SquareKanban, User, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { PROFIL_GEAENDERT } from '../components/AppLayout'
 import type {
   CalendarSource,
   CalendarSourceArt,
@@ -417,6 +418,7 @@ export default function Settings() {
       setNameError(error.message)
     } else {
       setProfile((prev) => (prev ? { ...prev, name: profileName } : prev))
+      window.dispatchEvent(new Event(PROFIL_GEAENDERT))
     }
     setSavingName(false)
   }
@@ -454,6 +456,7 @@ export default function Settings() {
     }
     setNewFoto(null)
     await loadProfile(userId)
+    window.dispatchEvent(new Event(PROFIL_GEAENDERT))
     setSavingFoto(false)
   }
 
