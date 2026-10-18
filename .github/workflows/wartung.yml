@@ -3,11 +3,11 @@ name: Wartung
 # Wartungsläufe von Hand, Details im jeweiligen Skript:
 #   vorschau  scripts/wartung-vorschau.mjs  Listenvorschau der Dokumente neu
 #             berechnen (0058) - etwa nach einer Änderung an vorschau()
-#   speicher  scripts/wartung-speicher.mjs  einmalig: Speicherbereich
-#             "zusammenfassungen" samt letzter Datei entfernen (0060)
+#   bilder    scripts/wartung-bilder.py     Tag "Enthält Bilder" an Dokumente,
+#             deren Original-PDF inhaltlich wichtige Bilder hat
 # Zuerst mit "probe" laufen lassen und die Ausgabe prüfen, dann mit
-# "ausfuehren". Die früheren Läufe für Dateien und Notizen (17.10.2026) sind
-# erledigt und entfernt.
+# "ausfuehren". Die früheren Läufe für Dateien, Notizen und den Speicherbereich
+# "zusammenfassungen" (17.10.2026) sind erledigt und entfernt.
 #
 # Das Repository ist öffentlich: Protokolle kann jeder angemeldete
 # GitHub-Nutzer lesen. Die Skripte schreiben deshalb nur Zahlen ins
@@ -25,7 +25,7 @@ on:
         required: true
         default: vorschau
         type: choice
-        options: [vorschau, speicher]
+        options: [vorschau, bilder]
       modus:
         description: '"probe" zeigt nur den Plan, "ausfuehren" ändert'
         required: true
@@ -57,7 +57,20 @@ jobs:
           if [ -z "$key" ] || [ "$key" = "null" ]; then echo "Kein service_role-Schlüssel erhalten"; exit 1; fi
           echo "::add-mask::$key"
           echo "SUPABASE_SERVICE_ROLE_KEY=$key" >> "$GITHUB_ENV"
+      - if: inputs.skript == 'bilder'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - if: inputs.skript == 'bilder'
+        run: pip install pymupdf==1.28.2 requests==2.34.2
+      - name: Wartung (Python)
+        if: inputs.skript == 'bilder'
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          MODUS: ${{ inputs.modus }}
+        run: python -I scripts/wartung-bilder.py
       - name: Wartung
+        if: inputs.skript != 'bilder'
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           MODUS: ${{ inputs.modus }}
