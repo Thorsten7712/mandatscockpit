@@ -5,6 +5,9 @@ name: Wartung
 #             berechnen (0058) - etwa nach einer Änderung an vorschau()
 #   bilder    scripts/wartung-bilder.py     Tag "Enthält Bilder" an Dokumente,
 #             deren Original-PDF inhaltlich wichtige Bilder hat
+#   protokolle  einmalig: Protokolle der Importläufe vor dem 18.10.2026
+#             löschen - sie enthielten die Feed-URLs, darunter persönliche
+#             ALLRIS-Abos mit Sitzungskennung (siehe CHANGELOG 18.10.2026)
 # Zuerst mit "probe" laufen lassen und die Ausgabe prüfen, dann mit
 # "ausfuehren". Die früheren Läufe für Dateien, Notizen und den Speicherbereich
 # "zusammenfassungen" (17.10.2026) sind erledigt und entfernt.
@@ -25,7 +28,7 @@ on:
         required: true
         default: vorschau
         type: choice
-        options: [vorschau, bilder]
+        options: [vorschau, bilder, protokolle]
       modus:
         description: '"probe" zeigt nur den Plan, "ausfuehren" ändert'
         required: true
@@ -37,7 +40,34 @@ permissions:
   contents: read
 
 jobs:
+  protokolle:
+    if: inputs.skript == 'protokolle'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Protokolle alter Importläufe löschen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODUS: ${{ inputs.modus }}
+          REPO: ${{ github.repository }}
+        # Der erste Lauf ohne URL im Protokoll war der von Hand gestartete am
+        # 18.10.2026 um 12:17 UTC; alles davor geht weg. Die Läufe selbst
+        # bleiben stehen, nur ihr Protokoll verschwindet.
+        run: |
+          bis=2026-10-18T12:00:00Z
+          ids=$(gh api --paginate "repos/$REPO/actions/workflows/import-ics.yml/runs?per_page=100" \
+            --jq ".workflow_runs[] | select(.created_at < \"$bis\") | .id")
+          echo "Läufe vor $bis: $(echo "$ids" | grep -c . || true)"
+          [ "$MODUS" = ausfuehren ] || exit 0
+          fehler=0
+          for id in $ids; do
+            gh api -X DELETE "repos/$REPO/actions/runs/$id/logs" > /dev/null 2>&1 || fehler=$((fehler + 1))
+          done
+          echo "Nicht löschbar: $fehler"
+
   wartung:
+    if: inputs.skript != 'protokolle'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

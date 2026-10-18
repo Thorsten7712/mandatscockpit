@@ -51,7 +51,6 @@ export type Pruefungen = [
   Pruefe<Passt<T.FaktRow, Tables<'fakten'>>>,
   Pruefe<Passt<T.SitzungDokument, Tables<'sitzung_dokumente'>>>,
   Pruefe<Passt<T.CalendarSource, Tables<'calendar_sources'>>>,
-  Pruefe<Passt<T.UserSourceSubscription, Tables<'user_source_subscriptions'>>>,
   Pruefe<Passt<T.UserGremium, Tables<'user_gremien'>>>,
   Pruefe<Passt<T.SessionRow, Tables<'sessions'>>>,
   Pruefe<Passt<T.SummaryRow, Tables<'summaries'>>>,

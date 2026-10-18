@@ -45,7 +45,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
   angelegt mit dem Konto (`handle_new_user`), Constraint `todo_columns_feste_spalten`. Drag & Drop
   via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle 62 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle 63 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 
@@ -181,15 +181,16 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   (`0040_fakten_immer_geteilt.sql` schränkt `sichtbarkeit` auf `'geteilt'` ein und macht `ebene`
   zur Pflicht) – wer etwas nur für sich notieren will, nutzt den Dokumenten-Hub. Das Formular fragt
   deshalb nur noch, für welche der eigenen Ebenen der Fakt gilt. RLS spiegelt exakt die vier
-  `dokumente`-Policies. Kein MCP-Tool dafür.
+  `dokumente`-Policies. MCP-Tools `list_fakten`/`create_fakt`/`update_fakt` (`tools/fakten.ts`) bauen
+  diese Sichtbarkeit im Code nach (`darfFaktSehen()`); Löschen nur in der Web-UI.
 - **Kopfleiste des Dashboards**: die drei inhaltlichen Ziele in fester Reihenfolge – Dokumente,
   Zahlen & Fakten, Archiv. Einstellungen und Abmelden liegen in einem Klappmenü hinter dem eigenen
   Profilbild links (schließt per Klick daneben und per Escape).
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
-  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 29 Tools über
-  ToDos/Termine/Sitzungen/Notizen/Presseschau/Dokumenten-Hub – volle Liste + Details in
+  `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 32 Tools über
+  ToDos/Termine/Sitzungen/Notizen/Presseschau/Dokumenten-Hub/Zahlen & Fakten – volle Liste + Details in
   README.md Abschnitt 9 und `docs/CHANGELOG.md`). `get_document` liefert den Markdown-Text eines Hub-Dokuments (in Abschnitten bis 20.000
   Zeichen) – `list_documents` lädt den Text bewusst nicht. `list_documents` kennt das Dokumenten-Archiv
   (Parameter `archiv`, Standard „ohne" wie in der Web-UI) und einen Titel-Filter (`titel`, greift
@@ -423,21 +424,8 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 
 ## Geplante nächste Schritte
 
-1. **Fraktionsbüro-Variante der Termin-Erstellung**: eigene Termine anlegen/bearbeiten/löschen ist
-   fertig (siehe oben), es fehlt noch die Rolle „Fraktionsbüro", die ein Zielmitglied aus der eigenen
-   Fraktion auswählen und für dieses einen Termin (`herkunft = 'fraktionsbuero'`) anlegen kann.
-   **Entschieden (17.10.2026):** Das Fraktionsbüro darf selbst angelegte Termine jederzeit ändern
-   und löschen, auch nachdem das Mitglied sie bearbeitet hat. Offen dabei: Am Termin hängen Daten des Mitglieds (Notizen, verknüpfte ToDos/Dokumente). Ändert oder löscht das Fraktionsbüro den Termin, dürfen die nicht stillschweigend verschwinden – wie das gelöst wird, gehört in die anstehende Grundsatzüberlegung zu Notizen/Zusammenfassungen/Verknüpfungen und Kalender.
-   Die Kalender-Einbindung insgesamt will der Nutzer ebenfalls grundsätzlich neu überdenken – vor
-   dem Bau dieser Rolle also erst das Ergebnis davon abwarten.
-2. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
-   `list_fakten`/`create_fakt` nach dem Muster von `tools/dokumente.ts` wäre additiv – dabei die
-   Sichtbarkeitsprüfung wie dort explizit im Tool-Code nachbauen, der MCP-Server umgeht RLS.
-
-Bekannte offene Frage bei der Quellen-UI: aktuell kann jedes Mitglied jede selbst angelegte Quelle auch
-wieder löschen (`calendar_sources_delete_own`-Policy), auch wenn andere Mitglieder sie bereits
-abonniert haben – das kollidiert nicht mit RLS, ist aber UX-mäßig nicht ideal (verwaiste Subscriptions).
-Kein Blocker für den MVP, aber im Hinterkopf behalten.
+Derzeit keine fest geplanten. Optional: OAuth für den MCP-Server, damit das Token auch bei claude.ai
+nicht mehr in der Connector-URL steht (siehe README Abschnitt 9).
 
 ## Entschiedene Design-Fragen (17.10.2026)
 
@@ -448,6 +436,12 @@ Die früher offenen Punkte aus KONZEPT.md Abschnitt 11 sind entschieden:
 - **ToDo-Spalten** sind fest: Neu, Geplant, Ergebnis erstellt, Fertig.
 - **Keine Bilder im Hub** (Entscheidung 18.10.2026): statt eines Anhang-Systems der Tag „Enthält
   Bilder" mit Verweis aufs Original-PDF, siehe Dokumente oben.
+- **Keine Rolle „Fraktionsbüro"** (Entscheidung 18.10.2026, gestrichen): `events.herkunft` und
+  `erstellt_von` bleiben, es gibt aber keine Oberfläche, mit der jemand Termine für andere anlegt.
+- **Kalender-Abos entfallen** (`0063`): der Kalender zeigt alles aus gemeinsamen und eigenen Quellen,
+  gefiltert über „Meine Gremien". Gemeinsame Quellen ändern/löschen nur Admins, eigene sieht nur ihr
+  Besitzer – verwaiste Abos kann es nicht mehr geben. Der Einzel-Reimport (`import-ics-source`)
+  lädt nur Quellen, die der Aufrufer sieht.
 - **Kein iCal-Export** (Entscheidung 18.10.2026): der zusammengeführte Kalender bleibt im Cockpit.
 - **Aktive Sitzung**: wird manuell aufgerufen. Kein automatisch bestimmter Sitzungsfokus, keine
   vom Ratsbüro gesetzte Markierung – die Sitzungen stehen im Kalender und in „Demnächst".

@@ -1,6 +1,6 @@
 // Aus der Datenbank erzeugt (Supabase, `supabase gen types typescript` bzw.
 // generate_typescript_types über den Connector) - nicht von Hand bearbeiten,
-// sondern nach einer Migration neu erzeugen. Stand: 0062.
+// sondern nach einer Migration neu erzeugen. Stand: 0063.
 //
 // Gekürzt auf die Zeilen- und Schreibtypen der Tabellen; die Hilfstypen
 // (Tables<>, TablesInsert<> ...) der Vorlage stehen unten in vereinfachter
@@ -192,9 +192,6 @@ export type Database = {
       }
       user_gremien: {
         Row: { gremium: string; user_id: string }
-      }
-      user_source_subscriptions: {
-        Row: { gremium_filter: string | null; source_id: string; user_id: string }
       }
     }
     Functions: {

@@ -228,13 +228,24 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
+  // Wer aufruft, darf nur Quellen neu laden, die er auch sieht: gemeinsame und
+  // eigene (wie calendar_sources_select_shared_or_own). verify_jwt prüft nur,
+  // DASS ein gültiges Konto anfragt, nicht welches - ohne diese Prüfung könnte
+  // jedes Konto mit einer fremden Quell-Id deren Import auslösen. Eine fremde
+  // Quelle meldet dasselbe wie eine nicht vorhandene.
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  const { data: auth } = await supabase.auth.getUser(token)
+  if (!auth.user) {
+    return jsonResponse({ error: 'Nicht angemeldet.' }, 401)
+  }
+
   const { data: source, error: sourceError } = await supabase
     .from('calendar_sources')
     .select('*')
     .eq('id', sourceId)
     .single()
 
-  if (sourceError || !source) {
+  if (sourceError || !source || (source.verwaltet_von !== null && source.verwaltet_von !== auth.user.id)) {
     return jsonResponse({ error: 'Kalenderquelle nicht gefunden.' }, 404)
   }
 

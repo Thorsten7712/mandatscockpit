@@ -60,6 +60,7 @@ import {
 } from './tools/dokumente.ts'
 import { linkTodoDocument, unlinkTodoDocument } from './tools/todo_dokumente.ts'
 import { search } from './tools/search.ts'
+import { createFakt, listFakten, updateFakt } from './tools/fakten.ts'
 
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05']
 const DEFAULT_PROTOCOL_VERSION = '2025-06-18'
@@ -156,7 +157,7 @@ Deno.serve(async (req) => {
           protocolVersion,
           capabilities: { tools: {} },
           serverInfo: { name: 'mandatscockpit-mcp', version: '1.0.0' },
-          instructions: `Verwaltet ToDos, eigene Termine, Sitzungen, Notizen, Presseschauen und den Dokumenten-Hub im MandatsCockpit-Account von ${user.name ?? 'diesem Nutzer'}.`,
+          instructions: `Verwaltet ToDos, eigene Termine, Sitzungen, Notizen, Presseschauen, den Dokumenten-Hub und Zahlen & Fakten im MandatsCockpit-Account von ${user.name ?? 'diesem Nutzer'}.`,
         }),
       )
     }
@@ -264,6 +265,15 @@ Deno.serve(async (req) => {
           break
         case 'search':
           result = await search(db, user.id, args)
+          break
+        case 'list_fakten':
+          result = await listFakten(db, user.id, args)
+          break
+        case 'create_fakt':
+          result = await createFakt(db, user.id, args)
+          break
+        case 'update_fakt':
+          result = await updateFakt(db, user.id, args)
           break
         default:
           return respond(jsonRpcError(id, -32602, `Unbekanntes Tool: ${name}`))

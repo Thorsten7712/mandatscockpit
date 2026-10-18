@@ -134,7 +134,6 @@ const PROFILBILD_TYPEN = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 export default function Settings() {
   const [activeSection, setActiveSection] = useState<SectionId>('profil')
   const [sources, setSources] = useState<CalendarSource[]>([])
-  const [subscribed, setSubscribed] = useState<string[]>([])
   const [userId, setUserId] = useState<string | null>(null)
 
   const [name, setName] = useState('')
@@ -193,11 +192,6 @@ export default function Settings() {
   }
 
   async function loadUserData(uid: string) {
-    const { data: subs } = await supabase
-      .from('user_source_subscriptions')
-      .select('source_id')
-      .eq('user_id', uid)
-    setSubscribed((subs ?? []).map((s) => s.source_id))
     const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', uid)
     const currentSelection = (mine ?? []).map((g) => g.gremium)
     setMeineGremien(currentSelection)
@@ -380,21 +374,6 @@ export default function Settings() {
     if (error) await loadProfile(userId)
   }
 
-  async function toggle(sourceId: string) {
-    if (!userId) return
-    if (subscribed.includes(sourceId)) {
-      await supabase
-        .from('user_source_subscriptions')
-        .delete()
-        .eq('user_id', userId)
-        .eq('source_id', sourceId)
-      setSubscribed((prev) => prev.filter((id) => id !== sourceId))
-    } else {
-      await supabase.from('user_source_subscriptions').insert({ user_id: userId, source_id: sourceId })
-      setSubscribed((prev) => [...prev, sourceId])
-    }
-  }
-
   async function handleAddSource(e: FormEvent) {
     e.preventDefault()
     if (!userId) return
@@ -427,7 +406,6 @@ export default function Settings() {
     const { error } = await supabase.from('calendar_sources').delete().eq('id', sourceId)
     if (error) throw new Error(error.message)
     await loadSources()
-    setSubscribed((prev) => prev.filter((id) => id !== sourceId))
   }
 
   async function handleSaveName(e: FormEvent) {
@@ -764,10 +742,11 @@ export default function Settings() {
                     </span>
                   )}
                 </span>
-                <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500">
-                  Abonniert
-                  <input type="checkbox" checked={subscribed.includes(s.id)} onChange={() => toggle(s.id)} />
-                </label>
+                {/* Sichtbarkeit statt Abo-Haken (bis 0063): Der Kalender zeigt alles
+                    aus gemeinsamen und eigenen Quellen, gefiltert über "Meine Gremien". */}
+                <span className="shrink-0 text-xs text-slate-400">
+                  {s.verwaltet_von === null ? 'Für alle' : 'Nur für dich'}
+                </span>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 {canManage ? (
@@ -817,13 +796,14 @@ export default function Settings() {
                             titel: s.name,
                             was: 'Die Kalenderquelle',
                             // verwaltet_von = null heißt "gemeinsam verwaltet":
-                            // die Quelle steht allen zur Verfügung und andere
-                            // haben sie ggf. abonniert.
+                            // die Quelle steht allen zur Verfügung. Löschen
+                            // dürfen sie nur Admins (Policy
+                            // calendar_sources_delete_own_or_shared_admin).
                             folgen:
                               s.verwaltet_von === null
                                 ? [
                                     'Diese Quelle ist gemeinsam verwaltet und steht allen Mitgliedern zur Verfügung.',
-                                    'Abonnements anderer laufen ins Leere, importierte Sitzungen der Quelle verschwinden mit.',
+                                    'Ihre Sitzungen verschwinden für alle aus dem Kalender, samt Tagesordnungen und ihren Verknüpfungen.',
                                     'Das lässt sich nicht rückgängig machen.',
                                   ]
                                 : undefined,
