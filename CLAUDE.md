@@ -24,7 +24,16 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
   Tabelle `calendar_sources`) mit frei eingetragenen persönlichen Terminen. Termine können auch vom
   Fraktionsbüro für Mitglieder der eigenen Fraktion angelegt werden (Tabelle `events`, Spalte `herkunft`).
   Jede Quelle hat eine `art`: `sitzung` (Gremien-gefiltert via `user_gremien`) oder `termin` (reiner
-  Terminkalender, alle Einträge ungefiltert). Import-Horizont: `MIN_IMPORT_DATUM = 2025-11-11`
+  Terminkalender, alle Einträge ungefiltert). **Öffentlich + persönlich** (seit `0062`): Die
+  gemeinsame Quelle „Stadtrat Iserlohn" liest den **öffentlichen** ALLRIS-Feed (`/public/ics/`),
+  daraus wählt jedes Mitglied seine Gremien. Sein **persönliches** ALLRIS-Abo (`/personal/ics/…?bid=
+  …&sid=…`) hinterlegt jedes Mitglied als eigene, nur für sich sichtbare Quelle mit
+  `nur_ergaenzend = true`: der Import übernimmt daraus nur Termine, deren UID in keiner gemeinsamen
+  Quelle derselben Ebene steht – nichtöffentliche Gremien, Vertretungen, Fraktion –, und deren
+  Gremien sind unter „Meine Gremien" auswählbar. Der Tagesimport läuft deshalb in zwei Runden
+  (erst alle anderen, dann die ergänzenden). Bis 0062 hing die gemeinsame Quelle am persönlichen
+  Abo eines Mitglieds, sichtbar für alle samt `sid`. **Die Feed-URL nie ins Protokoll schreiben**
+  (`ohneUrl()` in beiden Importern), `quelle_url` nur ohne Query. Import-Horizont: `MIN_IMPORT_DATUM = 2025-11-11`
   (ältere Feed-Einträge werden nicht importiert, ältere DB-Bestände bleiben unangetastet erhalten).
   **Nichtöffentliche Gremien** (Kleine Kommissionen, Verwaltungs- und Aufsichtsräte) werden
   importiert wie alle anderen und stehen als Kalendereintrag zur Verfügung – sie bekommen nur
@@ -36,7 +45,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
   angelegt mit dem Konto (`handle_new_user`), Constraint `todo_columns_feste_spalten`. Drag & Drop
   via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle 61 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle 62 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 

@@ -1,6 +1,6 @@
 // Aus der Datenbank erzeugt (Supabase, `supabase gen types typescript` bzw.
 // generate_typescript_types über den Connector) - nicht von Hand bearbeiten,
-// sondern nach einer Migration neu erzeugen. Stand: 0061.
+// sondern nach einer Migration neu erzeugen. Stand: 0062.
 //
 // Gekürzt auf die Zeilen- und Schreibtypen der Tabellen; die Hilfstypen
 // (Tables<>, TablesInsert<> ...) der Vorlage stehen unten in vereinfachter
@@ -20,6 +20,7 @@ export type Database = {
           ics_url: string
           id: string
           name: string
+          nur_ergaenzend: boolean
           verwaltet_von: string | null
         }
       }
