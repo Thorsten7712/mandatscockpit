@@ -364,25 +364,12 @@ export default function Dokumente() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <div className="h-1.5 bg-topbar" aria-hidden="true" />
-      <header className="bg-linear-to-r from-primary to-primary-hover text-white shadow-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">Dokumente</h1>
-            {unreadCount > 0 && (
-              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                {unreadCount}
-              </span>
-            )}
-          </div>
-          <Link to="/" className="mc-btn px-3 py-1.5 text-sm text-white/90 hover:bg-white/15 hover:text-white">
-            Zurück zum Dashboard
-          </Link>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-6 py-8">
+    <div>
+      <div className="mb-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 className="mc-page-title">Dokumente</h1>
+        {unreadCount > 0 && <span className="text-sm text-slate-500">{unreadCount} ungelesen</span>}
+      </div>
+      <div>
         <div className="relative mb-3 max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input

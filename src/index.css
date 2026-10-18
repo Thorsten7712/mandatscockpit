@@ -3,8 +3,11 @@
 /* Partei-Theme-Tokens, Werte kommen aus den [data-theme=...]-Blöcken unten.
  * RGB-Tripel-Syntax, damit Tailwind-Alpha (z. B. bg-primary/10) funktioniert. */
 @theme {
+  /* IBM Plex statt Inter (UI-Umbau 18.10.2026): ruhiger, amtlicher, mit
+   * eigener Mono für Datum, Uhrzeit und Drucksachennummern. */
   --font-sans:
-    'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    'IBM Plex Sans Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
   --color-primary: rgb(var(--mc-primary));
   --color-primary-hover: rgb(var(--mc-primary-hover));
@@ -73,6 +76,12 @@
 
 @utility mc-btn-ghost {
   @apply mc-btn px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-900/5 hover:text-slate-900;
+}
+
+/* Seitentitel im App-Rahmen (AppLayout): jede Seite beginnt mit genau
+ * einem h1 dieser Größe, statt eigener Kopfleisten pro Seite. */
+@utility mc-page-title {
+  @apply text-[28px] leading-tight font-bold tracking-tight text-slate-900;
 }
 
 @utility mc-btn-danger {
