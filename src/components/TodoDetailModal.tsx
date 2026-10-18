@@ -26,10 +26,13 @@ export function TodoDetailModal({
   id,
   onClose,
   onChanged,
+  eingebettet = false,
 }: {
   id: string
   onClose: () => void
   onChanged: () => void
+  /** Als Karte neben dem Board statt als Fenster (Aufgaben-Seite). */
+  eingebettet?: boolean
 }) {
   const [userId, setUserId] = useState<string | null>(null)
   const [todo, setTodo] = useState<TodoRow | null>(null)
@@ -888,6 +891,7 @@ export function TodoDetailModal({
         onClose={onClose}
         left={leftColumn}
         right={rightColumn}
+        eingebettet={eingebettet}
       />
       {loeschDialog}
     </>

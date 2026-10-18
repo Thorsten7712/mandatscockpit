@@ -3404,3 +3404,19 @@ Tagesordnungspunkt öffnet sich **übergangslos in derselben Karte**, nicht als 
   nicht mehr gelesen.
 - „Passende Zahlen & Fakten" aus dem Entwurf ist nicht gebaut: Fakten sind nicht mit Sitzungen
   oder Gremien verknüpft, eine Auswahl wäre geraten.
+
+## 18.10.2026 – UI-Umbau, Schritt 4a: Kalender und Aufgaben
+
+- **Kalender** (`/kalender`, neu geschrieben): Kopf mit vor/Heute/zurück und dem Zeitraum,
+  Umschalter Woche/Liste (auf dem Handy startet die Liste), Filter-Chips nur für das, was im
+  Zeitraum vorkommt (Eigene Termine, Ebene ab zwei Ebenen, Gremien), „+ Termin" als Zeile über
+  dem Kalender. Woche: sieben Spalten, heute in der Parteifarbe getönt, Sitzungen getönt, eigene
+  Termine grau, auf schmalen Bildschirmen waagerecht scrollbar. Liste: die nächsten 90 Tage.
+  Daten aus `ladeTermine(userId, von, bis)` (`src/lib/termine.ts`), aus `heute.ts` herausgelöst;
+  „Diese Woche" auf der Startseite nutzt dieselbe Funktion. `CalendarView.tsx` entfällt.
+- **Aufgaben** (`/aufgaben`): Ab 1024 px Breite öffnet eine Karte rechts neben dem Board statt
+  im Fenster (`TodoBoard` meldet die Auswahl über `onAuswahl`, `stand` lädt nach Änderungen neu;
+  `DetailModalShell eingebettet` stellt beide Spalten untereinander). Schalter „Nur mir
+  zugewiesen" (`nurMir`, nach `zustaendig_user_id`). Spalten des Boards ab 220 px statt 272 px,
+  damit neben der Karte noch zwei nebeneinander passen. Der Gremienfilter aus dem Entwurf fehlt:
+  Karten tragen kein Gremium, nur über eine Sitzung – das wäre eine eigene Ableitung.

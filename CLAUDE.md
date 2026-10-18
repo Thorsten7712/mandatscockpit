@@ -64,9 +64,14 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   neue Tagesordnungspunkte kommender Sitzungen meiner Gremien, seit dem letzten „Alles gesehen";
   Stand in der eigenen Tabelle `neuigkeiten_stand`, nicht in `profiles` – dort für Kolleg*innen
   lesbar; beim ersten Besuch gilt nichts als neu). Das ToDo-Board liegt auf `/aufgaben` (feste
-  Spalten, Drag & Drop, Teilen mit Partei-/Ebenen-/Gliederungs-Kolleg*innen, darunter „Meine
-  Notizen" – `NotizenSection.tsx`), die Termine auf `/kalender` (`CalendarView`, eigene Termine +
-  importierte Sitzungen, mit Detail-Modal), die Sitzungsliste auf `/sitzungen`.
+  Spalten, Drag & Drop, Teilen mit Partei-/Ebenen-/Gliederungs-Kolleg*innen; ab 1024 px öffnet
+  eine Karte rechts neben dem Board – `TodoBoard` mit `onAuswahl`, `TodoDetailModal`/
+  `DetailModalShell` mit `eingebettet` –, schmaler im Fenster; Schalter „Nur mir zugewiesen";
+  darunter „Meine Notizen" – `NotizenSection.tsx`). Der Kalender liegt auf `/kalender`
+  (`src/pages/Kalender.tsx`, Daten aus `ladeTermine()` in `src/lib/termine.ts`, das auch „Diese
+  Woche" speist): Woche als sieben Spalten mit vor/zurück oder Liste der nächsten 90 Tage (Handy:
+  Liste), Filter Eigene Termine/Ebene/Gremium, „+ Termin" für eigene Termine. Sitzungen springen
+  in die Sitzungsansicht, eigene Termine öffnen im Fenster.
 - **Settings** (Sidebar-Navigation): Profil (Foto/Name), Kalenderquellen (eigene + gemeinsam
   verwaltete, strikt privat pro Nutzer getrennt), Meine Gremien/Ebenen/Gliederung, ToDo-Board (Anzeigeoptionen; die Spalten sind fest),
   MCP Connection (persönliches Bearer-Token), Benutzerverwaltung, Kontaktanfragen und Speicher-
