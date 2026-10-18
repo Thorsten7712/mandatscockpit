@@ -1,12 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ChevronLeft, ChevronRight, File, FileImage, FileText, Search, StickyNote, X } from 'lucide-react'
+import { Archive, ChevronLeft, ChevronRight, FileText, Search, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentListenZeile, DokumentRow, Ebene, Profile } from '../lib/types'
 import { DOKUMENT_LISTEN_SPALTEN, ladeDokument, sucheDokumente } from '../lib/dokumentSpalten'
 import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
-import { fileExtension, fileNameFromPath, IMAGE_EXTENSIONS } from '../lib/dateien'
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { TagEditor } from '../components/TagEditor'
 import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
@@ -62,19 +61,9 @@ function gliederungFuer(profile: Profile | null, ebene: Ebene): string | null {
 }
 
 function chipClass(active: boolean): string {
-  return `rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-    active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+  return `min-h-8.5 rounded-full px-3 text-[13px] transition-colors ${
+    active ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
   }`
-}
-
-/** Datei-Typ-Icon für die Listenkarte - variiert nur das Glyph, nicht die
- *  Farbe (bewusst zurückhaltend, kein neues Farbsystem). */
-function docIcon(d: DokumentListenZeile) {
-  if (!d.datei_url) return StickyNote
-  const ext = fileExtension(d.datei_url)
-  if (IMAGE_EXTENSIONS.has(ext)) return FileImage
-  if (ext === 'pdf') return FileText
-  return File
 }
 
 /**
@@ -90,7 +79,17 @@ function docIcon(d: DokumentListenZeile) {
  * Liste heraus: ein geteiltes Dokument verschwindet für alle, das gehört
  * hinter die Detailansicht mit ihrer Warnung, nicht neben einen Listeneintrag.
  */
+/** Ab dieser Breite steht das geöffnete Dokument neben der Liste, darunter im Fenster. */
+const BREIT = '(min-width: 1024px)'
+
 export default function Dokumente() {
+  const [breit, setBreit] = useState(() => window.matchMedia(BREIT).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(BREIT)
+    const beiAenderung = () => setBreit(mq.matches)
+    mq.addEventListener('change', beiAenderung)
+    return () => mq.removeEventListener('change', beiAenderung)
+  }, [])
   const [userId, setUserId] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [documents, setDocuments] = useState<DokumentListenZeile[]>([])
@@ -365,19 +364,22 @@ export default function Dokumente() {
 
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="mc-page-title">Dokumente</h1>
-        {unreadCount > 0 && <span className="text-sm text-slate-500">{unreadCount} ungelesen</span>}
-      </div>
-      <div>
-        <div className="relative mb-3 max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h1 className="mc-page-title">Dokumente</h1>
+          <span className="text-sm text-slate-500">
+            {documents.length.toLocaleString('de-DE')} Drucksachen und Notizen
+            {unreadCount > 0 ? ` · ${unreadCount.toLocaleString('de-DE')} ungelesen` : ''}
+          </span>
+        </div>
+        <div className="relative w-full sm:w-[380px]">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
-            type="text"
-            placeholder="Dokumente durchsuchen..."
+            type="search"
+            placeholder="Titel, Text, Drucksachennummer …"
             value={searchQuery}
             onChange={(e) => mitSeitenreset(setSearchQuery)(e.target.value)}
-            className="mc-input w-full pl-9 pr-8"
+            className="mc-input min-h-11 w-full rounded-[10px]! pl-10 pr-9 text-[15px]!"
           />
           {searchQuery && (
             <button
@@ -390,6 +392,8 @@ export default function Dokumente() {
             </button>
           )}
         </div>
+      </header>
+      <div>
         {ladeFehler && (
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
             Die Dokumente konnten nicht vollständig geladen werden ({ladeFehler}) – die Liste ist
@@ -540,154 +544,181 @@ export default function Dokumente() {
           </form>
         )}
 
-        <ul className="space-y-2">
-          {sichtbare.map((d, idx) => {
-            const ungelesen = istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id))
-            const Icon = docIcon(d)
-            const grund = archivGrundById.get(d.id)
-            return (
-            <li
-              key={d.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => oeffne(d.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  oeffne(d.id)
-                }
-              }}
-              style={{ animationDelay: `${Math.min(idx, 8) * 30}ms` }}
-              className="mc-card mc-animate-slide group flex cursor-pointer items-start justify-between gap-3 p-3 transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
-            >
-              <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleToggleGelesen(d, ungelesen)
-                  }}
-                  aria-label={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
-                  title={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
-                  className="mt-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full hover:bg-slate-100"
-                >
-                  <span
-                    className={`h-2 w-2 rounded-full transition-opacity ${
-                      ungelesen ? 'bg-primary opacity-100' : 'bg-transparent opacity-0 ring-1 ring-slate-300 group-hover:opacity-100'
-                    }`}
-                  />
-                </button>
-                <Icon className="mt-0.5 h-6 w-6 shrink-0 text-slate-400" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className={`truncate text-sm text-slate-900 ${ungelesen ? 'font-bold' : 'font-normal'}`}>
-                      {d.titel}
-                    </span>
-                    {d.ebene && (
-                      <span
-                        className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[d.ebene].chip}`}
-                      >
-                        {EBENE_LABEL[d.ebene]}
-                        {d.gliederung ? ` · ${d.gliederung}` : ''}
-                      </span>
-                    )}
-                    {d.tags.map((t) => (
-                      <span key={t} className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
-                        {t}
-                      </span>
-                    ))}
-                    {grund && (
-                      <span
-                        title={
-                          grund === 'sitzung'
-                            ? 'Archiviert: die verknüpfte Sitzung ist vorbei'
-                            : 'Von Hand archiviert'
+        <div className={breit ? 'mc-card flex h-[calc(100vh-15rem)] min-h-[560px] overflow-hidden' : ''}>
+          <div className={breit ? 'flex w-[400px] shrink-0 flex-col border-r border-slate-100 xl:w-[440px]' : ''}>
+            <ul className={breit ? 'min-h-0 flex-1 overflow-y-auto' : 'mc-card overflow-hidden'}>
+              {sichtbare.map((d) => {
+                const ungelesen = istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id))
+                const grund = archivGrundById.get(d.id)
+                const aktiv = openDoc?.id === d.id
+                // Drucksachennummer aus dem Titel („DS11/0993 – …") in die Kopfzeile ziehen.
+                const ds = d.titel.match(/^(DS[\w/.-]+)\s*[–-]\s*(.+)$/)
+                return (
+                  <li key={d.id} className="border-b border-slate-100 last:border-b-0">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={breit ? aktiv : undefined}
+                      onClick={() => oeffne(d.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          oeffne(d.id)
                         }
-                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500"
+                      }}
+                      className={`group flex cursor-pointer gap-2 px-3 py-3 ${aktiv ? 'bg-primary/10' : 'hover:bg-slate-50'}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleToggleGelesen(d, ungelesen)
+                        }}
+                        aria-label={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
+                        title={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-slate-200/60"
                       >
-                        <Archive className="h-2.5 w-2.5" />
-                        Archiv
+                        <span
+                          className={`h-2 w-2 rounded-full transition-opacity ${
+                            ungelesen ? 'bg-primary opacity-100' : 'bg-transparent opacity-0 ring-1 ring-slate-300 group-hover:opacity-100'
+                          }`}
+                        />
+                      </button>
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <div className="flex items-baseline justify-between gap-2 text-xs text-slate-500">
+                          <span className="truncate font-mono">
+                            {ds ? ds[1] : d.user_id !== userId ? (authorNames.get(d.user_id) ?? 'Unbekannt') : 'Eigenes Dokument'}
+                          </span>
+                          <span className="shrink-0">{formatDate(d.erstellt_am)}</span>
+                        </div>
+                        <span className={`text-[15px] leading-snug text-slate-900 ${ungelesen ? 'font-semibold' : 'font-medium'}`}>
+                          {ds ? ds[2] : d.titel}
+                        </span>
+                        {d.vorschau && <p className="line-clamp-2 text-[13px] leading-snug text-slate-500">{d.vorschau}</p>}
+                        {(d.tags.length > 0 || grund || (d.ebene && ebenenPresent.length > 1)) && (
+                          <div className="flex flex-wrap gap-1">
+                            {d.ebene && ebenenPresent.length > 1 && (
+                              <span
+                                className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[d.ebene].chip}`}
+                              >
+                                {EBENE_LABEL[d.ebene]}
+                              </span>
+                            )}
+                            {d.tags.map((t) => (
+                              <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
+                                {t}
+                              </span>
+                            ))}
+                            {grund && (
+                              <span
+                                title={grund === 'sitzung' ? 'Archiviert: die verknüpfte Sitzung ist vorbei' : 'Von Hand archiviert'}
+                                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500"
+                              >
+                                <Archive className="h-2.5 w-2.5" />
+                                Archiv
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+              {!loading && filtered.length === 0 && (
+                <li className="p-6 text-center text-sm text-slate-400">
+                  {documents.length === 0 ? 'Noch keine Dokumente.' : 'Keine Dokumente für diese Auswahl.'}
+                </li>
+              )}
+            </ul>
+
+            {filtered.length > 0 && (
+              <div
+                className={`flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500 ${
+                  breit ? 'shrink-0 border-t border-slate-100 px-3 py-2' : 'mt-4'
+                }`}
+              >
+                <label className="flex items-center gap-2">
+                  <span>Pro Seite</span>
+                  <select
+                    value={proSeite}
+                    onChange={(e) => handleProSeite(Number(e.target.value))}
+                    className="mc-input w-auto! py-1! text-sm!"
+                  >
+                    {SEITENGROESSEN.map((g) => (
+                      <option key={g} value={g}>
+                        {g === 0 ? 'Alle' : g}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-center gap-2">
+                  <span>
+                    {proSeite === 0
+                      ? `${filtered.length} von ${documents.length}`
+                      : `${(aktuelleSeite - 1) * proSeite + 1}–${Math.min(aktuelleSeite * proSeite, filtered.length)} von ${filtered.length}`}
+                  </span>
+                  {seitenAnzahl > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setSeite(aktuelleSeite - 1)}
+                        disabled={aktuelleSeite <= 1}
+                        aria-label="Vorherige Seite"
+                        className="mc-btn-ghost p-1.5!"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <span className="tabular-nums">
+                        {aktuelleSeite} / {seitenAnzahl}
                       </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {d.user_id !== userId && `${authorNames.get(d.user_id) ?? 'Unbekannt'} · `}
-                    {formatDate(d.erstellt_am)}
-                    {d.datei_url && ` · 📎 ${fileNameFromPath(d.datei_url)}`}
-                  </p>
-                  {d.vorschau && (
-                    <p className="mt-1 line-clamp-2 text-sm text-slate-600">{d.vorschau}</p>
+                      <button
+                        type="button"
+                        onClick={() => setSeite(aktuelleSeite + 1)}
+                        disabled={aktuelleSeite >= seitenAnzahl}
+                        aria-label="Nächste Seite"
+                        className="mc-btn-ghost p-1.5!"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
-            </li>
-            )
-          })}
-          {!loading && filtered.length === 0 && (
-            <li className="mc-card p-6 text-center text-sm text-slate-400">
-              {documents.length === 0 ? 'Noch keine Dokumente.' : 'Keine Dokumente für diese Auswahl.'}
-            </li>
-          )}
-        </ul>
+            )}
+          </div>
 
-        {filtered.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
-            <label className="flex items-center gap-2">
-              <span>Pro Seite</span>
-              <select
-                value={proSeite}
-                onChange={(e) => handleProSeite(Number(e.target.value))}
-                className="mc-input w-auto! py-1! text-sm!"
-              >
-                {SEITENGROESSEN.map((g) => (
-                  <option key={g} value={g}>
-                    {g === 0 ? 'Alle' : g}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex items-center gap-2">
-              <span>
-                {proSeite === 0
-                  ? `${filtered.length} von ${documents.length}`
-                  : `${(aktuelleSeite - 1) * proSeite + 1}–${Math.min(aktuelleSeite * proSeite, filtered.length)} von ${filtered.length}`}
-              </span>
-              {seitenAnzahl > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setSeite(aktuelleSeite - 1)}
-                    disabled={aktuelleSeite <= 1}
-                    aria-label="Vorherige Seite"
-                    className="mc-btn-ghost p-1.5!"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <span className="tabular-nums">
-                    Seite {aktuelleSeite} / {seitenAnzahl}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setSeite(aktuelleSeite + 1)}
-                    disabled={aktuelleSeite >= seitenAnzahl}
-                    aria-label="Nächste Seite"
-                    className="mc-btn-ghost p-1.5!"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </>
+          {breit && (
+            <div className="min-w-0 flex-1">
+              {openDoc ? (
+                <DokumentDetailModal
+                  key={openDoc.id}
+                  document={openDoc}
+                  eingebettet
+                  onClose={() => setOpenDoc(null)}
+                  onGelesenGeaendert={() => userId && loadLeseStatus(userId)}
+                  onDeleted={() => {
+                    setOpenDoc(null)
+                    loadDocuments()
+                  }}
+                />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center text-sm text-slate-400">
+                  <FileText className="h-8 w-8" />
+                  Ein Dokument aus der Liste wählen.
+                </div>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {openDoc && (
+      {!breit && openDoc && (
         <DokumentDetailModal
           document={openDoc}
+          onGelesenGeaendert={() => userId && loadLeseStatus(userId)}
           onClose={() => {
             setOpenDoc(null)
-            if (userId) loadLeseStatus(userId)
             loadDocuments()
           }}
           onDeleted={() => {

@@ -84,6 +84,16 @@
   @apply text-[28px] leading-tight font-bold tracking-tight text-slate-900;
 }
 
+/* Reiter mit Unterstrich (Archiv, Zahlen & Fakten): der aktive trägt
+ * aria-selected="true" und bekommt die Parteifarbe als Linie. Die Leiste
+ * darum: flex + border-b. */
+@utility mc-tab {
+  @apply -mb-px inline-flex min-h-11 items-center gap-1.5 border-b-[3px] border-transparent px-4 text-[15px] font-semibold text-slate-500 transition-colors hover:text-slate-900;
+  &[aria-selected='true'] {
+    @apply border-primary text-slate-900;
+  }
+}
+
 @utility mc-btn-danger {
   @apply mc-btn px-2.5 py-1.5 text-sm text-red-600 hover:bg-red-50;
 }
