@@ -3276,3 +3276,44 @@ nur prüfen, nicht speichern) und hat den Bestand nachgetragen – 131 Vorlagen 
 17; die meisten Pläne stecken in Anlagen. `wartung-bilder.py` setzt den Tag seitdem nur noch und
 entfernt ihn nie, sonst hätte ein erneuter Lauf diese Befunde wieder gelöscht.
 
+## 18.10.2026 – Öffentlicher und persönlicher ALLRIS-Kalender
+
+Nutzeridee: Der öffentliche ALLRIS-Kalender steht allen Mitgliedern der Ebene zur Verfügung, jeder
+wählt daraus seine Gremien. Zusätzlich kann jeder sein persönliches Abo hinterlegen, das nur die
+nichtöffentlichen Gremien beisteuert – alle davon, auch Vertretungen, und auswählbar wie die übrigen
+(die Fraktionssitzung soll man dort ebenfalls an- und abwählen können; die Google-Quelle „CDU
+Fraktion Iserlohn intern" ist ein anderer Kalender und bleibt).
+
+**Befund vorher:** Die gemeinsame Quelle „Stadtrat Iserlohn" hing am persönlichen Abo von Thorsten
+Kois (`/personal/ics/…?bid=…&sid=…`). Gemeinsame Quellen sieht jedes angemeldete Konto, samt URL und
+aller Sitzungen – also auch Fraktion, Aufsichtsräte und Kleine Kommissionen. Zudem schrieb der
+tägliche Import die volle Feed-URL ins Protokoll der Actions-Läufe, und die sind in diesem
+öffentlichen Repository für jeden angemeldeten GitHub-Nutzer lesbar. Empfehlung an den Nutzer: den
+Abo-Link in ALLRIS neu erzeugen und in der persönlichen Quelle eintragen.
+
+**Vergleich der Feeds** (18.10.): öffentlich 47 Termine, persönlich 69, alle 47 mit gleicher UID
+(`ALLRIS-Sitzung-<Nummer>`) auch im persönlichen. Der Abgleich läuft deshalb über die UID, nicht über
+Gremiennamen.
+
+**`0062_persoenlicher_allris_kalender.sql`** (über den Connector, mit Generalprobe):
+- `calendar_sources.nur_ergaenzend`: nur Termine übernehmen, deren UID in keiner gemeinsamen Quelle
+  derselben Ebene vorkommt.
+- Neue private Quelle „ALLRIS persönlich" für Thorsten Kois mit dem bisherigen Abo; die 82 Sitzungen
+  der zehn nichtöffentlichen Gremien (davon 62 Fraktionssitzungen, auch vergangene, die längst aus
+  dem Feed gerollt sind) dorthin **verschoben**, nicht neu angelegt. Keine davon hatte TOPs oder
+  ToDos (Sicherheitsnetz in der Migration). Die gemeinsame Quelle liest jetzt den öffentlichen Feed,
+  113 Sitzungen bleiben dort.
+
+**Import** (`scripts/import-ics.mjs`, `import-ics-source`): zwei Runden, erst alle anderen Quellen,
+dann die ergänzenden (sonst landete eine heute neu veröffentlichte Sitzung doppelt). Ausgeschlossene
+UIDs zählen für die Absage-Erkennung als „im Feed", ein öffentlich gewordener Termin gilt also nicht
+als abgesagt. Keine Feed-URL mehr im Protokoll oder in Fehlerantworten (`ohneUrl()`), `quelle_url`
+fällt nur noch auf die URL ohne Query zurück.
+
+**Oberfläche:** Beim Anlegen/Bearbeiten einer Sitzungsquelle die Option „Persönliches ALLRIS-Abo";
+in der Liste das Kennzeichen „Persönlich, ergänzend".
+
+**Für die anderen Mitglieder:** Wer bisher Fraktion, Aufsichtsräte oder Kleine Kommissionen über
+die gemeinsame Quelle sah, sieht sie erst wieder mit eigenem persönlichem Abo. Kreistag-, LWL- und
+die Google-Quelle bleiben unverändert (Absprache mit den betroffenen Mitgliedern steht aus).
+

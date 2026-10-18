@@ -13,7 +13,7 @@
 // Wiederverwendung zwischen Deno Edge Function und Node-Skript ist ohne
 // gemeinsames Build-Tooling nicht sinnvoll möglich, daher bewusst dupliziert.
 
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import ical from 'npm:node-ical@0.20.1'
 
 const corsHeaders = {
@@ -53,6 +53,45 @@ const MIN_IMPORT_DATUM = new Date('2025-11-11T00:00:00Z')
 function startOfTodayUtcIso(): string {
   const now = new Date()
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+}
+
+// Die Feed-URL gehört in keine Antwort und kein Protokoll: persönliche
+// ALLRIS-Abos tragen eine Sitzungskennung (?bid=...&sid=...). Siehe
+// scripts/import-ics.mjs.
+function ohneUrl(text: string, url: string): string {
+  return text.split(url).join('<Feed-URL>').split(normalizeIcsUrl(url)).join('<Feed-URL>')
+}
+
+// Persönliches ALLRIS-Abo (nur_ergaenzend, 0062): nur Termine übernehmen, deren
+// UID in keiner gemeinsamen Quelle derselben Ebene vorkommt. WICHTIG:
+// identische Logik in scripts/import-ics.mjs.
+async function uidsGemeinsamerQuellen(
+  supabase: SupabaseClient,
+  source: { id: string; ebene: string },
+): Promise<Set<string>> {
+  const { data: gemeinsame, error } = await supabase
+    .from('calendar_sources')
+    .select('id')
+    .is('verwaltet_von', null)
+    .eq('ebene', source.ebene)
+    .neq('id', source.id)
+  if (error) throw new Error(`Gemeinsame Quellen nicht lesbar: ${error.message}`)
+  const ids = ((gemeinsame ?? []) as { id: string }[]).map((q) => q.id)
+  const uids = new Set<string>()
+  if (ids.length === 0) return uids
+  for (let von = 0; ; von += 1000) {
+    const { data, error: fehler } = await supabase
+      .from('sessions')
+      .select('id, ics_uid')
+      .in('source_id', ids)
+      .not('ics_uid', 'is', null)
+      .order('id')
+      .range(von, von + 999)
+    if (fehler) throw new Error(`Gemeinsame Sitzungen nicht lesbar: ${fehler.message}`)
+    for (const z of (data ?? []) as { ics_uid: string }[]) uids.add(z.ics_uid)
+    if ((data ?? []).length < 1000) break
+  }
+  return uids
 }
 
 // node-ical liefert ICS-Properties mit Parametern (z. B. "SUMMARY;LANGUAGE=de:...",
@@ -215,7 +254,7 @@ Deno.serve(async (req) => {
   try {
     parsed = await ical.async.fromURL(normalizeIcsUrl(source.ics_url))
   } catch (err) {
-    return jsonResponse({ error: `Fehler beim Laden des ICS-Feeds: ${String(err)}` }, 502)
+    return jsonResponse({ error: `Fehler beim Laden des ICS-Feeds: ${ohneUrl(String(err), source.ics_url)}` }, 502)
   }
 
   // Wiederkehrende Termine (entry.rrule gesetzt) NICHT hier schon auf
@@ -232,8 +271,17 @@ Deno.serve(async (req) => {
   )
   const entries = expandOccurrences(rawEntries) as (IcalEntry & { uid: string; start: Date })[]
 
+  let ausgeschlossen = new Set<string>()
+  if (source.nur_ergaenzend) {
+    try {
+      ausgeschlossen = await uidsGemeinsamerQuellen(supabase, source)
+    } catch (err) {
+      return jsonResponse({ error: String(err) }, 500)
+    }
+  }
+
   // "termin"-Quellen tragen bewusst kein gremium, siehe scripts/import-ics.mjs.
-  const rows = entries.map((entry) => {
+  const rows = entries.filter((entry) => !ausgeschlossen.has(entry.uid)).map((entry) => {
     const summary = toText(entry.summary)
     return {
       source_id: source.id,
@@ -243,11 +291,12 @@ Deno.serve(async (req) => {
       ebene: source.ebene,
       datum: new Date(entry.start).toISOString(),
       ort: toText(entry.location) || null,
-      quelle_url: toText(entry.url) || source.ics_url,
+      // Ohne Query: die Feed-URL eines persönlichen Abos trägt eine Sitzungskennung.
+      quelle_url: toText(entry.url) || source.ics_url.split('?')[0],
     }
   })
 
-  if (rows.length === 0) {
+  if (entries.length === 0) {
     return jsonResponse({ imported: 0 })
   }
 
@@ -255,15 +304,16 @@ Deno.serve(async (req) => {
   // die Begründung: Insert nutzt den Tabellen-Default, Update lässt einen
   // manuell gesetzten Status wie 'aktiv' unangetastet). Cancel-/Uncancel-
   // Logik läuft danach separat.
-  const { error: upsertError } = await supabase
-    .from('sessions')
-    .upsert(rows, { onConflict: 'source_id,ics_uid' })
+  const { error: upsertError } = rows.length > 0
+    ? await supabase.from('sessions').upsert(rows, { onConflict: 'source_id,ics_uid' })
+    : { error: null }
 
   if (upsertError) {
     return jsonResponse({ error: upsertError.message }, 500)
   }
 
-  const seenUids = new Set(rows.map((r) => r.ics_uid))
+  // Alle UIDs des Feeds, auch die ausgeschlossenen - siehe scripts/import-ics.mjs.
+  const seenUids = new Set(entries.map((e) => e.uid))
   const cancelledInFeed = new Set(entries.filter((e) => e.status === 'CANCELLED').map((e) => e.uid))
   const missingFromFeed = new Set([...existingByUid.keys()].filter((uid) => !seenUids.has(uid)))
   const toCancel = [...new Set([...cancelledInFeed, ...missingFromFeed])]
@@ -279,5 +329,10 @@ Deno.serve(async (req) => {
     await supabase.from('sessions').update({ status: 'geplant' }).eq('source_id', source.id).in('ics_uid', toUncancel)
   }
 
-  return jsonResponse({ imported: rows.length, abgesagt: toCancel.length, reaktiviert: toUncancel.length })
+  return jsonResponse({
+    imported: rows.length,
+    schon_gemeinsam: entries.length - rows.length,
+    abgesagt: toCancel.length,
+    reaktiviert: toUncancel.length,
+  })
 })

@@ -83,6 +83,25 @@ async function loadDistinctGremien(): Promise<GremiumEntry[]> {
   return entries.sort((a, b) => a.gremium.localeCompare(b.gremium, 'de'))
 }
 
+/** Für das persönliche ALLRIS-Abo neben dem öffentlichen Feed (0062): es
+ *  enthält alle öffentlichen Sitzungen noch einmal, übernommen werden nur die
+ *  übrigen. Die Gremien daraus erscheinen wie alle anderen unter "Meine Gremien". */
+function NurErgaenzendFeld({ checked, onChange }: { checked: boolean; onChange: (wert: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-2 text-sm text-slate-600">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5" />
+      <span>
+        Persönliches ALLRIS-Abo
+        <span className="block text-xs text-slate-400">
+          Übernimmt nur Termine, die nicht schon im gemeinsamen Kalender dieser Ebene stehen – also die
+          nichtöffentlichen Gremien, Vertretungen und die Fraktion. Gemeint ist der Abo-Link aus ALLRIS mit
+          „/personal/ics/“ darin. Nur du siehst diese Quelle und ihre Termine.
+        </span>
+      </span>
+    </label>
+  )
+}
+
 const EBENEN: { value: Ebene; label: string }[] = [
   { value: 'kommune', label: 'Kommune' },
   { value: 'kreis', label: 'Kreis' },
@@ -122,6 +141,7 @@ export default function Settings() {
   const [ebene, setEbene] = useState<Ebene>('kommune')
   const [icsUrl, setIcsUrl] = useState('')
   const [art, setArt] = useState<CalendarSourceArt>('sitzung')
+  const [nurErgaenzend, setNurErgaenzend] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { fragen: loeschRueckfrage, dialog: loeschDialog } = useLoeschDialog()
@@ -154,6 +174,7 @@ export default function Settings() {
   const [editEbene, setEditEbene] = useState<Ebene>('kommune')
   const [editIcsUrl, setEditIcsUrl] = useState('')
   const [editArt, setEditArt] = useState<CalendarSourceArt>('sitzung')
+  const [editNurErgaenzend, setEditNurErgaenzend] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -270,6 +291,7 @@ export default function Settings() {
     setEditEbene(s.ebene)
     setEditIcsUrl(s.ics_url)
     setEditArt(s.art)
+    setEditNurErgaenzend(s.nur_ergaenzend)
     setEditError(null)
   }
 
@@ -285,7 +307,13 @@ export default function Settings() {
     setEditError(null)
     const { error } = await supabase
       .from('calendar_sources')
-      .update({ name: editName, ebene: editEbene, ics_url: editIcsUrl, art: editArt })
+      .update({
+        name: editName,
+        ebene: editEbene,
+        ics_url: editIcsUrl,
+        art: editArt,
+        nur_ergaenzend: editArt === 'sitzung' && editNurErgaenzend,
+      })
       .eq('id', editingId)
     if (error) {
       setEditError(error.message)
@@ -374,7 +402,14 @@ export default function Settings() {
     setError(null)
     const { error } = await supabase
       .from('calendar_sources')
-      .insert({ name, ebene, ics_url: icsUrl, art, verwaltet_von: userId })
+      .insert({
+        name,
+        ebene,
+        ics_url: icsUrl,
+        art,
+        verwaltet_von: userId,
+        nur_ergaenzend: art === 'sitzung' && nurErgaenzend,
+      })
     if (error) {
       setError(error.message)
     } else {
@@ -382,6 +417,7 @@ export default function Settings() {
       setEbene('kommune')
       setIcsUrl('')
       setArt('sitzung')
+      setNurErgaenzend(false)
       await loadSources()
     }
     setSaving(false)
@@ -679,6 +715,9 @@ export default function Settings() {
                       </option>
                     ))}
                   </select>
+                  {editArt === 'sitzung' && (
+                    <NurErgaenzendFeld checked={editNurErgaenzend} onChange={setEditNurErgaenzend} />
+                  )}
                   <input
                     type="url"
                     value={editIcsUrl}
@@ -717,6 +756,11 @@ export default function Settings() {
                   {s.art === 'termin' && (
                     <span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                       Terminkalender
+                    </span>
+                  )}
+                  {s.nur_ergaenzend && (
+                    <span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      Persönlich, ergänzend
                     </span>
                   )}
                 </span>
@@ -950,6 +994,7 @@ export default function Settings() {
           </select>
           <p className="mt-1 text-xs text-slate-400">{ARTEN.find((o) => o.value === art)?.hint}</p>
         </div>
+        {art === 'sitzung' && <NurErgaenzendFeld checked={nurErgaenzend} onChange={setNurErgaenzend} />}
         <div>
           <label className="block text-sm text-slate-600 mb-1" htmlFor="source-ics-url">
             ICS-URL

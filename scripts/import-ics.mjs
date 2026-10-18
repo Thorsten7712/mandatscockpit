@@ -55,6 +55,46 @@ function startOfTodayUtcIso() {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
 }
 
+// Die Feed-URL gehört nie ins Protokoll: persönliche ALLRIS-Abos tragen eine
+// Sitzungskennung (?bid=...&sid=...), und die Protokolle dieses öffentlichen
+// Repositorys kann jeder angemeldete GitHub-Nutzer lesen. Bis 18.10.2026 stand
+// sie in jeder "Importiere ..."-Zeile. Auch Fehlermeldungen werden davon
+// bereinigt, falls eine Bibliothek die URL hineinschreibt.
+function ohneUrl(text, url) {
+  return String(text).split(url).join('<Feed-URL>').split(normalizeIcsUrl(url)).join('<Feed-URL>')
+}
+
+// Persönliches ALLRIS-Abo (nur_ergaenzend, 0062): Es enthält alle öffentlichen
+// Sitzungen noch einmal, mit derselben UID. Übernommen wird nur, was in keiner
+// gemeinsamen Quelle derselben Ebene vorkommt - die nichtöffentlichen Gremien.
+// Seitenweise, weil PostgREST höchstens 1.000 Zeilen liefert.
+// WICHTIG: identische Logik in supabase/functions/import-ics-source/index.ts.
+async function uidsGemeinsamerQuellen(source) {
+  const { data: gemeinsame, error } = await supabase
+    .from('calendar_sources')
+    .select('id')
+    .is('verwaltet_von', null)
+    .eq('ebene', source.ebene)
+    .neq('id', source.id)
+  if (error) throw new Error(`Gemeinsame Quellen nicht lesbar: ${error.message}`)
+  const ids = (gemeinsame ?? []).map((q) => q.id)
+  const uids = new Set()
+  if (ids.length === 0) return uids
+  for (let von = 0; ; von += 1000) {
+    const { data, error: fehler } = await supabase
+      .from('sessions')
+      .select('id, ics_uid')
+      .in('source_id', ids)
+      .not('ics_uid', 'is', null)
+      .order('id')
+      .range(von, von + 999)
+    if (fehler) throw new Error(`Gemeinsame Sitzungen nicht lesbar: ${fehler.message}`)
+    data.forEach((z) => uids.add(z.ics_uid))
+    if (data.length < 1000) break
+  }
+  return uids
+}
+
 // node-ical liefert ICS-Properties mit Parametern (z. B. "SUMMARY;LANGUAGE=de:...",
 // wie im echten ALLRIS-Feed von Iserlohn) als { params, val } statt als String.
 // Diese Funktion normalisiert beide Formen zu einem String.
@@ -150,7 +190,7 @@ function expandOccurrences(rawEntries) {
 }
 
 async function importSource(source) {
-  console.log(`Importiere "${source.name}" (${source.ics_url})`)
+  console.log(`Importiere "${source.name}"`)
 
   try {
     // Bestehende Sessions dieser Quelle VOR dem Import laden, um nachher zu
@@ -181,6 +221,7 @@ async function importSource(source) {
         (entry.rrule || new Date(entry.start) >= MIN_IMPORT_DATUM),
     )
     const entries = expandOccurrences(rawEntries)
+    const ausgeschlossen = source.nur_ergaenzend ? await uidsGemeinsamerQuellen(source) : new Set()
 
     // "termin"-Quellen (reiner Terminkalender ohne Gremien-Konzept) tragen
     // bewusst kein gremium - sonst würde die heuristische SUMMARY-Auswertung
@@ -188,7 +229,7 @@ async function importSource(source) {
     // streuen, obwohl diese Quelle ohnehin ungefiltert übernommen wird
     // (siehe CalendarView.tsx/Archiv.tsx: "termin"-Quellen umgehen die
     // Gremien-Auswahl komplett).
-    const rows = entries.map((entry) => {
+    const rows = entries.filter((entry) => !ausgeschlossen.has(entry.uid)).map((entry) => {
       const summary = toText(entry.summary)
       return {
         source_id: source.id,
@@ -198,11 +239,12 @@ async function importSource(source) {
         ebene: source.ebene,
         datum: new Date(entry.start).toISOString(),
         ort: toText(entry.location) || null,
-        quelle_url: toText(entry.url) || source.ics_url,
+        // Ohne Query: die Feed-URL eines persönlichen Abos trägt eine Sitzungskennung.
+        quelle_url: toText(entry.url) || source.ics_url.split('?')[0],
       }
     })
 
-    if (rows.length === 0) {
+    if (entries.length === 0) {
       console.log('  Keine VEVENTs im Feed gefunden.')
       return { source: source.name, imported: 0 }
     }
@@ -211,7 +253,9 @@ async function importSource(source) {
     // Tabellen-Default ('geplant'), beim Update bleibt ein manuell vom
     // Ratsbüro gesetzter Status (z. B. 'aktiv') unangetastet. Cancel-/
     // Uncancel-Logik läuft danach separat (siehe unten).
-    const { error } = await supabase.from('sessions').upsert(rows, { onConflict: 'source_id,ics_uid' })
+    const { error } = rows.length > 0
+      ? await supabase.from('sessions').upsert(rows, { onConflict: 'source_id,ics_uid' })
+      : { error: null }
 
     if (error) {
       console.error(`  Fehler beim Schreiben: ${error.message}`)
@@ -221,7 +265,10 @@ async function importSource(source) {
     // Absagen erkennen: STATUS:CANCELLED im Feed (falls der Feed das nutzt)
     // ODER eine zuvor bekannte UID, die jetzt komplett aus dem Feed
     // verschwunden ist (der Fall beim ALLRIS-Feed).
-    const seenUids = new Set(rows.map((r) => r.ics_uid))
+    // Alle UIDs des Feeds, auch die ausgeschlossenen: ein Termin, der aus dem
+    // persönlichen Abo herausfällt, weil er öffentlich geworden ist, ist nicht
+    // abgesagt.
+    const seenUids = new Set(entries.map((e) => e.uid))
     const cancelledInFeed = new Set(
       entries.filter((e) => e.status === 'CANCELLED').map((e) => e.uid),
     )
@@ -243,6 +290,7 @@ async function importSource(source) {
 
     console.log(
       `  ${rows.length} Termine importiert/aktualisiert.` +
+        (ausgeschlossen.size > 0 ? ` ${entries.length - rows.length} stehen schon im gemeinsamen Kalender.` : '') +
         (toCancel.length > 0 ? ` ${toCancel.length} als abgesagt markiert.` : '') +
         (toUncancel.length > 0 ? ` ${toUncancel.length} wieder aktiviert.` : ''),
     )
@@ -252,8 +300,9 @@ async function importSource(source) {
     // hier lässt sich ein "fetch failed" in den Logs keiner bestimmten Quelle
     // zuordnen, da die Reihenfolge der Log-Zeilen nicht der Reihenfolge der
     // "Importiere ..."-Zeilen entsprechen muss.
-    console.error(`  Fehler beim Verarbeiten der Quelle "${source.name}": ${err.message}`)
-    return { source: source.name, imported: 0, error: err.message }
+    const meldung = ohneUrl(err.message, source.ics_url)
+    console.error(`  Fehler beim Verarbeiten der Quelle "${source.name}": ${meldung}`)
+    return { source: source.name, imported: 0, error: meldung }
   }
 }
 
@@ -268,7 +317,13 @@ async function main() {
     return
   }
 
-  const results = await Promise.all(sources.map(importSource))
+  // Erst die gemeinsamen und alle übrigen Quellen, danach die ergänzenden
+  // persönlichen Abos - die brauchen den frischen Stand der gemeinsamen, sonst
+  // landet eine heute neu veröffentlichte Sitzung doppelt im Kalender.
+  const results = [
+    ...(await Promise.all(sources.filter((s) => !s.nur_ergaenzend).map(importSource))),
+    ...(await Promise.all(sources.filter((s) => s.nur_ergaenzend).map(importSource))),
+  ]
   const failed = results.filter((r) => r.error)
   const totalImported = results.reduce((sum, r) => sum + r.imported, 0)
 

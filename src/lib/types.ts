@@ -167,6 +167,8 @@ export interface CalendarSource {
   /** Token-Id aus src/lib/sourceColors.ts, null = Theme-Primärfarbe */
   farbe: string | null
   art: CalendarSourceArt
+  /** Persönliches ALLRIS-Abo: nur Termine, deren UID in keiner gemeinsamen Quelle derselben Ebene vorkommt (0062) */
+  nur_ergaenzend: boolean
   created_at: string
 }
 
