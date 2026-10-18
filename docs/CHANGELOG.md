@@ -3249,3 +3249,10 @@ es für claude.ai nur mit OAuth in der Function.
 **CLAUDE.md:** veralteter Punkt „RIS-Dokumenten-Import in `documents`" aus den nächsten Schritten
 gestrichen.
 
+## 18.10.2026 – iCal-Export gestrichen, Typen geprüft
+
+Nutzerentscheidung: kein iCal-Export. Aus den nächsten Schritten in CLAUDE.md gestrichen, in KONZEPT.md
+Abschnitt 5 als gestrichen markiert.
+
+`src/lib/database.types.ts` nach 0061 frisch über den Connector erzeugt und Zeile für Zeile mit der
+von Hand gekürzten Fassung verglichen: alle 23 Tabellen identisch, keine Änderung nötig.

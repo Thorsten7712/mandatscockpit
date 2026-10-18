@@ -413,14 +413,13 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
    und löschen, auch nachdem das Mitglied sie bearbeitet hat. Offen dabei: Am Termin hängen Daten des Mitglieds (Notizen, verknüpfte ToDos/Dokumente). Ändert oder löscht das Fraktionsbüro den Termin, dürfen die nicht stillschweigend verschwinden – wie das gelöst wird, gehört in die anstehende Grundsatzüberlegung zu Notizen/Zusammenfassungen/Verknüpfungen und Kalender.
    Die Kalender-Einbindung insgesamt will der Nutzer ebenfalls grundsätzlich neu überdenken – vor
    dem Bau dieser Rolle also erst das Ergebnis davon abwarten.
-2. **iCal-Export** des zusammengeführten persönlichen Kalenders.
-3. **Bilder in Vorlagen**: Markdown kann Bilder referenzieren, aber der Storage-Bucket ist privat
+2. **Bilder in Vorlagen**: Markdown kann Bilder referenzieren, aber der Storage-Bucket ist privat
    und die Lese-Policy hängt an `dokumente.datei_url` – ein eingebettetes Bild wäre nur für den
    Hochladenden sichtbar. Nötig wären eine Jointabelle `dokument_anhaenge` plus ein zweiter
    `exists`-Zweig in `dokumente_storage_select_own_or_shared`. `VorlageAnsicht.tsx` rendert
    Bild-Referenzen bis dahin als Link und lädt bewusst keine fremden URLs (die würden IP und
    Zeitpunkt jedes lesenden Mitglieds an einen fremden Server melden).
-4. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
+3. **MCP-Tools für „Zahlen & Fakten"** (`fakten`, 0039): bislang nur über die Web-UI pflegbar. Ein
    `list_fakten`/`create_fakt` nach dem Muster von `tools/dokumente.ts` wäre additiv – dabei die
    Sichtbarkeitsprüfung wie dort explizit im Tool-Code nachbauen, der MCP-Server umgeht RLS.
 
@@ -436,6 +435,7 @@ Die früher offenen Punkte aus KONZEPT.md Abschnitt 11 sind entschieden:
 - **Zusammenfassungen** werden nicht mehr gebraucht – es gibt nur Notizen (Text) an ToDos und
   Dokumenten. Den Speicherbereich `zusammenfassungen` gibt es nicht mehr.
 - **ToDo-Spalten** sind fest: Neu, Geplant, Ergebnis erstellt, Fertig.
+- **Kein iCal-Export** (Entscheidung 18.10.2026): der zusammengeführte Kalender bleibt im Cockpit.
 - **Aktive Sitzung**: wird manuell aufgerufen. Kein automatisch bestimmter Sitzungsfokus, keine
   vom Ratsbüro gesetzte Markierung – die Sitzungen stehen im Kalender und in „Demnächst".
 
