@@ -155,8 +155,11 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   **Bilder** aus den Original-PDFs (Lagepläne, Karten, Diagramme, Scans) gibt es im Markdown nicht;
   stattdessen trägt ein Dokument den Tag **„Enthält Bilder"**, wenn sich der Blick ins PDF lohnt
   (Entscheidung 18.10.2026 statt eines Anhang-Systems). Gesetzt einmalig für den Bestand von
-  `scripts/wartung-bilder.py` (`wartung.yml`, skript=bilder), künftig von dailyallris beim Import.
-  Regel in beiden gleich: mind. 300×200 px, mind. 10 % der Seite, nicht in 5+ PDFs identisch (Logo).
+  `scripts/wartung-bilder.py` (`wartung.yml`, skript=bilder), seither von dailyallris beim Import,
+  das dabei auch die **Anlagen** der Vorlage in ALLRIS prüft (die liegen nicht im Hub; Bestand
+  nachgetragen: 131 statt 17). Regel überall gleich: mind. 300×200 px, mind. 10 % der Seite,
+  kein wiederkehrendes Logo. Das Wartungsskript **setzt den Tag nur, entfernt ihn nie** – es sieht
+  die Anlagen nicht und würde sonst die Befunde von dailyallris löschen.
   Die **Listenansicht** zeigt nur `vorschau()` – zwei Zeilen reiner Text, bevorzugt der
   Beschlussvorschlag. Niemals `inhalt` ungekürzt rendern: das sind pro Vorlage rund 9.000 Zeichen.
 - **Zahlen & Fakten** (`/fakten`, eigener Reiter in der Kopfleiste): Argumentationshilfen,

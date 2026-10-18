@@ -3271,3 +3271,8 @@ Protokoll kommen nur Zahlen. dailyallris übernimmt dieselbe Regel für neue Vor
 
 `wartung-speicher.mjs` (einmaliger Lauf vom 17.10.) ist entfernt, die Option heißt jetzt `bilder`.
 
+**Nachtrag:** dailyallris prüft jetzt zusätzlich die Anlagen jeder Vorlage aus ALLRIS (Variante b:
+nur prüfen, nicht speichern) und hat den Bestand nachgetragen – 131 Vorlagen tragen den Tag statt
+17; die meisten Pläne stecken in Anlagen. `wartung-bilder.py` setzt den Tag seitdem nur noch und
+entfernt ihn nie, sonst hätte ein erneuter Lauf diese Befunde wieder gelöscht.
+

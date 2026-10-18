@@ -14,8 +14,12 @@ Wann ein Bild zählt (gleiche Regel wie in dailyallris):
 
 Läuft über .github/workflows/wartung.yml (skript=bilder). Das Repository ist
 öffentlich: ins Protokoll kommen nur Zahlen, keine Titel oder Inhalte.
-MODUS=probe zählt nur. Mehrfaches Ausführen ist unschädlich - der Tag wird
-gesetzt bzw. entfernt, bis er zum Befund passt.
+MODUS=probe zählt nur. Mehrfaches Ausführen ist unschädlich.
+
+Das Skript setzt den Tag nur, es entfernt ihn nie: dailyallris prüft seit
+18.10.2026 zusätzlich die Anlagen einer Vorlage aus ALLRIS (Lagepläne,
+Gutachten), die nicht im Hub liegen. Ein Tag ohne Bild im Vorlagen-PDF ist
+deshalb kein Fehler - ein Entfernen würde diese Befunde wieder löschen.
 """
 
 import collections
@@ -97,28 +101,16 @@ print(f"Nicht lesbar: {fehler}")
 print(f"Wiederkehrende Bilder (Logo/Briefkopf), ignoriert: {len(wiederholt)}")
 print(f"Dokumente mit wichtigen Bildern: {len(mit_bildern)}")
 
-setzen, entfernen = [], []
-for d in dokumente:
-    if d["id"] not in kandidaten:
-        continue  # nicht lesbar - Tag unverändert lassen
-    hat_tag = TAG in (d["tags"] or [])
-    soll = d["id"] in mit_bildern
-    if soll and not hat_tag:
-        setzen.append(d)
-    elif hat_tag and not soll:
-        entfernen.append(d)
-print(f"Tag setzen: {len(setzen)}, Tag entfernen: {len(entfernen)}")
+setzen = [d for d in dokumente if d["id"] in mit_bildern and TAG not in (d["tags"] or [])]
+print(f"Tag setzen: {len(setzen)}")
 
 if aendern:
-    for d in setzen + entfernen:
-        tags = [t for t in (d["tags"] or []) if t != TAG]
-        if d in setzen:
-            tags.append(TAG)
+    for d in setzen:
         r = sitzung.patch(
             f"{url}/rest/v1/dokumente",
             params={"id": f"eq.{d['id']}"},
-            json={"tags": tags},
+            json={"tags": (d["tags"] or []) + [TAG]},
             headers={"Prefer": "return=minimal"},
         )
         r.raise_for_status()
-    print(f"Aktualisiert: {len(setzen) + len(entfernen)}")
+    print(f"Aktualisiert: {len(setzen)}")
