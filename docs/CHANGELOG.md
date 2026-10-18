@@ -3340,3 +3340,22 @@ absichern.
   `tools/dokumente.ts` jetzt, statt sie ein zweites Mal zu schreiben.
 - **Fraktionsbüro:** gestrichen, aus den nächsten Schritten entfernt.
 
+## 18.10.2026 – UI-Umbau, Schritt 1: App-Rahmen mit Leiste
+
+Wunsch: die Oberfläche grundlegend neu ordnen. Aus vier Entwürfen (Design-Canvas) hat Thorsten die
+Kombination aus A (Arbeitsplatz mit Leiste) und B (Sitzung im Mittelpunkt) gewählt, mit drei
+Vorgaben: dieselbe linke Leiste auf allen Seiten, einklappbar; dieselbe Inhaltsbreite überall; die
+Partei-Themes gelten weiter. Ein Tagesordnungspunkt öffnet sich übergangslos in der Sitzungsansicht
+(kommt mit Schritt 3).
+
+- **`AppLayout`** als Layout-Route in `App.tsx`: Leiste links (240 px, eingeklappt 72 px, Zustand
+  pro Gerät in `localStorage`), auf dem Handy Tab-Leiste unten mit „Mehr"-Blatt. Der Ungelesen-Zähler
+  der Dokumente wandert aus dem Dashboard-Kopf in die Leiste und wird bei jedem Seitenwechsel neu
+  gezählt. Partei-Logo oben in der Leiste, Profil/Abmelden unten.
+- Die eigenen Kopfleisten (Verlauf in Parteifarbe, „Zurück zum Dashboard") von Dashboard, Archiv,
+  Dokumente, Zahlen & Fakten, Einstellungen und Termindetail sind entfallen – jede Seite beginnt mit
+  ihrem Titel (`mc-page-title`).
+- Neue Routen `/kalender`, `/sitzungen`, `/aufgaben` als Zwischenstand aus den vorhandenen
+  Bausteinen (CalendarView; Liste der kommenden Sitzungen der eigenen Gremien; ToDo-Board + Notizen).
+  Startseite, Sitzungsansicht und die übrigen Seiten folgen in den Schritten 2–4.
+- Schrift: IBM Plex Sans statt Inter, IBM Plex Mono für Datum, Uhrzeit und Drucksachennummern.

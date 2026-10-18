@@ -183,9 +183,15 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   deshalb nur noch, für welche der eigenen Ebenen der Fakt gilt. RLS spiegelt exakt die vier
   `dokumente`-Policies. MCP-Tools `list_fakten`/`create_fakt`/`update_fakt` (`tools/fakten.ts`) bauen
   diese Sichtbarkeit im Code nach (`darfFaktSehen()`); Löschen nur in der Web-UI.
-- **Kopfleiste des Dashboards**: die drei inhaltlichen Ziele in fester Reihenfolge – Dokumente,
-  Zahlen & Fakten, Archiv. Einstellungen und Abmelden liegen in einem Klappmenü hinter dem eigenen
-  Profilbild links (schließt per Klick daneben und per Escape).
+- **App-Rahmen** (`src/components/AppLayout.tsx`, UI-Umbau seit 18.10.2026): alle Seiten hinter
+  dem Login hängen als verschachtelte Routen an **einer** Layout-Route in `App.tsx`. Links eine
+  Leiste (Heute, Kalender, Sitzungen, Aufgaben, Dokumente mit Ungelesen-Zähler, Zahlen & Fakten,
+  Archiv; unten Profil → Einstellungen, Abmelden, Einklappen 240 ↔ 72 px), auf dem Handy statt
+  dessen eine Tab-Leiste unten (Heute, Sitzungen, Aufgaben, Dokumente, Mehr). Inhalt höchstens
+  1440 px breit, oben ein 4-px-Streifen in der Parteifarbe (`bg-topbar`). Seiten bringen **kein
+  eigenes Chrome** mit, nur ein `h1` mit `mc-page-title` und ihren Inhalt. Schrift IBM Plex Sans,
+  Datum/Uhrzeit/Drucksachennummern in IBM Plex Mono (`font-mono`). Freigegebener Entwurf:
+  Design-Canvas „MandatsCockpit – UI-Struktur" (A+B kombiniert).
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
@@ -335,8 +341,9 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   `src/lib/dokumenteArchiv.ts`). Server-seitig ist `.lt('datum', ...)` unproblematisch.
 - **`Number(localStorage.getItem(...))` ist `0`, wenn nichts gespeichert ist** – tückisch, wenn `0`
   ein gültiger Wert der Einstellung ist (in `Dokumente.tsx` bedeutet 0 „Alle anzeigen"). Immer erst
-  explizit auf `null` prüfen. `localStorage` wird im Projekt nur an dieser einen Stelle genutzt, für
-  eine reine Anzeige-Vorliebe pro Gerät; alles, was geräteübergreifend gelten muss, gehört in die DB.
+  explizit auf `null` prüfen. `localStorage` nutzt das Projekt nur für reine Anzeige-Vorlieben pro
+  Gerät (Seitengröße im Hub, Leselayout im Dokument-Modal, eingeklappte Leiste in `AppLayout`, dort
+  in try/catch); alles, was geräteübergreifend gelten muss, gehört in die DB.
 - **Zwei zusammengehörige States immer im selben Tick setzen**: `loadDocuments()` in `Dokumente.tsx`
   setzt erst die Sitzungs-Map und dann die Dokumente. Umgekehrt rendert React einmal mit voller
   Dokumentenliste und leerer Sitzungs-Map – und dann gilt kein Dokument als archiviert, das Archiv
