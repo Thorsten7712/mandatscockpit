@@ -32,6 +32,7 @@ function Card({
   hatDokument,
   zustaendigName,
   mirZugewiesen,
+  ausgewaehlt,
 }: {
   todo: TodoRow
   settings: TodoBoardSettings | null
@@ -42,6 +43,8 @@ function Card({
   zustaendigName: string | null
   /** Mir zugewiesen, aber von jemand anderem angelegt - hervorgehoben. */
   mirZugewiesen: boolean
+  /** Gerade rechts daneben geöffnet (Aufgaben-Seite). */
+  ausgewaehlt: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: todo.id })
   // touchAction: 'none' ist auf Touch-Geräten (iPad) nötig, sonst interpretiert
@@ -60,7 +63,7 @@ function Card({
       {...listeners}
       {...attributes}
       onClick={onOpen}
-      className={`cursor-grab select-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-xs transition-shadow duration-150 hover:shadow-md active:cursor-grabbing ${isDragging ? 'z-10 shadow-lg ring-2 ring-primary/40' : ''}`}
+      className={`cursor-grab select-none rounded-lg border bg-white px-3 py-2.5 shadow-xs transition-shadow duration-150 hover:shadow-md active:cursor-grabbing ${ausgewaehlt ? 'border-primary ring-1 ring-primary' : 'border-slate-200'} ${isDragging ? 'z-10 shadow-lg ring-2 ring-primary/40' : ''}`}
     >
       <p className={`text-sm font-medium ${todo.erledigt ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
         {todo.ebene && <span title="Für Kolleg*innen freigebbar/geteilt">🔗 </span>}
@@ -99,6 +102,7 @@ function Column({
   dokumentIds,
   namen,
   userId,
+  ausgewaehltId,
 }: {
   column: TodoColumn
   entries: TodoRow[]
@@ -110,6 +114,7 @@ function Column({
   dokumentIds: Set<string>
   namen: Map<string, string>
   userId: string | null
+  ausgewaehltId: string | null
 }) {
   const { setNodeRef } = useDroppable({ id: column.id })
   const [newCardTitel, setNewCardTitel] = useState('')
@@ -142,6 +147,7 @@ function Column({
             hatDokument={dokumentIds.has(t.id)}
             zustaendigName={t.zustaendig_user_id ? (namen.get(t.zustaendig_user_id) ?? '…') : null}
             mirZugewiesen={t.zustaendig_user_id === userId && t.user_id !== userId}
+            ausgewaehlt={t.id === ausgewaehltId}
           />
         ))}
       </div>
@@ -160,7 +166,21 @@ function Column({
   )
 }
 
-export function TodoBoard() {
+export function TodoBoard({
+  ausgewaehltId = null,
+  onAuswahl,
+  stand = 0,
+  nurMir = false,
+}: {
+  /** Mit onAuswahl öffnet ein Klick die Karte nicht im eigenen Fenster,
+   *  sondern meldet sie dem Aufrufer, der sie daneben zeigt. */
+  ausgewaehltId?: string | null
+  onAuswahl?: (id: string) => void
+  /** Hochzählen lädt das Board neu, z. B. nach Änderungen daneben. */
+  stand?: number
+  /** Nur Karten, für die ich zuständig bin. */
+  nurMir?: boolean
+} = {}) {
   const [userId, setUserId] = useState<string | null>(null)
   const [columns, setColumns] = useState<TodoColumn[]>([])
   const [todos, setTodos] = useState<TodoRow[]>([])
@@ -214,6 +234,12 @@ export function TodoBoard() {
       setSettings(settingsRow)
     })
   }, [])
+
+  useEffect(() => {
+    if (stand > 0 && userId) load(userId)
+    // load ist eine einfache Funktion im Render-Scope; neu laden nur bei neuem Stand.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stand])
 
   // Für die Kartenanzeige ("Titel + Datum des Termins" statt nur "Termin")
   // werden die verknüpften Events/Sitzungen gezielt nachgeladen - nur die
@@ -349,7 +375,9 @@ export function TodoBoard() {
   const terminLabels: Record<string, string | null> = {}
   for (const t of todos) terminLabels[t.id] = terminLabelFor(t)
 
-  const sichtbareTodos = todos.filter((t) => placementByTodoId.has(t.id) && istAufBoardSichtbar(t))
+  const sichtbareTodos = todos.filter(
+    (t) => placementByTodoId.has(t.id) && istAufBoardSichtbar(t) && (!nurMir || t.zustaendig_user_id === userId),
+  )
   const entriesByColumn = new Map<string, TodoRow[]>()
   for (const t of sichtbareTodos) {
     const placement = placementByTodoId.get(t.id)!
@@ -369,7 +397,7 @@ export function TodoBoard() {
             Spalten brechen sie in weitere Zeilen um, bei wenigen teilen sie
             sich die Breite. Drag & Drop über Zeilen hinweg funktioniert,
             weil dnd-kit rein pointer-basiert droppt. */}
-        <div className="grid items-start gap-4 grid-cols-[repeat(auto-fill,minmax(272px,1fr))]">
+        <div className="grid items-start gap-3.5 grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
           {sortedColumns.map((col) => (
             <Column
               key={col.id}
@@ -377,7 +405,8 @@ export function TodoBoard() {
               entries={entriesByColumn.get(col.id) ?? []}
               settings={settings}
               onAddCard={(titel) => handleAddCard(col.id, titel)}
-              onOpenTodo={setOpenTodoId}
+              onOpenTodo={onAuswahl ?? setOpenTodoId}
+              ausgewaehltId={ausgewaehltId}
               canAddCard={col.id === neuColumn.id}
               terminLabels={terminLabels}
               dokumentIds={dokumentIds}

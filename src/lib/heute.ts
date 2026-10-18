@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { inStuecken } from './alleZeilen'
+import { ladeTermine, type KalenderEintrag } from './termine'
 import { startOfTodayIso } from './format'
 import type { TodoColumn } from './types'
 
@@ -11,18 +12,8 @@ import type { TodoColumn } from './types'
 
 const TAGE_WOCHE = 7
 
-export interface WochenEintrag {
-  kind: 'session' | 'event'
-  id: string
-  titel: string
-  start: string
-  ort: string | null
-  abgesagt: boolean
-  /** Beginn liegt beim Laden schon zurück (heute früher). */
-  vorbei: boolean
-  /** Nur bei Sitzungen: Anzahl der Tagesordnungspunkte (0 = noch keine). */
-  tops: number | null
-}
+/** Ein Eintrag in „Diese Woche“ – derselbe Typ wie im Kalender. */
+export type WochenEintrag = KalenderEintrag
 
 export interface MeineAufgabe {
   id: string
@@ -50,59 +41,7 @@ function faelligMs(faellig: string): number {
 export async function ladeWoche(userId: string): Promise<WochenEintrag[]> {
   const von = startOfTodayIso()
   const bis = new Date(Date.parse(von) + TAGE_WOCHE * 24 * 60 * 60 * 1000).toISOString()
-
-  const [gremienErgebnis, quellenErgebnis, eventsErgebnis] = await Promise.all([
-    supabase.from('user_gremien').select('gremium').eq('user_id', userId),
-    supabase.from('calendar_sources').select('id, art'),
-    supabase.from('events').select('id, titel, start, ort, status').gte('start', von).lt('start', bis).order('start'),
-  ])
-  const gremien = (gremienErgebnis.data ?? []).map((g) => g.gremium as string)
-  const terminQuellen = (quellenErgebnis.data ?? []).filter((q) => q.art === 'termin').map((q) => q.id as string)
-
-  // Zwei .in()-Abfragen statt eines .or()-Strings, wie in CalendarView: Gremien-
-  // namen mit Kommas oder Klammern würden das PostgREST-Filterformat brechen.
-  const spalten = 'id, titel, gremium, datum, ort, status'
-  const [nachGremium, nachQuelle] = await Promise.all([
-    gremien.length > 0
-      ? supabase.from('sessions').select(spalten).in('gremium', gremien).gte('datum', von).lt('datum', bis)
-      : Promise.resolve({ data: [] }),
-    terminQuellen.length > 0
-      ? supabase.from('sessions').select(spalten).in('source_id', terminQuellen).gte('datum', von).lt('datum', bis)
-      : Promise.resolve({ data: [] }),
-  ])
-  const sitzungen = new Map<string, { id: string; titel: string; gremium: string | null; datum: string; ort: string | null; status: string }>()
-  for (const s of [...(nachGremium.data ?? []), ...(nachQuelle.data ?? [])]) sitzungen.set(s.id, s)
-
-  const topsJeSitzung = new Map<string, number>()
-  for (const ids of inStuecken([...sitzungen.keys()])) {
-    const { data } = await supabase.from('sitzung_dokumente').select('session_id').in('session_id', ids)
-    for (const z of data ?? []) topsJeSitzung.set(z.session_id, (topsJeSitzung.get(z.session_id) ?? 0) + 1)
-  }
-
-  const jetzt = Date.now()
-  const eintraege: WochenEintrag[] = [
-    ...[...sitzungen.values()].map((s) => ({
-      kind: 'session' as const,
-      id: s.id,
-      titel: s.gremium ?? s.titel,
-      start: s.datum,
-      ort: s.ort,
-      abgesagt: s.status === 'abgesagt',
-      vorbei: Date.parse(s.datum) < jetzt,
-      tops: topsJeSitzung.get(s.id) ?? 0,
-    })),
-    ...(eventsErgebnis.data ?? []).map((e) => ({
-      kind: 'event' as const,
-      id: e.id,
-      titel: e.titel,
-      start: e.start,
-      ort: e.ort,
-      abgesagt: e.status === 'abgesagt',
-      vorbei: Date.parse(e.start) < jetzt,
-      tops: null,
-    })),
-  ]
-  return eintraege.sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
+  return ladeTermine(userId, von, bis)
 }
 
 export async function ladeMeineAufgaben(userId: string): Promise<AufgabenStand> {
