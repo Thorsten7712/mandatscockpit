@@ -9,6 +9,7 @@ import { formatDateTime } from '../lib/format'
 import { inStuecken } from '../lib/alleZeilen'
 import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
 import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
+import { archivGrund, ladeSitzungenJeDokument } from '../lib/dokumenteArchiv'
 
 // Gleiche Liste wie in Settings.tsx/Archiv.tsx (Kalenderquellen- bzw.
 // Sitzung-nachtragen-Formular) - bewusst dupliziert, siehe CLAUDE.md.
@@ -95,6 +96,9 @@ export function TerminDetailPanel({
   // Nur für layout="eingebettet": Kennzeichen an den Tagesordnungspunkten.
   const [kartenJeDokument, setKartenJeDokument] = useState<Map<string, number>>(new Map())
   const [gelesenJeDokument, setGelesenJeDokument] = useState<Map<string, string>>(new Map())
+  // Archiviertes gilt als gelesen – eine Vorlage aus einer vergangenen Sitzung
+  // ist nur dann „neu", wenn sie noch auf einer kommenden Tagesordnung steht.
+  const [archiviertIds, setArchiviertIds] = useState<Set<string>>(new Set())
   const [nurMitDrucksache, setNurMitDrucksache] = useState(false)
   const [nurUngelesen, setNurUngelesen] = useState(false)
   // Auf dem Handy steht entweder die Tagesordnung oder der gewählte Punkt da.
@@ -366,9 +370,14 @@ export function TerminDetailPanel({
         for (const z of verknuepft.data ?? []) karten.set(z.dokument_id, (karten.get(z.dokument_id) ?? 0) + 1)
         for (const z of lesestand.data ?? []) gelesen.set(z.dokument_id, z.gelesen_am)
       }
+      const { sitzungen } = await ladeSitzungenJeDokument(
+        supabase,
+        linkedDokumente.map((d) => d.id),
+      )
       if (abgebrochen) return
       setKartenJeDokument(karten)
       setGelesenJeDokument(gelesen)
+      setArchiviertIds(new Set(linkedDokumente.filter((d) => archivGrund(d, sitzungen)).map((d) => d.id)))
     }
     ladeKennzeichen()
     return () => {
@@ -654,7 +663,9 @@ export function TerminDetailPanel({
     const dokById = new Map(linkedDokumente.map((d) => [d.id, d]))
     const ungelesen = (dokId: string) => {
       const d = dokById.get(dokId)
-      return d ? istDokumentUngelesen(d, notizenJeDokument.get(dokId) ?? [], gelesenJeDokument.get(dokId)) : false
+      return d
+        ? istDokumentUngelesen(d, notizenJeDokument.get(dokId) ?? [], gelesenJeDokument.get(dokId), archiviertIds.has(dokId))
+        : false
     }
     const sichtbar = tagesordnung.filter((t) => {
       if (nurMitDrucksache && !t.dokument_id) return false

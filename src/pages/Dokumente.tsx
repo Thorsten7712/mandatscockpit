@@ -304,13 +304,15 @@ export default function Dokumente() {
   const eigeneEbenen = profile?.ebenen ?? []
   const ebenenPresent = EBENEN_ORDER.filter((e) => documents.some((d) => d.ebene === e))
   const tagsPresent = Array.from(new Set(documents.flatMap((d) => d.tags))).sort((a, b) => a.localeCompare(b, 'de'))
-  const unreadCount = documents.filter((d) => istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id))).length
-
   // Archiv-Zustand einmal je Render für alle Dokumente (siehe
-  // src/lib/dokumenteArchiv.ts) - wird sowohl zum Ausblenden als auch für das
-  // Archiv-Fähnchen an der Karte gebraucht.
+  // src/lib/dokumenteArchiv.ts) - wird zum Ausblenden, für das Archiv-Fähnchen
+  // und für den Lesestand gebraucht: Archiviertes gilt als gelesen.
   const archivGrundById = new Map(documents.map((d) => [d.id, archivGrund(d, sitzungen)]))
   const archivGesamt = Array.from(archivGrundById.values()).filter(Boolean).length
+  const offenGesamt = documents.length - archivGesamt
+  const istUngelesen = (d: DokumentListenZeile) =>
+    istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id), Boolean(archivGrundById.get(d.id)))
+  const unreadCount = documents.filter(istUngelesen).length
 
   // Wer sucht, sucht im Gesamtbestand: eine aktive Suche zieht das Archiv
   // automatisch mit hinein, auch ohne den Archiv-Schalter (Nutzerwunsch).
@@ -368,8 +370,9 @@ export default function Dokumente() {
         <div className="flex flex-col gap-0.5">
           <h1 className="mc-page-title">Dokumente</h1>
           <span className="text-sm text-slate-500">
-            {documents.length.toLocaleString('de-DE')} Drucksachen und Notizen
+            {offenGesamt.toLocaleString('de-DE')} offen
             {unreadCount > 0 ? ` · ${unreadCount.toLocaleString('de-DE')} ungelesen` : ''}
+            {archivGesamt > 0 ? ` · ${archivGesamt.toLocaleString('de-DE')} im Archiv` : ''}
           </span>
         </div>
         <div className="relative w-full sm:w-[380px]">
@@ -548,7 +551,7 @@ export default function Dokumente() {
           <div className={breit ? 'flex w-[400px] shrink-0 flex-col border-r border-slate-100 xl:w-[440px]' : ''}>
             <ul className={breit ? 'min-h-0 flex-1 overflow-y-auto' : 'mc-card overflow-hidden'}>
               {sichtbare.map((d) => {
-                const ungelesen = istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id))
+                const ungelesen = istUngelesen(d)
                 const grund = archivGrundById.get(d.id)
                 const aktiv = openDoc?.id === d.id
                 // Drucksachennummer aus dem Titel („DS11/0993 – …") in die Kopfzeile ziehen.
@@ -568,22 +571,27 @@ export default function Dokumente() {
                       }}
                       className={`group flex cursor-pointer gap-2 px-3 py-3 ${aktiv ? 'bg-primary/10' : 'hover:bg-slate-50'}`}
                     >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleToggleGelesen(d, ungelesen)
-                        }}
-                        aria-label={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
-                        title={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-slate-200/60"
-                      >
-                        <span
-                          className={`h-2 w-2 rounded-full transition-opacity ${
-                            ungelesen ? 'bg-primary opacity-100' : 'bg-transparent opacity-0 ring-1 ring-slate-300 group-hover:opacity-100'
-                          }`}
-                        />
-                      </button>
+                      {/* Im Archiv gilt alles als gelesen – dort gibt es nichts umzuschalten. */}
+                      {grund ? (
+                        <span className="w-6 shrink-0" />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleToggleGelesen(d, ungelesen)
+                          }}
+                          aria-label={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
+                          title={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-slate-200/60"
+                        >
+                          <span
+                            className={`h-2 w-2 rounded-full transition-opacity ${
+                              ungelesen ? 'bg-primary opacity-100' : 'bg-transparent opacity-0 ring-1 ring-slate-300 group-hover:opacity-100'
+                            }`}
+                          />
+                        </button>
+                      )}
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
                         <div className="flex items-baseline justify-between gap-2 text-xs text-slate-500">
                           <span className="truncate font-mono">
