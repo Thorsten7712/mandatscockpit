@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { PresseschauSection } from '../components/PresseschauSection'
 import { TodoDetailModal } from '../components/TodoDetailModal'
 import { TerminDetailModal } from '../components/TerminDetailModal'
-import { ladeNeuigkeiten, neuigkeitenGesehen, type Neuigkeiten } from '../lib/neuigkeiten'
-import { aufgabeErledigen, ladeMeineAufgaben, ladeWoche, type AufgabenStand, type WochenEintrag } from '../lib/heute'
+import { DokumentDetailModal } from '../components/DokumentDetailModal'
+import { ladeDokument } from '../lib/dokumentSpalten'
+import type { DokumentRow } from '../lib/types'
+import { ladeNeuigkeiten, neuigkeitenGesehen, type Neuigkeiten, type Ziel } from '../lib/neuigkeiten'
+import {
+  aufgabeErledigen,
+  ladeMeineAufgaben,
+  ladeNaechsteSitzung,
+  ladeWoche,
+  type AufgabenStand,
+  type WochenEintrag,
+} from '../lib/heute'
 import { formatDateTime, formatTime } from '../lib/format'
 
 /**
@@ -45,10 +55,21 @@ export default function Dashboard() {
   const [neuigkeiten, setNeuigkeiten] = useState<Neuigkeiten | null>(null)
   const [fehler, setFehler] = useState<string | null>(null)
   const [offen, setOffen] = useState<Offen | null>(null)
+  const [offenesDokument, setOffenesDokument] = useState<DokumentRow | null>(null)
+  const [naechsteSitzung, setNaechsteSitzung] = useState<{ id: string; titel: string; start: string } | null | undefined>(
+    undefined,
+  )
+  const navigate = useNavigate()
 
   const laden = useCallback(async (uid: string) => {
     try {
-      const [w, a, n] = await Promise.all([ladeWoche(uid), ladeMeineAufgaben(uid), ladeNeuigkeiten(uid)])
+      const [w, a, n, s] = await Promise.all([
+        ladeWoche(uid),
+        ladeMeineAufgaben(uid),
+        ladeNeuigkeiten(uid),
+        ladeNaechsteSitzung(uid),
+      ])
+      setNaechsteSitzung(s)
       setWoche(w)
       setAufgaben(a)
       setNeuigkeiten(n)
@@ -97,7 +118,15 @@ export default function Dashboard() {
     setNeuigkeiten({ ...neuigkeiten, seit: new Date().toISOString(), neu: [] })
   }
 
-  const naechsteSitzung = woche?.find((e) => e.kind === 'session' && !e.abgesagt && !e.vorbei)
+  async function oeffneZiel(ziel: Ziel) {
+    if (ziel.art === 'todo') setOffen(ziel)
+    else if (ziel.art === 'sitzung') setOffen({ art: 'session', id: ziel.id })
+    else if (ziel.art === 'dokumente') navigate('/dokumente')
+    else {
+      const dok = await ladeDokument(ziel.id)
+      if (dok) setOffenesDokument(dok)
+    }
+  }
   const ueberfaellig = aufgaben?.offen.filter((a) => a.ueberfaellig).length ?? 0
   const faelligDieseWoche = aufgaben?.offen.filter((a) => a.dieseWoche).length ?? 0
 
@@ -150,7 +179,7 @@ export default function Dashboard() {
         ) : (
           <div className={`${kachel} col-span-2 lg:col-span-1`}>
             <span className="text-[13px] text-slate-500">Nächste Sitzung</span>
-            <span className="text-[15px] text-slate-500">{woche ? 'Keine in den nächsten 7 Tagen' : '…'}</span>
+            <span className="text-[15px] text-slate-500">{naechsteSitzung === null ? 'Keine geplant' : '…'}</span>
           </div>
         )}
         <Link to="/aufgaben" className={`${kachel} transition-colors hover:border-primary/40`}>
@@ -301,7 +330,7 @@ export default function Dashboard() {
               <li key={n.schluessel} className="border-b border-slate-100 last:border-b-0">
                 <button
                   type="button"
-                  onClick={() => setOffen(n.ziel.art === 'todo' ? n.ziel : { art: 'session', id: n.ziel.id })}
+                  onClick={() => oeffneZiel(n.ziel)}
                   className="flex w-full flex-col gap-0.5 py-2.5 text-left"
                 >
                   <span className="text-xs font-semibold uppercase tracking-wider text-primary">{n.art}</span>
@@ -315,6 +344,16 @@ export default function Dashboard() {
       </div>
 
       {offen?.art === 'todo' && <TodoDetailModal id={offen.id} onClose={schliessen} onChanged={() => {}} />}
+      {offenesDokument && (
+        <DokumentDetailModal
+          document={offenesDokument}
+          onClose={() => setOffenesDokument(null)}
+          onDeleted={() => {
+            setOffenesDokument(null)
+            if (userId) laden(userId)
+          }}
+        />
+      )}
       {(offen?.art === 'session' || offen?.art === 'event') && (
         <TerminDetailModal kind={offen.art} id={offen.id} onClose={schliessen} />
       )}

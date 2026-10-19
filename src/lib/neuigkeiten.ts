@@ -11,7 +11,16 @@ import type { SessionRow } from './types'
 const TAGE_SITZUNGEN = 7
 const TAGE_AUFGABEN = 3
 
-export type Ziel = { art: 'todo'; id: string } | { art: 'sitzung'; id: string }
+export type Ziel =
+  | { art: 'todo'; id: string }
+  | { art: 'sitzung'; id: string }
+  | { art: 'dokument'; id: string }
+  /** Zu viele neue Drucksachen für einzelne Zeilen – führt in den Hub. */
+  | { art: 'dokumente' }
+
+/** Bis zu so vielen neuen Drucksachen eine Zeile je Dokument, darüber eine Sammelzeile
+ *  (der Erstimport brachte über 1.000 auf einmal). */
+const EINZELN_BIS = 8
 
 export interface Neuigkeit {
   schluessel: string
@@ -102,6 +111,28 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
     .gt('erstellt_am', new Date(seitMs).toISOString())
   for (const n of notizen ?? []) autorIds.add(n.user_id as string)
 
+  // --- Neu: Drucksachen im Hub und Notizen anderer an Dokumenten ---------------
+  // RLS liefert nur, was ich sehen darf. Archiviertes (von Hand) zählt nicht.
+  const seitIso = new Date(seitMs).toISOString()
+  const [neueDokumente, neueDokNotizen] = await Promise.all([
+    supabase
+      .from('dokumente')
+      .select('id, titel, erstellt_am', { count: 'exact' })
+      .is('parent_id', null)
+      .is('archiviert_am', null)
+      .neq('user_id', userId)
+      .gt('erstellt_am', seitIso)
+      .order('erstellt_am', { ascending: false })
+      .limit(EINZELN_BIS + 1),
+    supabase
+      .from('dokumente')
+      .select('id, parent_id, user_id, titel, erstellt_am')
+      .not('parent_id', 'is', null)
+      .neq('user_id', userId)
+      .gt('erstellt_am', seitIso),
+  ])
+  for (const n of neueDokNotizen.data ?? []) autorIds.add(n.user_id as string)
+
   // --- Sitzungen meiner Gremien: kommende, mit ihren Tagesordnungspunkten ------
   let kommende: Pick<SessionRow, 'id' | 'titel' | 'gremium' | 'datum'>[] = []
   if (gremien.length > 0) {
@@ -114,15 +145,18 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
       .order('datum')
     kommende = data ?? []
   }
+  // Drucksachen, die schon über „neue Tagesordnungspunkte" gemeldet werden.
+  const schonAlsTop = new Set<string>()
   const neueTopsJeSitzung = new Map<string, number>()
   const letzterTopJeSitzung = new Map<string, string>()
   const topsJeSitzung = new Map<string, number>()
   for (const ids of inStuecken(kommende.map((s) => s.id))) {
-    const { data } = await supabase.from('sitzung_dokumente').select('session_id, erstellt_am').in('session_id', ids)
+    const { data } = await supabase.from('sitzung_dokumente').select('session_id, dokument_id, erstellt_am').in('session_id', ids)
     for (const z of data ?? []) {
       const sid = z.session_id as string
       topsJeSitzung.set(sid, (topsJeSitzung.get(sid) ?? 0) + 1)
       if (Date.parse(z.erstellt_am as string) > seitMs) {
+        if (z.dokument_id) schonAlsTop.add(z.dokument_id as string)
         neueTopsJeSitzung.set(sid, (neueTopsJeSitzung.get(sid) ?? 0) + 1)
         const bisher = letzterTopJeSitzung.get(sid)
         if (!bisher || Date.parse(z.erstellt_am as string) > Date.parse(bisher)) letzterTopJeSitzung.set(sid, z.erstellt_am as string)
@@ -197,6 +231,56 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
       ziel: { art: 'sitzung', id: s.id },
     })
   }
+  const dokumentZeilen = (neueDokumente.data ?? []).filter((d) => !schonAlsTop.has(d.id as string))
+  const dokumentAnzahl = (neueDokumente.count ?? dokumentZeilen.length) - ((neueDokumente.data ?? []).length - dokumentZeilen.length)
+  if (dokumentAnzahl > EINZELN_BIS) {
+    neu.push({
+      schluessel: 'dokumente-sammel',
+      art: 'Drucksachen',
+      zeit: (neueDokumente.data ?? [])[0]?.erstellt_am as string,
+      symbol: '📄',
+      text: `${dokumentAnzahl} neue Drucksachen im Dokumenten-Hub`,
+      ziel: { art: 'dokumente' },
+    })
+  } else {
+    for (const d of dokumentZeilen) {
+      neu.push({
+        schluessel: `dokument-${d.id}`,
+        art: 'Drucksache',
+        zeit: d.erstellt_am as string,
+        symbol: '📄',
+        text: d.titel as string,
+        ziel: { art: 'dokument', id: d.id as string },
+      })
+    }
+  }
+  // Notizen anderer an Dokumenten, je Dokument eine Zeile. Den Titel des
+  // Dokuments nachladen – die Notiz selbst trägt nur ihren eigenen.
+  const notizenJeDokument = new Map<string, { anzahl: number; zeit: string; autoren: Set<string> }>()
+  for (const n of neueDokNotizen.data ?? []) {
+    const pid = n.parent_id as string
+    const e = notizenJeDokument.get(pid) ?? { anzahl: 0, zeit: n.erstellt_am as string, autoren: new Set<string>() }
+    e.anzahl++
+    if (Date.parse(n.erstellt_am as string) > Date.parse(e.zeit)) e.zeit = n.erstellt_am as string
+    e.autoren.add(wer(n.user_id as string))
+    notizenJeDokument.set(pid, e)
+  }
+  const dokTitel = new Map<string, string>()
+  for (const ids of inStuecken([...notizenJeDokument.keys()])) {
+    const { data } = await supabase.from('dokumente').select('id, titel').in('id', ids)
+    for (const d of data ?? []) dokTitel.set(d.id as string, d.titel as string)
+  }
+  for (const [pid, e] of notizenJeDokument) {
+    neu.push({
+      schluessel: `dokument-notiz-${pid}`,
+      art: 'Notiz',
+      zeit: e.zeit,
+      symbol: '📝',
+      text: `${[...e.autoren].join(', ')}: ${e.anzahl === 1 ? 'neue Notiz' : `${e.anzahl} neue Notizen`} an „${dokTitel.get(pid) ?? 'Dokument'}"`,
+      ziel: { art: 'dokument', id: pid },
+    })
+  }
+
   neu.sort((a, b) => Date.parse(b.zeit) - Date.parse(a.zeit))
 
   // --- Demnächst: Sitzungen und fällige Aufgaben ------------------------------

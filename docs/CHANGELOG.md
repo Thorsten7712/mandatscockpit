@@ -3460,3 +3460,19 @@ mit (rund 1.139, praktisch nie Geöffnetes).
   ist.
 - Offen: die 111 Drucksachen ohne Sitzungsverknüpfung bleiben in der Übersicht – nach den Daten
   wurden sie in keiner Sitzung behandelt.
+
+## 19.10.2026 – „Neu für dich" meldet neue Drucksachen
+
+Befund: Am 19.10. kamen drei Vorlagen in den Hub (DS11/1112, DS11/1106, DS11/1059-1), die
+Startseite zeigte trotzdem „Nichts Neues". `ladeNeuigkeiten()` kannte für Dokumente nur neue
+Tagesordnungspunkte kommender Sitzungen der eigenen Gremien – eine Drucksache ohne
+Sitzungsverknüpfung tauchte nie auf.
+
+- Neu: Drucksachen anderer seit dem letzten „Alles gesehen" (ohne von Hand archivierte, ohne
+  solche, die schon als neuer Tagesordnungspunkt gemeldet werden). Bis 8 je eine Zeile, die das
+  Dokument öffnet; darüber eine Sammelzeile „n neue Drucksachen", die in den Hub führt.
+- Neu: Notizen anderer an Dokumenten (z. B. Analysen), je Dokument eine Zeile.
+- `Ziel` kennt dafür `dokument` und `dokumente`.
+- Die Kachel „Nächste Sitzung" sucht die nächste Sitzung der eigenen Gremien ohne 7-Tage-Grenze
+  (`ladeNaechsteSitzung()`); vorher stand dort in sitzungsfreien Wochen „Keine in den nächsten 7
+  Tagen".

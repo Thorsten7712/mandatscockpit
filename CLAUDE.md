@@ -61,7 +61,10 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   **Meine Aufgaben** (offene Karten meines Boards, mit Termin zuerst; Haken = nach „Fertig" wie
   Ziehen im Board; Zähler je Spalte) und **Neu für dich** (`src/lib/neuigkeiten.ts`,
   `0057_neuigkeiten.sql`: Zuweisungen, mit mir geteilte Karten, Notizen anderer an meinen Karten,
-  neue Tagesordnungspunkte kommender Sitzungen meiner Gremien, seit dem letzten „Alles gesehen";
+  neue Tagesordnungspunkte kommender Sitzungen meiner Gremien, seit 19.10.2026 auch neue
+  Drucksachen im Hub – bis 8 einzeln, darüber eine Sammelzeile – und Notizen anderer an
+  Dokumenten, jeweils seit dem letzten „Alles gesehen"; die Kachel „Nächste Sitzung" sucht ohne
+  7-Tage-Grenze (`ladeNaechsteSitzung()`);
   Stand in der eigenen Tabelle `neuigkeiten_stand`, nicht in `profiles` – dort für Kolleg*innen
   lesbar; beim ersten Besuch gilt nichts als neu). Das ToDo-Board liegt auf `/aufgaben` (feste
   Spalten, Drag & Drop, Teilen mit Partei-/Ebenen-/Gliederungs-Kolleg*innen; ab 1024 px öffnet

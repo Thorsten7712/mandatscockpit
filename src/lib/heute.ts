@@ -111,3 +111,23 @@ export async function aufgabeErledigen(userId: string, todoId: string, fertigSpa
     .eq('id', todoId)
   return error?.message ?? null
 }
+
+/** Die nächste nicht abgesagte Sitzung meiner Gremien, egal wie weit weg –
+ *  für die Kachel auf der Startseite („Diese Woche" reicht nur 7 Tage). */
+export async function ladeNaechsteSitzung(
+  userId: string,
+): Promise<{ id: string; titel: string; start: string } | null> {
+  const { data: mine } = await supabase.from('user_gremien').select('gremium').eq('user_id', userId)
+  const gremien = (mine ?? []).map((g) => g.gremium as string)
+  if (gremien.length === 0) return null
+  const { data } = await supabase
+    .from('sessions')
+    .select('id, titel, gremium, datum')
+    .in('gremium', gremien)
+    .gte('datum', new Date().toISOString())
+    .neq('status', 'abgesagt')
+    .order('datum')
+    .limit(1)
+  const s = data?.[0]
+  return s ? { id: s.id, titel: s.gremium ?? s.titel, start: s.datum } : null
+}
