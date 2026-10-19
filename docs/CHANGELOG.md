@@ -3469,7 +3469,12 @@ Tagesordnungspunkte kommender Sitzungen der eigenen Gremien – eine Drucksache 
 Sitzungsverknüpfung tauchte nie auf.
 
 - Neu: Drucksachen anderer seit dem letzten „Alles gesehen" (ohne von Hand archivierte, ohne
-  solche, die schon als neuer Tagesordnungspunkt gemeldet werden). Bis 8 je eine Zeile, die das
+  solche, die schon als neuer Tagesordnungspunkt gemeldet werden), und zwar **nur die meiner
+  Gremien** (Nachbesserung am selben Tag): ein Tag mit dem Namen eines meiner Gremien – so
+  vergibt dailyallris die Gremien-Tags – oder eine Verknüpfung mit einer Sitzung eines meiner
+  Gremien. Von den drei Vorlagen des 19.10. bleibt damit DS11/1059-1 (Tag „Digitalausschuss"),
+  die beiden „Uebergreifend"-Vorlagen fallen heraus. Kürzel-Tags wie „Rat" passen nicht auf
+  „Rat der Stadt Iserlohn"; geprüft werden höchstens 500 neue Drucksachen. Bis 8 je eine Zeile, die das
   Dokument öffnet; darüber eine Sammelzeile „n neue Drucksachen", die in den Hub führt.
 - Neu: Notizen anderer an Dokumenten (z. B. Analysen), je Dokument eine Zeile.
 - `Ziel` kennt dafür `dokument` und `dokumente`.

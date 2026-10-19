@@ -62,7 +62,8 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   Ziehen im Board; Zähler je Spalte) und **Neu für dich** (`src/lib/neuigkeiten.ts`,
   `0057_neuigkeiten.sql`: Zuweisungen, mit mir geteilte Karten, Notizen anderer an meinen Karten,
   neue Tagesordnungspunkte kommender Sitzungen meiner Gremien, seit 19.10.2026 auch neue
-  Drucksachen im Hub – bis 8 einzeln, darüber eine Sammelzeile – und Notizen anderer an
+  Drucksachen **meiner Gremien** (Tag mit dem Gremiennamen oder Sitzung eines meiner Gremien) –
+  bis 8 einzeln, darüber eine Sammelzeile – und Notizen anderer an
   Dokumenten, jeweils seit dem letzten „Alles gesehen"; die Kachel „Nächste Sitzung" sucht ohne
   7-Tage-Grenze (`ladeNaechsteSitzung()`);
   Stand in der eigenen Tabelle `neuigkeiten_stand`, nicht in `profiles` – dort für Kolleg*innen

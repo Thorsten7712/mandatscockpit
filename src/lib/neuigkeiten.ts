@@ -21,6 +21,8 @@ export type Ziel =
 /** Bis zu so vielen neuen Drucksachen eine Zeile je Dokument, darüber eine Sammelzeile
  *  (der Erstimport brachte über 1.000 auf einmal). */
 const EINZELN_BIS = 8
+/** Obergrenze für die neuen Drucksachen, die überhaupt geprüft werden. */
+const MAX_NEUE_DOKUMENTE = 500
 
 export interface Neuigkeit {
   schluessel: string
@@ -113,17 +115,20 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
 
   // --- Neu: Drucksachen im Hub und Notizen anderer an Dokumenten ---------------
   // RLS liefert nur, was ich sehen darf. Archiviertes (von Hand) zählt nicht.
+  // Gemeldet werden nur Drucksachen meiner Gremien (Wunsch 19.10.2026), dafür
+  // erst alle neuen laden und unten filtern – der Gremienbezug steht in Tags
+  // und Sitzungen, nicht in einer filterbaren Spalte.
   const seitIso = new Date(seitMs).toISOString()
   const [neueDokumente, neueDokNotizen] = await Promise.all([
     supabase
       .from('dokumente')
-      .select('id, titel, erstellt_am', { count: 'exact' })
+      .select('id, titel, tags, erstellt_am')
       .is('parent_id', null)
       .is('archiviert_am', null)
       .neq('user_id', userId)
       .gt('erstellt_am', seitIso)
       .order('erstellt_am', { ascending: false })
-      .limit(EINZELN_BIS + 1),
+      .limit(MAX_NEUE_DOKUMENTE),
     supabase
       .from('dokumente')
       .select('id, parent_id, user_id, titel, erstellt_am')
@@ -231,15 +236,30 @@ export async function ladeNeuigkeiten(userId: string): Promise<Neuigkeiten> {
       ziel: { art: 'sitzung', id: s.id },
     })
   }
-  const dokumentZeilen = (neueDokumente.data ?? []).filter((d) => !schonAlsTop.has(d.id as string))
-  const dokumentAnzahl = (neueDokumente.count ?? dokumentZeilen.length) - ((neueDokumente.data ?? []).length - dokumentZeilen.length)
+  // Zu meinen Gremien gehört eine Drucksache, wenn sie einen Tag mit dem Namen
+  // eines meiner Gremien trägt (so vergibt dailyallris die Gremien-Tags) oder
+  // mit einer Sitzung eines meiner Gremien verknüpft ist.
+  const meineGremien = new Set(gremien)
+  const kandidaten = (neueDokumente.data ?? []).filter((d) => !schonAlsTop.has(d.id as string))
+  const ueberSitzung = new Set<string>()
+  const ohneTag = kandidaten.filter((d) => !(d.tags as string[]).some((t) => meineGremien.has(t))).map((d) => d.id as string)
+  for (const ids of inStuecken(ohneTag)) {
+    const { data } = await supabase.from('sitzung_dokumente').select('dokument_id, sessions(gremium)').in('dokument_id', ids)
+    for (const z of (data ?? []) as unknown as { dokument_id: string; sessions: { gremium: string | null } | null }[]) {
+      if (z.sessions?.gremium && meineGremien.has(z.sessions.gremium)) ueberSitzung.add(z.dokument_id)
+    }
+  }
+  const dokumentZeilen = kandidaten.filter(
+    (d) => (d.tags as string[]).some((t) => meineGremien.has(t)) || ueberSitzung.has(d.id as string),
+  )
+  const dokumentAnzahl = dokumentZeilen.length
   if (dokumentAnzahl > EINZELN_BIS) {
     neu.push({
       schluessel: 'dokumente-sammel',
       art: 'Drucksachen',
-      zeit: (neueDokumente.data ?? [])[0]?.erstellt_am as string,
+      zeit: dokumentZeilen[0].erstellt_am as string,
       symbol: '📄',
-      text: `${dokumentAnzahl} neue Drucksachen im Dokumenten-Hub`,
+      text: `${dokumentAnzahl} neue Drucksachen zu deinen Gremien`,
       ziel: { art: 'dokumente' },
     })
   } else {
