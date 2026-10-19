@@ -18,7 +18,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { logoUrl, themeById } from '../lib/themes'
-import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
+import { istDokumentUngelesen, LESESTAND_GEAENDERT } from '../lib/dokumenteGelesen'
+import { archivGrund, ladeSitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { alleZeilen } from '../lib/alleZeilen'
 
 /**
@@ -71,12 +72,16 @@ function istAktiv(ziel: NavZiel, pfad: string): boolean {
 }
 
 // Zählt Top-Level-Dokumente, die nie geöffnet wurden oder seit dem letzten
-// Öffnen eine neue Notiz bekommen haben (src/lib/dokumenteGelesen.ts).
-// Seitenweise, weil eine einzelne Abfrage bei 1.000 Zeilen abschneidet.
+// Öffnen eine neue Notiz bekommen haben (src/lib/dokumenteGelesen.ts) – ohne
+// das Archiv, das als gelesen gilt. Seitenweise, weil eine einzelne Abfrage
+// bei 1.000 Zeilen abschneidet.
 async function zaehleUngeleseneDokumente(uid: string): Promise<number> {
-  const { zeilen: alle } = await alleZeilen<{ id: string; parent_id: string | null; erstellt_am: string }>((von, bis) =>
-    supabase.from('dokumente').select('id, parent_id, erstellt_am').order('id').range(von, bis),
-  )
+  const { zeilen: alle } = await alleZeilen<{
+    id: string
+    parent_id: string | null
+    erstellt_am: string
+    archiviert_am: string | null
+  }>((von, bis) => supabase.from('dokumente').select('id, parent_id, erstellt_am, archiviert_am').order('id').range(von, bis))
   const kinderByParent = new Map<string, { erstellt_am: string }[]>()
   for (const d of alle) {
     if (!d.parent_id) continue
@@ -86,8 +91,15 @@ async function zaehleUngeleseneDokumente(uid: string): Promise<number> {
   }
   const { data: gelesen } = await supabase.from('dokument_gelesen').select('dokument_id, gelesen_am').eq('user_id', uid)
   const gelesenMap = new Map((gelesen ?? []).map((g) => [g.dokument_id, g.gelesen_am]))
-  return alle.filter((d) => !d.parent_id && istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id)))
-    .length
+  // Archiv-Regel nur für die Kandidaten nachladen, nicht für den ganzen Hub.
+  const kandidaten = alle.filter(
+    (d) => !d.parent_id && !d.archiviert_am && istDokumentUngelesen(d, kinderByParent.get(d.id) ?? [], gelesenMap.get(d.id)),
+  )
+  const { sitzungen } = await ladeSitzungenJeDokument(
+    supabase,
+    kandidaten.map((d) => d.id),
+  )
+  return kandidaten.filter((d) => !archivGrund(d, sitzungen)).length
 }
 
 export function AppLayout() {
@@ -126,18 +138,24 @@ export function AppLayout() {
     return () => window.removeEventListener(PROFIL_GEAENDERT, ladeProfil)
   }, [])
 
-  // Neu zählen bei jedem Seitenwechsel: wer im Hub Dokumente gelesen hat,
-  // sieht die Zahl spätestens beim nächsten Ziel aktualisiert.
+  // Einmal beim Start und dann bei jeder Änderung des Lesestands
+  // (markiereGelesen/markiereUngelesen feuern LESESTAND_GEAENDERT).
   useEffect(() => {
     if (!userId) return
+    const uid = userId
     let aktuell = true
-    zaehleUngeleseneDokumente(userId).then((n) => {
-      if (aktuell) setUngelesen(n)
-    })
+    function zaehlen() {
+      zaehleUngeleseneDokumente(uid).then((n) => {
+        if (aktuell) setUngelesen(n)
+      })
+    }
+    zaehlen()
+    window.addEventListener(LESESTAND_GEAENDERT, zaehlen)
     return () => {
       aktuell = false
+      window.removeEventListener(LESESTAND_GEAENDERT, zaehlen)
     }
-  }, [userId, pathname])
+  }, [userId])
 
   // „Mehr" schließt bei jedem Seitenwechsel und per Escape.
   useEffect(() => setMehrOffen(false), [pathname])

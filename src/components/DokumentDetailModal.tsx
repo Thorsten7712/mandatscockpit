@@ -281,12 +281,7 @@ export function DokumentDetailModal({
         .eq('user_id', data.user.id)
       setGelesenAmVorDiesemOeffnen(gelesenRows?.[0]?.gelesen_am)
 
-      await supabase
-        .from('dokument_gelesen')
-        .upsert(
-          { dokument_id: document.id, user_id: data.user.id, gelesen_am: new Date().toISOString() },
-          { onConflict: 'dokument_id,user_id' },
-        )
+      await markiereGelesen(supabase, document.id, data.user.id)
       onGelesenGeaendert?.()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -627,6 +622,8 @@ export function DokumentDetailModal({
           <span className="hidden sm:inline">{archiviertAm ? 'Im Archiv' : 'Archivieren'}</span>
         </button>
       )}
+      {/* Im Archiv gilt das Dokument ohnehin als gelesen (dokumenteGelesen.ts). */}
+      {!(durchSitzungArchiviert || archiviertAm) && (
       <button
         type="button"
         onClick={toggleGelesen}
@@ -637,6 +634,7 @@ export function DokumentDetailModal({
         <span className={`h-2 w-2 rounded-full ${istGelesen ? 'bg-slate-300' : 'bg-primary'}`} />
         <span className="hidden sm:inline">{istGelesen ? 'Gelesen' : 'Ungelesen'}</span>
       </button>
+      )}
       {document.user_id === userId && (
         <button
           type="button"

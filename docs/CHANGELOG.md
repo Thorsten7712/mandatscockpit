@@ -3436,3 +3436,27 @@ Tagesordnungspunkt öffnet sich **übergangslos in derselben Karte**, nicht als 
   gefüllter Knöpfe.
 - **Einstellungen:** bleibt bei der Unternavigation links (entsprach schon dem Entwurf). Name und
   Foto erscheinen nach dem Speichern sofort in der Leiste (`PROFIL_GEAENDERT`).
+
+## 19.10.2026 – Archiv gilt als gelesen
+
+Wunsch: Drucksachen aus vergangenen Sitzungen sollen als gelesen gelten, im Archiv liegen und aus
+der Dokumentenübersicht verschwinden; taucht eine archivierte Vorlage auf einer neuen
+Tagesordnung auf, soll sie zurückkommen und nach dieser Sitzung wieder ins Archiv wandern.
+
+Befund: Die Archiv-Regel (letzte verknüpfte Sitzung vorbei) blendete diese Dokumente schon aus
+und holt sie bei einer neuen Sitzung von selbst zurück – Stand 19.10.: 1.141 Top-Level-Dokumente,
+1.026 mit vorbeigegangener letzter Sitzung, 4 mit kommender, 111 ohne jede Sitzung, 8 von Hand
+archiviert. Was störte, waren die Zahlen: der Kopf der Liste zählte den ganzen Bestand
+(„1.141 Drucksachen und Notizen"), und Ungelesen-Zähler in Liste und Leiste rechneten das Archiv
+mit (rund 1.139, praktisch nie Geöffnetes).
+
+- **Archiviertes gilt als gelesen** – `istDokumentUngelesen(…, archiviert)`. Bewusst abgeleitet
+  statt Zeilen in `dokument_gelesen` zu schreiben: dafür bräuchte es einen täglichen Job, und eine
+  zurückgekehrte Vorlage soll ihren echten Lesestand zeigen (nie geöffnet = neu).
+- **Liste:** Kopf „n offen · n ungelesen · n im Archiv"; im Archiv kein Gelesen-Schalter.
+- **Leiste:** zählt nur Ungelesenes außerhalb des Archivs (Archiv-Regel nur für die Kandidaten
+  nachgeladen). Statt bei jedem Seitenwechsel einmal beim Start und bei `LESESTAND_GEAENDERT`.
+- **Sitzungsansicht:** „neu" an einem Tagesordnungspunkt nur, wenn die Vorlage nicht archiviert
+  ist.
+- Offen: die 111 Drucksachen ohne Sitzungsverknüpfung bleiben in der Übersicht – nach den Daten
+  wurden sie in keiner Sitzung behandelt.

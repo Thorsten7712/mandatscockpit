@@ -125,7 +125,13 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   Rat noch entscheidet) oder
   `dokumente.archiviert_am` gesetzt wurde (`0038_dokumente_archiv.sql`, Regel in
   `src/lib/dokumenteArchiv.ts`). Archiviertes ist in der Liste ausgeblendet (Chip „Archiv (n)" blendet
-  es ein), wird von der Suche aber **immer** mitdurchsucht. Es erscheint zusätzlich im „Dokumente"-
+  es ein), wird von der Suche aber **immer** mitdurchsucht, und **gilt als gelesen** (seit
+  19.10.2026: viertes Argument `archiviert` von `istDokumentUngelesen()`, abgeleitet statt in
+  `dokument_gelesen` geschrieben – kommt eine Vorlage auf eine neue Tagesordnung, ist sie nicht
+  mehr archiviert, steht wieder in der Liste und zeigt ihren echten Lesestand; nach dieser
+  Sitzung wandert sie von selbst zurück). Der Kopf der Liste zählt „offen / ungelesen / im
+  Archiv", der Zähler in der Leiste nur Ungelesenes außerhalb des Archivs (neu gezählt beim
+  Start und bei `LESESTAND_GEAENDERT`, das `markiereGelesen()`/`markiereUngelesen()` feuern). Es erscheint zusätzlich im „Dokumente"-
   Reiter des Archivs. Dazu: Paginierung mit wählbarer
   Seitengröße (10/25/50/100/Alle) und ein Schnellfilter „Meine Gremien" (über die Sitzung des
   Dokuments, `user_gremien`). **Löschen nur im Detail-Modal**, nicht aus der Liste heraus: bei einem
