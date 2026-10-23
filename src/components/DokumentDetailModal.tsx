@@ -76,6 +76,18 @@ export function DokumentDetailModal({
 }) {
   const [variante, setVariante] = useState<LeseVariante>(() => (eingebettet ? 'a' : ladeVariante(VARIANTE_KEY_HUB, 'a')))
   const [notizenOffen, setNotizenOffen] = useState(true)
+  // Eingebettet (Hub, Sitzungsansicht) liegen die Notizen in einer Schublade
+  // über dem Text statt in einer eigenen Spalte – sonst blieb dem Text neben
+  // Liste und Notizen kaum Breite (Umgestaltung 23.10.2026, Entwurf A).
+  const [schubladeOffen, setSchubladeOffen] = useState(false)
+  useEffect(() => {
+    if (!schubladeOffen) return
+    function beiTaste(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSchubladeOffen(false)
+    }
+    window.addEventListener('keydown', beiTaste)
+    return () => window.removeEventListener('keydown', beiTaste)
+  }, [schubladeOffen])
   const [userId, setUserId] = useState<string | null>(null)
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
   const [children, setChildren] = useState<DokumentRow[]>([])
@@ -582,7 +594,18 @@ export function DokumentDetailModal({
           </button>
         ))}
       </div>
-      {variante === 'c' && (
+      {eingebettet && (
+        <button
+          type="button"
+          onClick={() => setSchubladeOffen((v) => !v)}
+          aria-expanded={schubladeOffen}
+          className="mc-btn-primary gap-1.5! px-2.5! py-1.5! text-xs!"
+        >
+          Notizen
+          <span className="rounded-full bg-white/20 px-1.5">{children.length}</span>
+        </button>
+      )}
+      {variante === 'c' && !eingebettet && (
         <button
           type="button"
           onClick={() => setNotizenOffen((v) => !v)}
@@ -803,16 +826,14 @@ export function DokumentDetailModal({
     </>
   )
 
-  const zeigeNotizen = variante !== 'c' || notizenOffen
-  const spaltenKlasse =
-    variante === 'c'
+  const zeigeNotizen = !eingebettet && (variante !== 'c' || notizenOffen)
+  const spaltenKlasse = eingebettet
+    ? ''
+    : variante === 'c'
       ? zeigeNotizen
         ? 'md:grid-cols-[minmax(0,1fr)_320px]'
         : 'md:grid-cols-[minmax(0,1fr)]'
-      : eingebettet
-        ? // Neben der Tagesordnung ist weniger Platz: erst ab xl nebeneinander.
-          'xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)]'
-        : 'md:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]'
+      : 'md:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]'
 
   const inhalt = (
     <>
@@ -1012,25 +1033,44 @@ export function DokumentDetailModal({
 
       <div className={`grid min-h-0 flex-1 grid-cols-1 ${spaltenKlasse}`}>
         <div
-          className={`min-h-0 border-b border-slate-200 ${
-            eingebettet
-              ? 'max-h-[60vh] xl:max-h-none xl:border-b-0 xl:border-r'
-              : 'max-h-[46vh] md:max-h-none md:border-b-0 md:border-r'
+          className={`min-h-0 ${
+            eingebettet ? '' : 'max-h-[46vh] border-b border-slate-200 md:max-h-none md:border-b-0 md:border-r'
           }`}
         >
-          <VorlageAnsicht inhalt={document.inhalt} zentriert={variante === 'c'} />
+          {/* Eingebettet in voller Breite, aber in Lesebreite gesetzt. */}
+          <VorlageAnsicht inhalt={document.inhalt} zentriert={eingebettet || variante === 'c'} />
         </div>
         {zeigeNotizen && (
           <div className="min-h-0 overflow-y-auto bg-slate-50/60 p-5">{notizenSpalte}</div>
         )}
       </div>
+
+      {eingebettet && schubladeOffen && (
+        <aside
+          aria-label="Notizen"
+          className="mc-animate-slide absolute inset-y-0 right-0 z-20 flex w-[400px] max-w-full flex-col border-l border-slate-200 bg-white shadow-[-16px_0_32px_rgba(15,23,42,0.08)]"
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
+            <span className="text-sm font-semibold">Notizen zu {document.titel.match(/^DS[\w/.-]+/)?.[0] ?? 'diesem Dokument'}</span>
+            <button
+              type="button"
+              onClick={() => setSchubladeOffen(false)}
+              aria-label="Notizen schließen"
+              className="mc-btn-ghost p-2!"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">{notizenSpalte}</div>
+        </aside>
+      )}
     </>
   )
 
   return (
     <>
       {eingebettet ? (
-        <div className="flex h-full min-h-0 flex-col">{inhalt}</div>
+        <div className="relative flex h-full min-h-0 flex-col overflow-hidden">{inhalt}</div>
       ) : (
         <div
           className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]"
