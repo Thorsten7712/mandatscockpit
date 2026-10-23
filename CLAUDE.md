@@ -82,9 +82,19 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   entfallen – Anträge der Fraktion liegen als Hub-Dokumente mit Tag „Antrag".
 - **Dokumente** (`/dokumente`, eigener Reiter neben dem Archiv): Top-Level-Dokumente sind immer
   "geteilt" (sichtbar für alle Mitglieder derselben Partei UND derselben Ebene/Gliederung, z. B.
-  "Kommune Iserlohn", getaggt mit Ebene + freien Tags, z. B. hochgeladene Sitzungsvorlagen). Klick auf
+  "Kommune Iserlohn", getaggt mit Ebene + freien Tags, z. B. hochgeladene Sitzungsvorlagen). Die Liste
+  zeigt **Vorgänge** statt einzelner Drucksachen (seit 23.10.2026, `src/lib/vorgaenge.ts`):
+  Drucksachen mit derselben Grundnummer – DS11/1013 (Anfrage) und DS11/1013-1 (Antwort der
+  Verwaltung), weitere Folgenummern – bilden eine Zeile mit Teilezahl und Datum des neuesten
+  Teils; ein Klick öffnet das neueste ungelesene bzw. neueste Teil und klappt die Teile darunter
+  auf. Geblättert wird über Vorgänge. Die Tag-Wolke über der Liste ist durch ein
+  **Filterfenster** ersetzt (`FilterAuswahl.tsx`: Gremien/Antragsteller/Themen per Heuristik
+  `tagGruppe()`, Suche, Ebenen; innerhalb einer Gruppe ODER, über Gruppen UND), gewählte Filter
+  stehen als Chips mit × daneben. Klick auf
   ein Dokument öffnet `DokumentDetailModal.tsx` (ab 1024 px rechts neben der Liste in derselben
-  Karte, `eingebettet`; die Liste zieht „ungelesen" über `onGelesenGeaendert` nach): dort lassen sich eigene Notizen/Analysen anhängen
+  Karte, `eingebettet`; die Liste zieht „ungelesen" über `onGelesenGeaendert` nach; eingebettet –
+  Hub wie Sitzungsansicht – steht der Text in voller Breite mit Lesebreite, die Notizen liegen in
+  einer **Schublade** hinter dem Knopf „Notizen (n)" statt in einer eigenen Spalte): dort lassen sich eigene Notizen/Analysen anhängen
   (`dokumente.parent_id`), wahlweise "persönlich", Ebene-weit geteilt oder mit einzelnen ausgewählten
   Personen geteilt (`dokument_shares`-Tabelle). Alles auch über den
   MCP-Server befüllbar (`create_document`/`list_documents` - der Server läuft über den
@@ -158,7 +168,7 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   der Sitzung samt Fortschritt und „Karte zu dieser Sitzung", Kopfdaten mit Bearbeiten/Löschen
   bei nachgetragenen Sitzungen, Notizen der verknüpften Karten und Dokumente) oder der gewählte
   Punkt – `DokumentDetailModal` mit `eingebettet`: ohne Overlay, ohne Schließen, ohne
-  Layout-Umschalter, Notizen ab `xl` daneben. Vor/zurück springt zwischen Punkten mit Drucksache.
+  Layout-Umschalter, Notizen in der Schublade. Vor/zurück springt zwischen Punkten mit Drucksache.
   Auf dem Handy steht entweder die Tagesordnung oder der Punkt da (Zurück-Knopf). **Eine Sitzung
   öffnet sich nirgends mehr als Fenster**: `TerminDetailModal` mit `kind="session"` leitet auf
   `/sitzungen/:id` um, `/termin/session/:id` ebenso; Fenster gibt es nur noch für eigene Termine.

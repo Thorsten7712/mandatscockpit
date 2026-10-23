@@ -4,10 +4,12 @@ import { Archive, ChevronLeft, ChevronRight, FileText, Search, X } from 'lucide-
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentListenZeile, DokumentRow, Ebene, Profile } from '../lib/types'
 import { DOKUMENT_LISTEN_SPALTEN, ladeDokument, sucheDokumente } from '../lib/dokumentSpalten'
-import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
+import { EBENE_LABEL } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
 import { TagEditor } from '../components/TagEditor'
+import { FilterAuswahl } from '../components/FilterAuswahl'
+import { drucksachennummer, grundnummer, gruppiereVorgaenge, tagGruppe, titelOhneNummer } from '../lib/vorgaenge'
 import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
 import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { vorschau } from '../lib/vorlageMarkdown'
@@ -97,7 +99,9 @@ export default function Dokumente() {
   const [loading, setLoading] = useState(true)
 
   const [ebeneFilter, setEbeneFilter] = useState<Ebene | 'alle'>('alle')
-  const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [aktiveTags, setAktiveTags] = useState<string[]>([])
+  // Aufgeklappter Vorgang in der Liste (Schlüssel aus gruppiereVorgaenge()).
+  const [offenerVorgang, setOffenerVorgang] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [nurMeineGremien, setNurMeineGremien] = useState(false)
   const [archivEinbeziehen, setArchivEinbeziehen] = useState(false)
@@ -329,7 +333,11 @@ export default function Dokumente() {
       if (!gremien.some((g) => g && meineGremien.includes(g))) return false
     }
     if (ebeneFilter !== 'alle' && d.ebene !== ebeneFilter) return false
-    if (tagFilter && !d.tags.includes(tagFilter)) return false
+    // Innerhalb einer Gruppe (z. B. zwei Fraktionen) genügt ein Treffer,
+    // über Gruppen hinweg müssen alle passen.
+    for (const gruppe of new Set(aktiveTags.map(tagGruppe))) {
+      if (!aktiveTags.some((t) => tagGruppe(t) === gruppe && d.tags.includes(t))) return false
+    }
     if (sucheAktiv) {
       // Titel, Tags und Text durchsucht die Datenbank (sucheDokumente); den
       // Namen der Autorin/des Autors steht dort nicht, der bleibt hier.
@@ -344,10 +352,17 @@ export default function Dokumente() {
   // wird beim Rendern geklemmt statt per Effekt zurückgesetzt: schrumpft die
   // Treffermenge (Filter/Suche), landet man sofort auf der letzten gültigen
   // Seite, ohne einen Zwischen-Render mit leerer Liste.
-  const seitenAnzahl = proSeite === 0 ? 1 : Math.max(1, Math.ceil(filtered.length / proSeite))
+  // Eine Zeile je Vorgang (Anfrage + Antworten), geblättert wird über Vorgänge.
+  const vorgaenge = gruppiereVorgaenge(filtered)
+  const seitenAnzahl = proSeite === 0 ? 1 : Math.max(1, Math.ceil(vorgaenge.length / proSeite))
   const aktuelleSeite = Math.min(seite, seitenAnzahl)
   const sichtbare =
-    proSeite === 0 ? filtered : filtered.slice((aktuelleSeite - 1) * proSeite, aktuelleSeite * proSeite)
+    proSeite === 0 ? vorgaenge : vorgaenge.slice((aktuelleSeite - 1) * proSeite, aktuelleSeite * proSeite)
+
+  function tagUmschalten(tag: string) {
+    setAktiveTags((vorher) => (vorher.includes(tag) ? vorher.filter((t) => t !== tag) : [...vorher, tag]))
+    setSeite(1)
+  }
 
   function handleProSeite(wert: number) {
     setProSeite(wert)
@@ -422,7 +437,33 @@ export default function Dokumente() {
         )}
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <FilterAuswahl
+              tags={tagsPresent}
+              aktiv={aktiveTags}
+              onUmschalten={tagUmschalten}
+              zusatz={
+                ebenenPresent.length > 1 && (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Ebene</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(['alle', ...ebenenPresent] as const).map((e) => (
+                        <button
+                          key={e}
+                          type="button"
+                          aria-pressed={ebeneFilter === e}
+                          onClick={() => mitSeitenreset(setEbeneFilter)(e)}
+                          className={chipClass(ebeneFilter === e)}
+                        >
+                          {e === 'alle' ? 'Alle Ebenen' : EBENE_LABEL[e]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              }
+            />
+            <span className="mx-1 h-5 w-px bg-slate-300" aria-hidden="true" />
             {meineGremien.length > 0 && (
               <button
                 type="button"
@@ -449,39 +490,35 @@ export default function Dokumente() {
                 Archiv ({archivGesamt})
               </button>
             )}
-            {ebenenPresent.length > 0 && (
-              <>
+            {aktiveTags.map((t) => (
+              <span
+                key={t}
+                className="inline-flex min-h-7.5 items-center gap-1 rounded-full bg-primary/10 pl-3 pr-1 text-[13px] font-medium text-primary"
+              >
+                {t}
+                <button
+                  type="button"
+                  onClick={() => tagUmschalten(t)}
+                  aria-label={`Filter ${t} entfernen`}
+                  className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-primary/10"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            ))}
+            {ebeneFilter !== 'alle' && (
+              <span className="inline-flex min-h-7.5 items-center gap-1 rounded-full bg-primary/10 pl-3 pr-1 text-[13px] font-medium text-primary">
+                {EBENE_LABEL[ebeneFilter]}
                 <button
                   type="button"
                   onClick={() => mitSeitenreset(setEbeneFilter)('alle')}
-                  className={chipClass(ebeneFilter === 'alle')}
+                  aria-label="Ebenen-Filter entfernen"
+                  className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-primary/10"
                 >
-                  Alle Ebenen
+                  <X className="h-3.5 w-3.5" />
                 </button>
-                {ebenenPresent.map((e) => (
-                  <button
-                    key={e}
-                    type="button"
-                    onClick={() => mitSeitenreset(setEbeneFilter)(e)}
-                    className={chipClass(ebeneFilter === e)}
-                  >
-                    {EBENE_LABEL[e]}
-                  </button>
-                ))}
-              </>
+              </span>
             )}
-            {tagsPresent.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => mitSeitenreset(setTagFilter)(tagFilter === t ? null : t)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-opacity ${tagColor(t).chip} ${
-                  tagFilter === t ? `ring-2 ring-offset-1 ${tagColor(t).ring}` : 'opacity-60 hover:opacity-100'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
           </div>
           <button type="button" onClick={() => setShowForm((v) => !v)} className={showForm ? 'mc-btn-ghost' : 'mc-btn-primary'}>
             {showForm ? 'Abbrechen' : '+ Dokument'}
@@ -550,23 +587,35 @@ export default function Dokumente() {
         <div className={breit ? 'mc-card flex h-[calc(100vh-15rem)] min-h-[560px] overflow-hidden' : ''}>
           <div className={breit ? 'flex w-[400px] shrink-0 flex-col border-r border-slate-100 xl:w-[440px]' : ''}>
             <ul className={breit ? 'min-h-0 flex-1 overflow-y-auto' : 'mc-card overflow-hidden'}>
-              {sichtbare.map((d) => {
-                const ungelesen = istUngelesen(d)
-                const grund = archivGrundById.get(d.id)
-                const aktiv = openDoc?.id === d.id
-                // Drucksachennummer aus dem Titel („DS11/0993 – …") in die Kopfzeile ziehen.
-                const ds = d.titel.match(/^(DS[\w/.-]+)\s*[–-]\s*(.+)$/)
+              {sichtbare.map((v) => {
+                const kopf = v.teile[0]
+                const neuester = v.teile.reduce((x, y) => (Date.parse(y.erstellt_am) > Date.parse(x.erstellt_am) ? y : x))
+                const mehrteilig = v.teile.length > 1
+                const ungelesenTeile = v.teile.filter(istUngelesen)
+                const ungelesen = ungelesenTeile.length > 0
+                const aktiv = v.teile.some((t) => t.id === openDoc?.id)
+                const aufgeklappt = mehrteilig && offenerVorgang === v.schluessel
+                // Archiv-Fähnchen nur, wenn der ganze Vorgang im Archiv liegt.
+                const grund = v.teile.every((t) => archivGrundById.get(t.id)) ? archivGrundById.get(neuester.id) : null
+                const tags = [...new Set(v.teile.flatMap((t) => t.tags))]
+                const nummer = grundnummer(kopf.titel)
+                const oeffneVorgang = () => {
+                  setOffenerVorgang(mehrteilig ? v.schluessel : null)
+                  // Das Neueste zuerst – meist die Antwort, auf die man wartet.
+                  oeffne((ungelesenTeile[ungelesenTeile.length - 1] ?? neuester).id)
+                }
                 return (
-                  <li key={d.id} className="border-b border-slate-100 last:border-b-0">
+                  <li key={v.schluessel} className="border-b border-slate-100 last:border-b-0">
                     <div
                       role="button"
                       tabIndex={0}
                       aria-pressed={breit ? aktiv : undefined}
-                      onClick={() => oeffne(d.id)}
+                      aria-expanded={mehrteilig ? aufgeklappt : undefined}
+                      onClick={oeffneVorgang}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
-                          oeffne(d.id)
+                          oeffneVorgang()
                         }
                       }}
                       className={`group flex cursor-pointer gap-2 px-3 py-3 ${aktiv ? 'bg-primary/10' : 'hover:bg-slate-50'}`}
@@ -579,7 +628,9 @@ export default function Dokumente() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation()
-                            handleToggleGelesen(d, ungelesen)
+                            for (const t of v.teile) {
+                              if (!archivGrundById.get(t.id)) handleToggleGelesen(t, ungelesen)
+                            }
                           }}
                           aria-label={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
                           title={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
@@ -593,34 +644,38 @@ export default function Dokumente() {
                         </button>
                       )}
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
-                        <div className="flex items-baseline justify-between gap-2 text-xs text-slate-500">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
                           <span className="truncate font-mono">
-                            {ds ? ds[1] : d.user_id !== userId ? (authorNames.get(d.user_id) ?? 'Unbekannt') : 'Eigenes Dokument'}
+                            {nummer ?? (kopf.user_id !== userId ? (authorNames.get(kopf.user_id) ?? 'Unbekannt') : 'Eigenes Dokument')}
                           </span>
-                          <span className="shrink-0">{formatDate(d.erstellt_am)}</span>
+                          {mehrteilig && (
+                            <span className="rounded-full bg-slate-200/70 px-1.5 font-semibold text-slate-700">{v.teile.length}</span>
+                          )}
+                          <span className="ml-auto shrink-0">{formatDate(neuester.erstellt_am)}</span>
                         </div>
                         <span className={`text-[15px] leading-snug text-slate-900 ${ungelesen ? 'font-semibold' : 'font-medium'}`}>
-                          {ds ? ds[2] : d.titel}
+                          {titelOhneNummer(kopf.titel)}
                         </span>
-                        {d.vorschau && <p className="line-clamp-2 text-[13px] leading-snug text-slate-500">{d.vorschau}</p>}
-                        {(d.tags.length > 0 || grund || (d.ebene && ebenenPresent.length > 1)) && (
+                        {mehrteilig ? (
+                          <p className="text-[13px] text-slate-500">
+                            {v.teile.length} Drucksachen · zuletzt {drucksachennummer(neuester.titel) ?? formatDate(neuester.erstellt_am)}
+                            {ungelesenTeile.length > 0 && ` · ${ungelesenTeile.length} neu`}
+                          </p>
+                        ) : (
+                          kopf.vorschau && <p className="line-clamp-2 text-[13px] leading-snug text-slate-500">{kopf.vorschau}</p>
+                        )}
+                        {(tags.length > 0 || grund) && (
                           <div className="flex flex-wrap gap-1">
-                            {d.ebene && ebenenPresent.length > 1 && (
-                              <span
-                                className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[d.ebene].chip}`}
-                              >
-                                {EBENE_LABEL[d.ebene]}
-                              </span>
-                            )}
-                            {d.tags.map((t) => (
-                              <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
+                            {tags.slice(0, 3).map((t) => (
+                              <span key={t} className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
                                 {t}
                               </span>
                             ))}
+                            {tags.length > 3 && <span className="px-1 text-[11px] text-slate-500">+{tags.length - 3}</span>}
                             {grund && (
                               <span
                                 title={grund === 'sitzung' ? 'Archiviert: die verknüpfte Sitzung ist vorbei' : 'Von Hand archiviert'}
-                                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500"
+                                className="inline-flex items-center gap-1 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500"
                               >
                                 <Archive className="h-2.5 w-2.5" />
                                 Archiv
@@ -630,6 +685,31 @@ export default function Dokumente() {
                         )}
                       </div>
                     </div>
+                    {aufgeklappt && (
+                      <ol className="mc-animate-slide flex flex-col bg-primary/5 pb-2 pl-11 pr-3">
+                        {v.teile.map((t) => {
+                          const teilAktiv = openDoc?.id === t.id
+                          const teilNeu = istUngelesen(t)
+                          return (
+                            <li key={t.id}>
+                              <button
+                                type="button"
+                                onClick={() => oeffne(t.id)}
+                                aria-pressed={teilAktiv}
+                                className={`flex min-h-9 w-full items-center gap-2.5 border-l-2 px-2.5 text-left text-[13px] ${
+                                  teilAktiv ? 'border-primary font-semibold' : 'border-slate-300 hover:bg-white/70'
+                                }`}
+                              >
+                                <span className="w-28 shrink-0 font-mono text-slate-500">{drucksachennummer(t.titel) ?? '—'}</span>
+                                <span className="min-w-0 flex-1 truncate">{titelOhneNummer(t.titel)}</span>
+                                {teilNeu && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="ungelesen" />}
+                                <span className="shrink-0 text-slate-500">{formatDate(t.erstellt_am)}</span>
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ol>
+                    )}
                   </li>
                 )
               })}
@@ -663,8 +743,8 @@ export default function Dokumente() {
                 <div className="flex items-center gap-2">
                   <span>
                     {proSeite === 0
-                      ? `${filtered.length} von ${documents.length}`
-                      : `${(aktuelleSeite - 1) * proSeite + 1}–${Math.min(aktuelleSeite * proSeite, filtered.length)} von ${filtered.length}`}
+                      ? `${vorgaenge.length} Vorgänge`
+                      : `${(aktuelleSeite - 1) * proSeite + 1}–${Math.min(aktuelleSeite * proSeite, vorgaenge.length)} von ${vorgaenge.length}`}
                   </span>
                   {seitenAnzahl > 1 && (
                     <>

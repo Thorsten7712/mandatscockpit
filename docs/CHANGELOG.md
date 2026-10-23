@@ -3460,3 +3460,25 @@ mit (rund 1.139, praktisch nie Geöffnetes).
   ist.
 - Offen: die 111 Drucksachen ohne Sitzungsverknüpfung bleiben in der Übersicht – nach den Daten
   wurden sie in keiner Sitzung behandelt.
+
+## 23.10.2026 – Dokumenten-Hub: Vorgänge, Filterfenster, Notizen als Schublade
+
+Wunsch: Tag-Wolke über der Liste weg, Anfrage und Antwort der Verwaltung (DS11/1013 und
+DS11/1013-1) zusammenhängend wie eine Mail-Konversation, und mehr Breite für den Text – die
+mittlere Spalte war neben Liste und Notizspalte zu schmal. Drei Entwürfe auf einem Design-Canvas
+(A Posteingang + Notizen als Schublade, B Verlauf, C Lesemodus mit Randnotizen); gewählt: A.
+
+- **Vorgänge** (`gruppiereVorgaenge()` in `src/lib/vorgaenge.ts`, mit Tests): Gruppierung über
+  die Grundnummer aus dem Titel, Teile nach Folgenummer sortiert (DS11/1013, -1, -1-2, -2),
+  Vorgänge nach dem neuesten Teil. Stand 23.10.: 1.141 Drucksachen in 893 Vorgängen, 203 davon
+  mehrteilig, bis zu 13 Teile. Rein im Frontend, keine Migration. Gelesen/ungelesen und Archiv
+  gelten je Teil; ein Vorgang ist ungelesen, wenn ein Teil es ist, und trägt das Archiv-Fähnchen
+  nur, wenn alle Teile archiviert sind. Ein Klick öffnet das neueste ungelesene Teil, sonst das
+  neueste.
+- **Filterfenster** statt Tag-Wolke (`FilterAuswahl.tsx`): Tags nach Gremien, Antragstellern und
+  Themen gruppiert (Heuristik über die Bezeichnung, dailyallris vergibt die Tags frei), je Gruppe
+  acht sichtbar, Suche, Ebenen. Mehrere Tags: ODER innerhalb einer Gruppe, UND über Gruppen.
+- **Notizen als Schublade**: `DokumentDetailModal` eingebettet ohne Notizspalte, der Text nimmt
+  die ganze Breite (zentriert in Lesebreite); „Notizen (n)" öffnet eine Schublade über dem Text,
+  Escape schließt. Gilt auch für die Sitzungsansicht. Im Fenster (schmale Bildschirme) bleiben
+  die Leselayouts A/C.
