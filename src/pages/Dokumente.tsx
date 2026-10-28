@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ChevronLeft, ChevronRight, FileText, Search, X } from 'lucide-react'
+import { Archive, ChevronLeft, ChevronRight, FileText, List as ListIcon, Search, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentListenZeile, DokumentRow, Ebene, Profile } from '../lib/types'
 import { DOKUMENT_LISTEN_SPALTEN, ladeDokument, sucheDokumente } from '../lib/dokumentSpalten'
@@ -83,15 +83,26 @@ function chipClass(active: boolean): string {
  */
 /** Ab dieser Breite steht das geöffnete Dokument neben der Liste, darunter im Fenster. */
 const BREIT = '(min-width: 1024px)'
+/** iPad und schmale Fenster: ist ein Dokument offen, klappt die Liste in eine
+ *  Schublade (Feinschliff 28.10.2026, Entwurf B) – sonst bleibt dem Text zu
+ *  wenig Breite und Höhe. */
+const KOMPAKT = '(pointer: coarse), (max-width: 1279px)'
 
-export default function Dokumente() {
-  const [breit, setBreit] = useState(() => window.matchMedia(BREIT).matches)
+function useMedien(abfrage: string): boolean {
+  const [passt, setPasst] = useState(() => window.matchMedia(abfrage).matches)
   useEffect(() => {
-    const mq = window.matchMedia(BREIT)
-    const beiAenderung = () => setBreit(mq.matches)
+    const mq = window.matchMedia(abfrage)
+    const beiAenderung = () => setPasst(mq.matches)
     mq.addEventListener('change', beiAenderung)
     return () => mq.removeEventListener('change', beiAenderung)
-  }, [])
+  }, [abfrage])
+  return passt
+}
+
+export default function Dokumente() {
+  const breit = useMedien(BREIT)
+  const kompakt = useMedien(KOMPAKT)
+  const [listeOffen, setListeOffen] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [documents, setDocuments] = useState<DokumentListenZeile[]>([])
@@ -379,8 +390,154 @@ export default function Dokumente() {
     }
   }
 
+  // Ist ein Dokument offen, steht auf dem iPad die Liste samt Suche und Filtern
+  // in der Schublade; sonst wie gewohnt über der Liste.
+  const schublade = breit && kompakt && openDoc !== null
+  useEffect(() => {
+    if (!schublade || !listeOffen) return
+    function beiEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setListeOffen(false)
+    }
+    window.addEventListener('keydown', beiEscape)
+    return () => window.removeEventListener('keydown', beiEscape)
+  }, [schublade, listeOffen])
+  const suchfeld = (
+    <div className="relative w-full sm:w-[380px]">
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <input
+        type="search"
+        placeholder="Titel, Text, Drucksachennummer …"
+        value={searchQuery}
+        onChange={(e) => mitSeitenreset(setSearchQuery)(e.target.value)}
+        className="mc-input min-h-11 w-full rounded-[10px]! pl-10 pr-9 text-[15px]!"
+      />
+      {searchQuery && (
+        <button
+          type="button"
+          onClick={() => mitSeitenreset(setSearchQuery)('')}
+          aria-label="Suche leeren"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  )
+  const filterzeile = (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <FilterAuswahl
+          tags={tagsPresent}
+          aktiv={aktiveTags}
+          onUmschalten={tagUmschalten}
+          zusatz={
+            ebenenPresent.length > 1 && (
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Ebene</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['alle', ...ebenenPresent] as const).map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      aria-pressed={ebeneFilter === e}
+                      onClick={() => mitSeitenreset(setEbeneFilter)(e)}
+                      className={chipClass(ebeneFilter === e)}
+                    >
+                      {e === 'alle' ? 'Alle Ebenen' : EBENE_LABEL[e]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          }
+        />
+        <span className="mx-1 h-5 w-px bg-slate-300" aria-hidden="true" />
+        {meineGremien.length > 0 && (
+          <button
+            type="button"
+            onClick={() => mitSeitenreset(setNurMeineGremien)(!nurMeineGremien)}
+            title={`Nur Dokumente aus Sitzungen von: ${meineGremien.join(', ')}`}
+            className={chipClass(nurMeineGremien)}
+          >
+            Meine Gremien
+          </button>
+        )}
+        {archivGesamt > 0 && (
+          <button
+            type="button"
+            onClick={() => mitSeitenreset(setArchivEinbeziehen)(!archivEinbeziehen)}
+            disabled={sucheAktiv}
+            title={
+              sucheAktiv
+                ? 'Bei aktiver Suche ist das Archiv immer eingeschlossen.'
+                : 'Auch Dokumente vergangener Sitzungen anzeigen'
+            }
+            className={`${chipClass(zeigeArchiv)} inline-flex items-center gap-1 disabled:cursor-not-allowed`}
+          >
+            <Archive className="h-3 w-3" />
+            Archiv ({archivGesamt})
+          </button>
+        )}
+        {aktiveTags.map((t) => (
+          <span
+            key={t}
+            className="inline-flex min-h-7.5 items-center gap-1 rounded-full bg-primary/10 pl-3 pr-1 text-[13px] font-medium text-primary"
+          >
+            {t}
+            <button
+              type="button"
+              onClick={() => tagUmschalten(t)}
+              aria-label={`Filter ${t} entfernen`}
+              className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-primary/10"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        ))}
+        {ebeneFilter !== 'alle' && (
+          <span className="inline-flex min-h-7.5 items-center gap-1 rounded-full bg-primary/10 pl-3 pr-1 text-[13px] font-medium text-primary">
+            {EBENE_LABEL[ebeneFilter]}
+            <button
+              type="button"
+              onClick={() => mitSeitenreset(setEbeneFilter)('alle')}
+              aria-label="Ebenen-Filter entfernen"
+              className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-primary/10"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        )}
+      </div>
+      <button type="button" onClick={() => setShowForm((v) => !v)} className={showForm ? 'mc-btn-ghost' : 'mc-btn-primary'}>
+        {showForm ? 'Abbrechen' : '+ Dokument'}
+      </button>
+    </div>
+  )
+
   return (
     <div>
+      {schublade ? (
+        <header className="mb-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setListeOffen(true)}
+            aria-expanded={listeOffen}
+            aria-controls="vorgaenge-schublade"
+            className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-[10px] border border-slate-300 bg-white px-3.5 text-sm font-semibold transition-colors hover:bg-slate-50"
+          >
+            <ListIcon className="h-4 w-4" />
+            Vorgänge
+            {unreadCount > 0 && (
+              <span className="rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">{unreadCount}</span>
+            )}
+          </button>
+          <h1 className="text-lg font-bold tracking-tight">Dokumente</h1>
+          <span className="truncate text-sm text-slate-500">
+            {offenGesamt.toLocaleString('de-DE')} offen
+            {unreadCount > 0 ? ` · ${unreadCount.toLocaleString('de-DE')} ungelesen` : ''}
+          </span>
+        </header>
+      ) : (
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h1 className="mc-page-title">Dokumente</h1>
@@ -390,27 +547,9 @@ export default function Dokumente() {
             {archivGesamt > 0 ? ` · ${archivGesamt.toLocaleString('de-DE')} im Archiv` : ''}
           </span>
         </div>
-        <div className="relative w-full sm:w-[380px]">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="search"
-            placeholder="Titel, Text, Drucksachennummer …"
-            value={searchQuery}
-            onChange={(e) => mitSeitenreset(setSearchQuery)(e.target.value)}
-            className="mc-input min-h-11 w-full rounded-[10px]! pl-10 pr-9 text-[15px]!"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => mitSeitenreset(setSearchQuery)('')}
-              aria-label="Suche leeren"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+        {suchfeld}
       </header>
+      )}
       <div>
         {ladeFehler && (
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
@@ -436,94 +575,7 @@ export default function Dokumente() {
           </p>
         )}
 
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <FilterAuswahl
-              tags={tagsPresent}
-              aktiv={aktiveTags}
-              onUmschalten={tagUmschalten}
-              zusatz={
-                ebenenPresent.length > 1 && (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Ebene</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(['alle', ...ebenenPresent] as const).map((e) => (
-                        <button
-                          key={e}
-                          type="button"
-                          aria-pressed={ebeneFilter === e}
-                          onClick={() => mitSeitenreset(setEbeneFilter)(e)}
-                          className={chipClass(ebeneFilter === e)}
-                        >
-                          {e === 'alle' ? 'Alle Ebenen' : EBENE_LABEL[e]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              }
-            />
-            <span className="mx-1 h-5 w-px bg-slate-300" aria-hidden="true" />
-            {meineGremien.length > 0 && (
-              <button
-                type="button"
-                onClick={() => mitSeitenreset(setNurMeineGremien)(!nurMeineGremien)}
-                title={`Nur Dokumente aus Sitzungen von: ${meineGremien.join(', ')}`}
-                className={chipClass(nurMeineGremien)}
-              >
-                Meine Gremien
-              </button>
-            )}
-            {archivGesamt > 0 && (
-              <button
-                type="button"
-                onClick={() => mitSeitenreset(setArchivEinbeziehen)(!archivEinbeziehen)}
-                disabled={sucheAktiv}
-                title={
-                  sucheAktiv
-                    ? 'Bei aktiver Suche ist das Archiv immer eingeschlossen.'
-                    : 'Auch Dokumente vergangener Sitzungen anzeigen'
-                }
-                className={`${chipClass(zeigeArchiv)} inline-flex items-center gap-1 disabled:cursor-not-allowed`}
-              >
-                <Archive className="h-3 w-3" />
-                Archiv ({archivGesamt})
-              </button>
-            )}
-            {aktiveTags.map((t) => (
-              <span
-                key={t}
-                className="inline-flex min-h-7.5 items-center gap-1 rounded-full bg-primary/10 pl-3 pr-1 text-[13px] font-medium text-primary"
-              >
-                {t}
-                <button
-                  type="button"
-                  onClick={() => tagUmschalten(t)}
-                  aria-label={`Filter ${t} entfernen`}
-                  className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-primary/10"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </span>
-            ))}
-            {ebeneFilter !== 'alle' && (
-              <span className="inline-flex min-h-7.5 items-center gap-1 rounded-full bg-primary/10 pl-3 pr-1 text-[13px] font-medium text-primary">
-                {EBENE_LABEL[ebeneFilter]}
-                <button
-                  type="button"
-                  onClick={() => mitSeitenreset(setEbeneFilter)('alle')}
-                  aria-label="Ebenen-Filter entfernen"
-                  className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-primary/10"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </span>
-            )}
-          </div>
-          <button type="button" onClick={() => setShowForm((v) => !v)} className={showForm ? 'mc-btn-ghost' : 'mc-btn-primary'}>
-            {showForm ? 'Abbrechen' : '+ Dokument'}
-          </button>
-        </div>
+        {!schublade && filterzeile}
 
         {showForm && (
           <form onSubmit={handleAdd} className="mc-card mc-animate-pop mb-4 max-w-xl space-y-3 p-4">
@@ -584,8 +636,39 @@ export default function Dokumente() {
           </form>
         )}
 
-        <div className={breit ? 'mc-card flex h-[calc(100vh-15rem)] min-h-[560px] overflow-hidden' : ''}>
-          <div className={breit ? 'flex w-[400px] shrink-0 flex-col border-r border-slate-100 xl:w-[440px]' : ''}>
+        <div
+          className={
+            breit
+              ? `mc-card relative flex overflow-hidden ${schublade ? 'h-[calc(100dvh-6.5rem)] min-h-[480px]' : 'h-[calc(100vh-15rem)] min-h-[560px]'}`
+              : ''
+          }
+        >
+          {schublade && listeOffen && (
+            <button
+              type="button"
+              aria-label="Vorgänge schließen"
+              onClick={() => setListeOffen(false)}
+              className="mc-animate-fade absolute inset-0 z-10 bg-slate-900/20"
+            />
+          )}
+          <div
+            id="vorgaenge-schublade"
+            className={
+              schublade
+                ? listeOffen
+                  ? 'mc-animate-slide absolute inset-y-0 left-0 z-20 flex w-[min(440px,85%)] flex-col border-r border-slate-200 bg-white shadow-xl'
+                  : 'hidden'
+                : breit
+                  ? 'flex w-[400px] shrink-0 flex-col border-r border-slate-100 xl:w-[440px]'
+                  : ''
+            }
+          >
+            {schublade && (
+              <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 p-3 *:mb-0! *:w-full!">
+                {suchfeld}
+                {filterzeile}
+              </div>
+            )}
             <ul className={breit ? 'min-h-0 flex-1 overflow-y-auto' : 'mc-card overflow-hidden'}>
               {sichtbare.map((v) => {
                 const kopf = v.teile[0]
@@ -601,6 +684,8 @@ export default function Dokumente() {
                 const nummer = grundnummer(kopf.titel)
                 const oeffneVorgang = () => {
                   setOffenerVorgang(mehrteilig ? v.schluessel : null)
+                  // Mehrteilige Vorgänge klappen ihre Teile auf – die Schublade bleibt dann offen.
+                  if (!mehrteilig) setListeOffen(false)
                   // Das Neueste zuerst – meist die Antwort, auf die man wartet.
                   oeffne((ungelesenTeile[ungelesenTeile.length - 1] ?? neuester).id)
                 }
@@ -694,7 +779,10 @@ export default function Dokumente() {
                             <li key={t.id}>
                               <button
                                 type="button"
-                                onClick={() => oeffne(t.id)}
+                                onClick={() => {
+                                  setListeOffen(false)
+                                  oeffne(t.id)
+                                }}
                                 aria-pressed={teilAktiv}
                                 className={`flex min-h-9 w-full items-center gap-2.5 border-l-2 px-2.5 text-left text-[13px] ${
                                   teilAktiv ? 'border-primary font-semibold' : 'border-slate-300 hover:bg-white/70'

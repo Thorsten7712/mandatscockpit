@@ -200,8 +200,10 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   diese Sichtbarkeit im Code nach (`darfFaktSehen()`); Löschen nur in der Web-UI.
 - **App-Rahmen** (`src/components/AppLayout.tsx`, UI-Umbau seit 18.10.2026): alle Seiten hinter
   dem Login hängen als verschachtelte Routen an **einer** Layout-Route in `App.tsx`. Links eine
-  Leiste (Heute, Kalender, Sitzungen, Aufgaben, Dokumente mit Ungelesen-Zähler, Zahlen & Fakten,
-  Archiv; unten Profil → Einstellungen, Abmelden, Einklappen 240 ↔ 72 px), auf dem Handy statt
+  Leiste (oben ein Kopf in der Parteifarbe mit Logo-Kachel, großem Profilbild, Name und
+  Fraktion · Gliederung – Klick führt zu den Einstellungen; darunter Heute, Kalender, Sitzungen,
+  Aufgaben, Dokumente mit Ungelesen-Zähler, Zahlen & Fakten, Archiv; unten Einstellungen,
+  Abmelden, Einklappen 240 ↔ 72 px), auf dem Handy statt
   dessen eine Tab-Leiste unten (Heute, Sitzungen, Aufgaben, Dokumente, Mehr). Inhalt höchstens
   1440 px breit, oben ein 4-px-Streifen in der Parteifarbe (`bg-topbar`). Seiten bringen **kein
   eigenes Chrome** mit, nur ein `h1` mit `mc-page-title` und ihren Inhalt. Schrift IBM Plex Sans,
@@ -212,6 +214,15 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   `PROFIL_GEAENDERT` auf `window`, die Leiste lädt nach. **Muster „Liste + Detail in einer
   Karte"** ab 1024 px, darunter Fenster: Sitzungen (TOP), Aufgaben (Karte), Dokumente (Leser) –
   jeweils dieselbe Detailkomponente mit `eingebettet`, keine zweite Ansicht.
+- **Sitzungsmodus** (`/sitzungen/:id/modus`, `src/pages/SitzungsModus.tsx`, seit 28.10.2026):
+  Vollbild ohne Leiste (eigene Route außerhalb von `AppLayout`), Einstieg über den Knopf in der
+  Sitzungsansicht. Immer ein Tagesordnungspunkt: große Nummer, Titel, Beschlussvorschlag, eigene
+  Notizen als Spickzettel, Mitschrift (speichert eine persönliche Notiz am Dokument). Unten
+  Zurück/Weiter und alle Punkte als Leiste, Pfeiltasten wechseln. Der Punkt steht in `?top=`,
+  Bildschirm bleibt per Wake Lock an. Setzt **kein** `ergebnis` – das gehört dem ALLRIS-Import.
+- **iPad-Lesen im Hub**: Bei `(pointer: coarse)` oder unter 1280 px klappt die Vorgangsliste samt
+  Suche und Filtern in eine Schublade (Knopf „Vorgänge"), sobald ein Dokument offen ist; die Karte
+  nimmt dann fast die ganze Höhe (`100dvh`).
 - **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
   Kontaktformular (anonymer Insert, Honeypot-Feld).
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),

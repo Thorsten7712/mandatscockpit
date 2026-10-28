@@ -19,6 +19,7 @@ const TerminDetail = lazy(() => import('./pages/TerminDetail'))
 const Kalender = lazy(() => import('./pages/Kalender'))
 const Sitzungen = lazy(() => import('./pages/Sitzungen'))
 const Aufgaben = lazy(() => import('./pages/Aufgaben'))
+const SitzungsModus = lazy(() => import('./pages/SitzungsModus'))
 
 export default function App() {
   return (
@@ -29,6 +30,15 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/impressum" element={<Impressum />} />
           <Route path="/datenschutz" element={<Datenschutz />} />
+          {/* Sitzungsmodus: Vollbild ohne Leiste, damit während der Sitzung nichts ablenkt. */}
+          <Route
+            path="/sitzungen/:id/modus"
+            element={
+              <ProtectedRoute>
+                <SitzungsModus />
+              </ProtectedRoute>
+            }
+          />
           {/* Alle Seiten hinter dem Login teilen sich den App-Rahmen (Leiste). */}
           <Route
             element={
