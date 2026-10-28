@@ -3482,3 +3482,24 @@ mittlere Spalte war neben Liste und Notizspalte zu schmal. Drei Entwürfe auf ei
   die ganze Breite (zentriert in Lesebreite); „Notizen (n)" öffnet eine Schublade über dem Text,
   Escape schließt. Gilt auch für die Sitzungsansicht. Im Fenster (schmale Bildschirme) bleiben
   die Leselayouts A/C.
+
+## 28.10.2026 – Feinschliff: Leiste, iPad-Lesen, Sitzungsmodus
+
+Wunsch: Parteilogo und Profilbild prominenter, auf dem iPad mehr Höhe zum Lesen der Drucksachen
+und ein Sitzungsmodus mit vollem Fokus auf die laufende Sitzung. Drei Entwürfe auf einem
+Design-Canvas (A Ruhig, B Identität im Kopf, C Blatt), gewählt: B für alle drei Teile.
+
+- **Leiste** (`AppLayout.tsx`): Kopf in der Parteifarbe mit Logo auf weißer Kachel, Profilbild
+  72 px mit weißem Ring, Name und „Fraktion · Gliederung" (Fallback: Parteiname). Der Kopf führt zu
+  den Einstellungen; unten steht statt der kleinen Profilzeile „Einstellungen". Eingeklappt:
+  kleine Logo-Kachel und 44-px-Bild.
+- **iPad-Lesen** (`Dokumente.tsx`): Die Höhe ging an Seitenkopf, Suche und Filterzeile verloren
+  (Karte `100vh-15rem`). Mit offenem Dokument auf Touch-Geräten oder unter 1280 px stehen Suche,
+  Filter und Liste in einer Schublade von links; oben bleibt eine Zeile mit „Vorgänge (n)". Ein
+  einteiliger Vorgang oder ein Teil schließt die Schublade, ein mehrteiliger klappt seine Teile
+  auf und lässt sie offen. Desktop unverändert.
+- **Sitzungsmodus** (`SitzungsModus.tsx`, Route `/sitzungen/:id/modus` außerhalb des
+  App-Rahmens): ein TOP groß, Spickzettel aus den eigenen Notizen am Dokument, Mitschrift als
+  persönliche Notiz (Entwürfe je Punkt bleiben beim Blättern erhalten), Leiste aller Punkte,
+  Pfeiltasten, `?top=` gegen Neuladen, Wake Lock. Ergebnis-Knöpfe aus Entwurf C bewusst nicht:
+  `sitzung_dokumente.ergebnis` schreibt der ALLRIS-Import und würde sie überschreiben.

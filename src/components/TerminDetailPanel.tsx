@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, ChevronDown, ChevronUp, ListChecks, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowLeft, ChevronDown, ChevronUp, ListChecks, Presentation, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { CalendarSource, DokumentRow, Ebene, EventRow, SessionRow, TagesordnungsEintrag, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
@@ -773,9 +774,14 @@ export function TerminDetailPanel({
             </span>
           </div>
           {tagesordnung.length > 0 && (
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {filterKnopf(nurMitDrucksache, () => setNurMitDrucksache((v) => !v), 'Nur mit Drucksache')}
               {filterKnopf(nurUngelesen, () => setNurUngelesen((v) => !v), 'Ungelesen')}
+              {/* Vollbild für die laufende Sitzung: ein Tagesordnungspunkt nach dem anderen. */}
+              <Link to={`/sitzungen/${session.id}/modus`} className="mc-btn-primary ml-1 inline-flex items-center gap-1.5">
+                <Presentation size={16} />
+                Sitzungsmodus
+              </Link>
             </div>
           )}
         </div>
