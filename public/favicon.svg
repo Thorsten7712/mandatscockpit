@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#0f172a"/><text x="16" y="22" font-family="ui-sans-serif,system-ui,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">MC</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- MandatsCockpit: Tacho als Zeichen fürs Cockpit, parteineutral (Farben wie das neutrale Theme). -->
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <g transform="translate(0 -3)">
+  <path d="M14 42a18 18 0 0 1 36 0" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <path d="M32 42 42.5 27.5" stroke="#52b7c1" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="32" cy="42" r="5" fill="#fff"/>
+  </g>
+</svg>
