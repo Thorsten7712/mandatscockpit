@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- MandatsCockpit: Tacho als Zeichen fürs Cockpit, parteineutral (Farben wie das neutrale Theme). -->
-  <rect width="64" height="64" rx="14" fill="#0f172a"/>
-  <g transform="translate(0 -3)">
-  <path d="M14 42a18 18 0 0 1 36 0" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
-  <path d="M32 42 42.5 27.5" stroke="#52b7c1" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="32" cy="42" r="5" fill="#fff"/>
-  </g>
+  <!-- MandatsCockpit: Rathaus (Giebel, vier Säulen, Sockel in Türkis), Farben wie die Leiste. -->
+  <rect width="64" height="64" rx="14" fill="#0B3358"/>
+  <path d="M14 26 32 14l18 12z" fill="#fff"/>
+  <rect x="16" y="29" width="5" height="16" rx="1" fill="#fff"/>
+  <rect x="25" y="29" width="5" height="16" rx="1" fill="#fff"/>
+  <rect x="34" y="29" width="5" height="16" rx="1" fill="#fff"/>
+  <rect x="43" y="29" width="5" height="16" rx="1" fill="#fff"/>
+  <rect x="12" y="47" width="40" height="4" rx="1.5" fill="#52B7C1"/>
 </svg>

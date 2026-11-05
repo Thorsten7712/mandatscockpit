@@ -3515,7 +3515,7 @@ Analysen –, eigene zuerst, je mit Autor und (außer bei Mitschriften) Titel.
 ## 05.11.2026 – Favicon und Icon für den Home-Bildschirm
 
 Bisher nur ein SVG mit dem Text „MC" – Safari (iPad/iPhone) zeigt SVG-Favicons nicht, und für
-„Zum Home-Bildschirm" gab es kein Icon. Neu: ein Tacho als Zeichen (dunkler Grund wie das neutrale
-Theme, Nadel in Türkis, parteineutral), als `public/favicon.svg`, `favicon-32.png` und
+„Zum Home-Bildschirm" gab es kein Icon. Neu: ein Rathaus als Zeichen (Giebel, vier Säulen, Sockel in
+Türkis auf Dunkelblau wie die Leiste; aus sechs Entwürfen gewählt, ein Tacho davor abgelehnt), als `public/favicon.svg`, `favicon-32.png` und
 `apple-touch-icon.png` (180 px, ohne eigene Rundung – iOS rundet selbst). Name auf dem
 Home-Bildschirm: „Cockpit" (`apple-mobile-web-app-title`, „MandatsCockpit" würde abgeschnitten).
