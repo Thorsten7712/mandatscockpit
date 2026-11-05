@@ -236,8 +236,8 @@ export default function SitzungsModus() {
       ) : tops.length === 0 ? (
         <p className="p-8 text-center text-slate-500">Für diese Sitzung ist noch keine Tagesordnung veröffentlicht.</p>
       ) : (
-        <main className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto px-5 py-6 sm:px-10 lg:flex-row lg:gap-10 lg:px-14 lg:py-9">
-          <div key={index} className="mc-animate-fade flex min-w-0 flex-1 flex-col gap-4">
+        <main className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto px-5 py-6 sm:px-10 lg:flex-row lg:gap-10 lg:overflow-hidden lg:px-12 lg:py-8">
+          <div key={index} className="mc-animate-fade flex min-w-0 flex-1 flex-col gap-4 lg:overflow-y-auto">
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <span className="font-mono text-5xl leading-none text-primary sm:text-6xl">{nummer}</span>
               <span className="text-[15px] text-slate-500">
@@ -279,19 +279,28 @@ export default function SitzungsModus() {
             {!dok && <p className="text-[15px] text-slate-500">Zu diesem Punkt gibt es keine Drucksache.</p>}
           </div>
 
-          <aside aria-label="Spickzettel und Mitschrift" className="flex w-full shrink-0 flex-col gap-3 lg:w-[360px]">
-            <h2 className="text-[15px] font-bold">Mein Spickzettel</h2>
+          {/* Der Spickzettel nimmt die ganze Höhe und gut zwei Fünftel der Breite: im Saal
+              muss er mit einem Blick lesbar sein (Rückmeldung 05.11.2026, vorher 360 px und
+              höchstens 40 % der Höhe). */}
+          <aside
+            aria-label="Spickzettel und Mitschrift"
+            className="flex w-full shrink-0 flex-col gap-3 lg:min-h-0 lg:w-[min(560px,44%)]"
+          >
+            <h2 className="text-base font-bold">
+              Mein Spickzettel
+              {notizen.length > 1 && <span className="ml-2 font-normal text-slate-500">{notizen.length} Notizen</span>}
+            </h2>
             {notizen.length > 0 ? (
-              <ul className="flex max-h-[40vh] flex-col gap-2 overflow-y-auto">
+              <ul className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {notizen.map((n) => (
-                  <li key={n.id} className="rounded-xl border border-slate-200 p-3.5">
-                    <span className="mb-1 block text-xs text-slate-500">{formatDateTime(n.erstellt_am)}</span>
-                    <p className="whitespace-pre-line text-base leading-relaxed">{n.inhalt}</p>
+                  <li key={n.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                    <span className="mb-1.5 block text-xs text-slate-500">{formatDateTime(n.erstellt_am)}</span>
+                    <p className="whitespace-pre-line text-lg leading-relaxed sm:text-xl">{n.inhalt}</p>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 lg:flex-1">
                 {dok ? 'Keine eigenen Notizen zu dieser Vorlage.' : 'Ohne Drucksache gibt es hier keine Notizen.'}
               </p>
             )}
@@ -302,7 +311,7 @@ export default function SitzungsModus() {
                 </label>
                 <textarea
                   id="mitschrift"
-                  rows={5}
+                  rows={4}
                   value={entwurf}
                   onChange={(e) => {
                     const wert = e.target.value

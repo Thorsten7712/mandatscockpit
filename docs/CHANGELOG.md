@@ -3503,3 +3503,9 @@ Design-Canvas (A Ruhig, B Identität im Kopf, C Blatt), gewählt: B für alle dr
   persönliche Notiz (Entwürfe je Punkt bleiben beim Blättern erhalten), Leiste aller Punkte,
   Pfeiltasten, `?top=` gegen Neuladen, Wake Lock. Ergebnis-Knöpfe aus Entwurf C bewusst nicht:
   `sitzung_dokumente.ergebnis` schreibt der ALLRIS-Import und würde sie überschreiben.
+
+## 05.11.2026 – Sitzungsmodus: größerer Spickzettel
+
+Rückmeldung: der Spickzettel war zu klein (360 px breit, höchstens 40 % der Höhe, 16 px Schrift).
+Jetzt bis zu 560 px bzw. 44 % der Breite, die Notizen füllen die ganze Höhe der Spalte bis zur
+Mitschrift und stehen in 18–20 px; die beiden Spalten scrollen ab 1024 px getrennt.
