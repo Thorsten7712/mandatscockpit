@@ -3509,3 +3509,5 @@ Design-Canvas (A Ruhig, B Identität im Kopf, C Blatt), gewählt: B für alle dr
 Rückmeldung: der Spickzettel war zu klein (360 px breit, höchstens 40 % der Höhe, 16 px Schrift).
 Jetzt bis zu 560 px bzw. 44 % der Breite, die Notizen füllen die ganze Höhe der Spalte bis zur
 Mitschrift und stehen in 18–20 px; die beiden Spalten scrollen ab 1024 px getrennt.
+Dazu zeigt der Spickzettel jetzt alle Notizen am Dokument, die man sehen darf – auch geteilte
+Analysen –, eigene zuerst, je mit Autor und (außer bei Mitschriften) Titel.

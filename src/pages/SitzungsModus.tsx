@@ -10,8 +10,11 @@ import { formatDateTime } from '../lib/format'
 import { logoUrl, themeById } from '../lib/themes'
 import { DokumentDetailModal } from '../components/DokumentDetailModal'
 
-interface EigeneNotiz {
+interface Notiz {
   id: string
+  user_id: string
+  titel: string
+  sichtbarkeit: string
   inhalt: string | null
   erstellt_am: string
 }
@@ -19,8 +22,8 @@ interface EigeneNotiz {
 /**
  * Sitzungsmodus (Feinschliff 28.10.2026, Entwurf B „Ein TOP, groß"): Vollbild
  * ohne Leiste für die laufende Sitzung. Es steht immer genau ein
- * Tagesordnungspunkt da – Nummer, Titel, Beschlussvorschlag, die eigenen
- * Notizen als Spickzettel und ein Feld für die Mitschrift. Unten Zurück/Weiter
+ * Tagesordnungspunkt da – Nummer, Titel, Beschlussvorschlag, die Notizen
+ * und Analysen zur Vorlage als Spickzettel und ein Feld für die Mitschrift. Unten Zurück/Weiter
  * und alle Punkte als Leiste.
  *
  * Der gewählte Punkt steht in der Adresse (?top=), damit ein Neuladen auf dem
@@ -40,7 +43,8 @@ export default function SitzungsModus() {
   const [fehler, setFehler] = useState<string | null>(null)
   const [jetzt, setJetzt] = useState(() => new Date())
 
-  const [notizen, setNotizen] = useState<EigeneNotiz[]>([])
+  const [notizen, setNotizen] = useState<Notiz[]>([])
+  const [autorNamen, setAutorNamen] = useState<Map<string, string>>(new Map())
   // Entwürfe je Punkt, damit ein Wechsel zum nächsten TOP nichts verwirft.
   const [entwuerfe, setEntwuerfe] = useState<Map<number, string>>(new Map())
   const [speichern, setSpeichern] = useState(false)
@@ -122,14 +126,21 @@ export default function SitzungsModus() {
     }
   }, [])
 
+  // Alle Notizen am Dokument, die RLS mich sehen lässt: eigene und geteilte
+  // Analysen (Rückmeldung 05.11.2026 – vorher nur eigene). Eigene zuerst.
   async function ladeNotizen(dokumentId: string, uid: string) {
     const { data } = await supabase
       .from('dokumente')
-      .select('id, inhalt, erstellt_am')
+      .select('id, user_id, titel, sichtbarkeit, inhalt, erstellt_am')
       .eq('parent_id', dokumentId)
-      .eq('user_id', uid)
       .order('erstellt_am', { ascending: false })
-    setNotizen(data ?? [])
+    const zeilen = (data ?? []).filter((n) => n.inhalt?.trim())
+    zeilen.sort((a, b) => Number(b.user_id === uid) - Number(a.user_id === uid))
+    const fremde = [...new Set(zeilen.map((n) => n.user_id).filter((id) => id !== uid))]
+    const { data: profile } =
+      fremde.length > 0 ? await supabase.from('profiles').select('id, name').in('id', fremde) : { data: [] }
+    setAutorNamen(new Map((profile ?? []).map((p) => [p.id, p.name])))
+    setNotizen(zeilen)
   }
 
   useEffect(() => {
@@ -294,14 +305,22 @@ export default function SitzungsModus() {
               <ul className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {notizen.map((n) => (
                   <li key={n.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
-                    <span className="mb-1.5 block text-xs text-slate-500">{formatDateTime(n.erstellt_am)}</span>
+                    <span className="mb-1.5 block text-xs text-slate-500">
+                      <b className="font-semibold text-slate-700">
+                        {n.user_id === userId ? 'Du' : (autorNamen.get(n.user_id) ?? 'Unbekannt')}
+                      </b>
+                      {n.sichtbarkeit === 'persoenlich' ? ' · nur für dich' : ''} · {formatDateTime(n.erstellt_am)}
+                    </span>
+                    {n.titel && !n.titel.startsWith('Mitschrift ') && (
+                      <span className="mb-1 block text-sm font-semibold text-slate-700">{n.titel}</span>
+                    )}
                     <p className="whitespace-pre-line text-lg leading-relaxed sm:text-xl">{n.inhalt}</p>
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="text-sm text-slate-500 lg:flex-1">
-                {dok ? 'Keine eigenen Notizen zu dieser Vorlage.' : 'Ohne Drucksache gibt es hier keine Notizen.'}
+                {dok ? 'Keine Notizen oder Analysen zu dieser Vorlage.' : 'Ohne Drucksache gibt es hier keine Notizen.'}
               </p>
             )}
             {dok && (
