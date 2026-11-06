@@ -216,8 +216,9 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   jeweils dieselbe Detailkomponente mit `eingebettet`, keine zweite Ansicht.
 - **Sitzungsmodus** (`/sitzungen/:id/modus`, `src/pages/SitzungsModus.tsx`, seit 28.10.2026):
   Vollbild ohne Leiste (eigene Route außerhalb von `AppLayout`), Einstieg über den Knopf in der
-  Sitzungsansicht. Immer ein Tagesordnungspunkt: große Nummer, Titel, Beschlussvorschlag, Notizen
-  und geteilte Analysen zur Vorlage als Spickzettel, Mitschrift (speichert eine persönliche Notiz am Dokument). Unten
+  Sitzungsansicht. Immer ein Tagesordnungspunkt: Nummer, Titel und links die Vorlage selbst
+  (`VorlageAnsicht`), rechts Notizen und geteilte Analysen zur Vorlage als Spickzettel (immer
+  sichtbar, als Markdown); eine neue Notiz nur auf „+ Notiz" (persönlich am Dokument). Unten
   Zurück/Weiter und alle Punkte als Leiste, Pfeiltasten wechseln. Der Punkt steht in `?top=`,
   Bildschirm bleibt per Wake Lock an. Setzt **kein** `ergebnis` – das gehört dem ALLRIS-Import.
 - **iPad-Lesen im Hub**: Bei `(pointer: coarse)` oder unter 1280 px klappt die Vorgangsliste samt

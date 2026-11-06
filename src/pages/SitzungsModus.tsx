@@ -1,14 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, FileText, X } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { DokumentRow, SessionRow, TagesordnungsEintrag } from '../lib/types'
 import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
-import { vorlageAufbereiten, vorschau } from '../lib/vorlageMarkdown'
+import { vorschau } from '../lib/vorlageMarkdown'
 import { drucksachennummer, titelOhneNummer } from '../lib/vorgaenge'
 import { formatDateTime } from '../lib/format'
 import { logoUrl, themeById } from '../lib/themes'
-import { DokumentDetailModal } from '../components/DokumentDetailModal'
+import { VorlageAnsicht } from '../components/VorlageAnsicht'
+
+/** ALLRIS stellt öffentlichen Punkten ein „Ö " voran – in der engen Leiste unten nur die Zahl. */
+function kurzeNummer(nummer: string | null): string | null {
+  return nummer ? nummer.replace(/^Ö\s*/, '') : null
+}
 
 interface Notiz {
   id: string
@@ -22,8 +29,8 @@ interface Notiz {
 /**
  * Sitzungsmodus (Feinschliff 28.10.2026, Entwurf B „Ein TOP, groß"): Vollbild
  * ohne Leiste für die laufende Sitzung. Es steht immer genau ein
- * Tagesordnungspunkt da – Nummer, Titel, Beschlussvorschlag, die Notizen
- * und Analysen zur Vorlage als Spickzettel und ein Feld für die Mitschrift. Unten Zurück/Weiter
+ * Tagesordnungspunkt da – Nummer, Titel und die Vorlage selbst, rechts die Notizen
+ * und Analysen zur Vorlage als Spickzettel, eine neue Notiz auf Wunsch. Unten Zurück/Weiter
  * und alle Punkte als Leiste.
  *
  * Der gewählte Punkt steht in der Adresse (?top=), damit ein Neuladen auf dem
@@ -50,7 +57,8 @@ export default function SitzungsModus() {
   const [speichern, setSpeichern] = useState(false)
   const [speicherFehler, setSpeicherFehler] = useState<string | null>(null)
   const [gespeichert, setGespeichert] = useState(false)
-  const [vorlageOffen, setVorlageOffen] = useState(false)
+  // Das Feld für eine neue Notiz erscheint nur auf Wunsch.
+  const [schreiben, setSchreiben] = useState(false)
   const leisteRef = useRef<HTMLOListElement>(null)
 
   const index = Math.min(Math.max(Number(params.get('top') ?? 0) || 0, 0), Math.max(tops.length - 1, 0))
@@ -164,7 +172,7 @@ export default function SitzungsModus() {
   useEffect(() => {
     function beiTaste(e: KeyboardEvent) {
       const ziel = e.target as HTMLElement | null
-      if (vorlageOffen || ziel?.closest('textarea, input, select, [contenteditable="true"]')) return
+      if (ziel?.closest('textarea, input, select, [contenteditable="true"]')) return
       if (e.key === 'ArrowRight') gehe(index + 1)
       if (e.key === 'ArrowLeft') gehe(index - 1)
     }
@@ -172,8 +180,9 @@ export default function SitzungsModus() {
     return () => window.removeEventListener('keydown', beiTaste)
   })
 
-  const beschluss = useMemo(() => (dok ? vorlageAufbereiten(dok.inhalt).beschlussvorschlag : null), [dok])
   const entwurf = entwuerfe.get(index) ?? ''
+  // Ein angefangener Entwurf hält das Feld offen, auch nach einem Wechsel des Punktes.
+  const schreibfeldOffen = schreiben || entwurf.length > 0
 
   async function mitschriftSpeichern() {
     if (!dok || !userId || !session || !entwurf.trim()) return
@@ -203,6 +212,7 @@ export default function SitzungsModus() {
       return neu
     })
     setGespeichert(true)
+    setSchreiben(false)
     await ladeNotizen(dok.id, userId)
   }
 
@@ -213,7 +223,7 @@ export default function SitzungsModus() {
 
   return (
     <div className="flex h-dvh flex-col bg-white text-slate-900">
-      <header className="flex min-h-16 shrink-0 items-center gap-3 bg-primary px-4 text-white sm:gap-4 sm:px-6">
+      <header className="flex min-h-14 shrink-0 items-center gap-3 bg-primary px-4 text-white sm:gap-4 sm:px-6">
         {logo && (
           <span className="hidden h-9 shrink-0 items-center rounded-lg bg-white px-2 sm:flex">
             <img src={logo} alt={themeById(partei).label} className="h-6 w-auto max-w-16 object-contain" />
@@ -247,11 +257,11 @@ export default function SitzungsModus() {
       ) : tops.length === 0 ? (
         <p className="p-8 text-center text-slate-500">Für diese Sitzung ist noch keine Tagesordnung veröffentlicht.</p>
       ) : (
-        <main className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto px-5 py-6 sm:px-10 lg:flex-row lg:gap-10 lg:overflow-hidden lg:px-12 lg:py-8">
-          <div key={index} className="mc-animate-fade flex min-w-0 flex-1 flex-col gap-4 lg:overflow-y-auto">
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              <span className="font-mono text-5xl leading-none text-primary sm:text-6xl">{nummer}</span>
-              <span className="text-[15px] text-slate-500">
+        <main className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5 sm:px-8 lg:flex-row lg:gap-8 lg:overflow-hidden lg:py-6">
+          <div key={index} className="mc-animate-fade flex min-w-0 flex-1 flex-col gap-3 lg:min-h-0">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-slate-500">
+              <span className="font-mono text-2xl leading-none text-primary">{kurzeNummer(nummer)}</span>
+              <span>
                 Punkt {index + 1} von {tops.length}
                 {ds && (
                   <>
@@ -262,59 +272,56 @@ export default function SitzungsModus() {
                 {akt?.ergebnis && ` · ${akt.ergebnis}`}
               </span>
             </div>
-            <h1 className="max-w-[28ch] text-[28px] font-bold leading-tight tracking-tight text-balance sm:text-[34px]">
-              {titel}
-            </h1>
+            <h1 className="max-w-[40ch] text-[22px] font-bold leading-snug tracking-tight text-balance">{titel}</h1>
+            {/* Die Vorlage steht direkt hier (Rückmeldung 06.11.2026) – mit dem
+                Beschlussvorschlag als Kasten obenauf, statt Vorschau und Extra-Fenster. */}
             {dok && (
-              <section className="mt-1 max-w-[66ch] rounded-xl bg-slate-100 px-5 py-4">
-                <h2 className="mb-1.5 text-sm font-semibold text-slate-500">
-                  {beschluss ? 'Beschlussvorschlag' : 'Worum es geht'}
-                </h2>
-                <p className="whitespace-pre-line font-serif text-lg leading-relaxed sm:text-xl">
-                  {beschluss || dok.vorschau || 'Für dieses Dokument liegt noch kein Text vor.'}
-                </p>
-              </section>
-            )}
-            {dok && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setVorlageOffen(true)}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-slate-300 px-4 text-sm font-semibold transition-colors hover:bg-slate-50"
-                >
-                  <FileText size={16} />
-                  Ganze Vorlage lesen
-                </button>
+              <div className="h-[70vh] min-h-0 overflow-hidden rounded-xl border border-slate-200 lg:h-auto lg:flex-1">
+                <VorlageAnsicht inhalt={dok.inhalt} zentriert />
               </div>
             )}
             {!dok && <p className="text-[15px] text-slate-500">Zu diesem Punkt gibt es keine Drucksache.</p>}
           </div>
 
-          {/* Der Spickzettel nimmt die ganze Höhe und gut zwei Fünftel der Breite: im Saal
-              muss er mit einem Blick lesbar sein (Rückmeldung 05.11.2026, vorher 360 px und
-              höchstens 40 % der Höhe). */}
+          {/* Spickzettel (Rückmeldung 06.11.2026): vorhandene Notizen und Analysen stehen
+              immer da, das Feld für eine neue Notiz erscheint erst auf „+ Notiz". */}
           <aside
-            aria-label="Spickzettel und Mitschrift"
-            className="flex w-full shrink-0 flex-col gap-3 lg:min-h-0 lg:w-[min(560px,44%)]"
+            aria-label="Spickzettel"
+            className="flex w-full shrink-0 flex-col gap-3 lg:min-h-0 lg:w-[min(480px,42%)]"
           >
-            <h2 className="text-base font-bold">
-              Mein Spickzettel
-              {notizen.length > 1 && <span className="ml-2 font-normal text-slate-500">{notizen.length} Notizen</span>}
-            </h2>
+            <div className="flex min-h-10 items-center gap-2">
+              <h2 className="text-[15px] font-bold">
+                Spickzettel
+                {notizen.length > 0 && <span className="ml-1.5 font-normal text-slate-500">({notizen.length})</span>}
+              </h2>
+              {dok && !schreibfeldOffen && (
+                <button
+                  type="button"
+                  onClick={() => setSchreiben(true)}
+                  className="ml-auto inline-flex min-h-10 items-center gap-1.5 rounded-[10px] border border-slate-300 px-3 text-sm font-semibold transition-colors hover:bg-slate-50"
+                >
+                  <Plus size={15} />
+                  Notiz
+                </button>
+              )}
+            </div>
             {notizen.length > 0 ? (
-              <ul className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              <ul className="flex flex-col gap-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {notizen.map((n) => (
-                  <li key={n.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
-                    <span className="mb-1.5 block text-xs text-slate-500">
+                  <li key={n.id} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <span className="mb-1 block text-xs text-slate-500">
                       <b className="font-semibold text-slate-700">
                         {n.user_id === userId ? 'Du' : (autorNamen.get(n.user_id) ?? 'Unbekannt')}
                       </b>
                       {n.sichtbarkeit === 'persoenlich' ? ' · nur für dich' : ''} · {formatDateTime(n.erstellt_am)}
                     </span>
-                    {n.titel && !n.titel.startsWith('Mitschrift ') && (
-                      <span className="mb-1 block text-sm font-semibold text-slate-700">{n.titel}</span>
+                    {/* Analysen beginnen meist mit ihrem Titel als Überschrift – dann nicht doppelt. */}
+                    {n.titel && !n.titel.startsWith('Mitschrift ') && !n.inhalt?.trimStart().startsWith('#') && (
+                      <span className="mb-1 block text-sm font-semibold text-slate-800">{n.titel}</span>
                     )}
-                    <p className="whitespace-pre-line text-lg leading-relaxed sm:text-xl">{n.inhalt}</p>
+                    <div className="mc-dokument-content text-[15px] [&_h1]:mb-2 [&_h1]:text-[15px] [&_h1]:font-semibold [&_h1]:text-slate-900">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{n.inhalt ?? ''}</ReactMarkdown>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -323,14 +330,15 @@ export default function SitzungsModus() {
                 {dok ? 'Keine Notizen oder Analysen zu dieser Vorlage.' : 'Ohne Drucksache gibt es hier keine Notizen.'}
               </p>
             )}
-            {dok && (
-              <>
-                <label htmlFor="mitschrift" className="mt-2 text-sm font-semibold">
-                  Mitschrift
+            {dok && schreibfeldOffen && (
+              <div className="mc-animate-pop flex shrink-0 flex-col gap-2 rounded-xl border border-slate-200 p-3">
+                <label htmlFor="mitschrift" className="text-sm font-semibold">
+                  Neue Notiz
                 </label>
                 <textarea
                   id="mitschrift"
                   rows={4}
+                  autoFocus
                   value={entwurf}
                   onChange={(e) => {
                     const wert = e.target.value
@@ -338,23 +346,40 @@ export default function SitzungsModus() {
                     setEntwuerfe((m) => new Map(m).set(index, wert))
                   }}
                   placeholder="Ergebnis, Wortmeldungen, Nachfassen …"
-                  className="mc-input w-full resize-none text-base!"
+                  className="mc-input w-full resize-none text-[15px]!"
                 />
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={mitschriftSpeichern}
                     disabled={speichern || !entwurf.trim()}
-                    className="mc-btn-primary min-h-11 disabled:opacity-50"
+                    className="mc-btn-primary min-h-10 disabled:opacity-50"
                   >
-                    {speichern ? 'Speichern …' : 'Als Notiz speichern'}
+                    {speichern ? 'Speichern …' : 'Speichern'}
                   </button>
-                  <span className="text-xs text-slate-500" role="status">
-                    {gespeichert ? 'Gespeichert – nur für dich sichtbar.' : 'Nur für dich sichtbar.'}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSchreiben(false)
+                      setEntwuerfe((m) => {
+                        const neu = new Map(m)
+                        neu.delete(index)
+                        return neu
+                      })
+                    }}
+                    className="mc-btn-ghost min-h-10"
+                  >
+                    Verwerfen
+                  </button>
+                  <span className="ml-auto text-xs text-slate-500">Nur für dich sichtbar.</span>
                 </div>
                 {speicherFehler && <p className="text-sm text-red-600">{speicherFehler}</p>}
-              </>
+              </div>
+            )}
+            {gespeichert && !schreibfeldOffen && (
+              <p className="text-xs text-slate-500" role="status">
+                Notiz gespeichert – nur für dich sichtbar.
+              </p>
             )}
           </aside>
         </main>
@@ -375,14 +400,14 @@ export default function SitzungsModus() {
             {tops.map((t, k) => {
               const aktuell = k === index
               return (
-                <li key={`${t.top_nummer ?? ''}|${t.dokument_id ?? k}`} className="min-w-11 flex-1">
+                <li key={`${t.top_nummer ?? ''}|${t.dokument_id ?? k}`} className="shrink-0">
                   <button
                     type="button"
                     onClick={() => gehe(k)}
                     aria-current={aktuell ? 'step' : undefined}
                     aria-label={`Punkt ${t.top_nummer ?? k + 1}: ${t.top_titel || titelOhneNummer(t.titel) || 'ohne Titel'}`}
                     title={t.top_titel || titelOhneNummer(t.titel)}
-                    className={`min-h-11 w-full whitespace-nowrap rounded-lg px-1.5 font-mono text-sm transition-colors ${
+                    className={`min-h-11 min-w-11 whitespace-nowrap rounded-lg px-2.5 font-mono text-sm transition-colors ${
                       aktuell
                         ? 'bg-primary text-white'
                         : k < index
@@ -390,7 +415,7 @@ export default function SitzungsModus() {
                           : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
-                    {t.top_nummer ?? k + 1}
+                    {kurzeNummer(t.top_nummer) ?? k + 1}
                   </button>
                 </li>
               )
@@ -408,20 +433,6 @@ export default function SitzungsModus() {
         </footer>
       )}
 
-      {vorlageOffen && dok && (
-        <DokumentDetailModal
-          document={dok}
-          onClose={() => setVorlageOffen(false)}
-          onDeleted={() => {
-            setVorlageOffen(false)
-            setDokById((m) => {
-              const neu = new Map(m)
-              neu.delete(dok.id)
-              return neu
-            })
-          }}
-        />
-      )}
     </div>
   )
 }
