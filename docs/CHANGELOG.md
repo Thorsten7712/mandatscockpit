@@ -3519,3 +3519,18 @@ Bisher nur ein SVG mit dem Text „MC" – Safari (iPad/iPhone) zeigt SVG-Favico
 Türkis auf Dunkelblau wie die Leiste; aus sechs Entwürfen gewählt, ein Tacho davor abgelehnt), als `public/favicon.svg`, `favicon-32.png` und
 `apple-touch-icon.png` (180 px, ohne eigene Rundung – iOS rundet selbst). Name auf dem
 Home-Bildschirm: „Cockpit" (`apple-mobile-web-app-title`, „MandatsCockpit" würde abgeschnitten).
+
+## 06.11.2026 – Sitzungsmodus ruhiger
+
+Rückmeldung mit iPad-Screenshot: zu unübersichtlich. Befund: Nummer („Ö 5") und Titel in 60/34 px,
+der Knopf „Ganze Vorlage lesen" unter dem Rand, Analysen als rohes Markdown („# Analyse …"),
+Nummern wie „Ö 14.1" liefen in der Leiste über ihre Knöpfe, das Mitschrift-Feld stand immer da.
+Drei neue Entwürfe (Liste zum Aufklappen, Tagesordnung + Reiter, nur der Punkt) gefielen nicht –
+die Aufteilung sollte bleiben. Jetzt:
+
+- Schrift kleiner (Nummer 24 px, Titel 22 px), links statt Vorschau-Kasten und Extra-Fenster die
+  ganze Vorlage (`VorlageAnsicht`, Beschlussvorschlag als Kasten obenauf, eigener Scrollbereich).
+- Spickzettel rechts immer sichtbar, Notizen als Markdown in 15 px; der Titel entfällt, wenn der
+  Text schon mit einer Überschrift beginnt.
+- Neue Notiz nur auf „+ Notiz" (Speichern/Verwerfen), ein angefangener Entwurf hält das Feld offen.
+- Leiste unten: Knöpfe so breit wie ihr Text, „Ö " vor der Nummer entfällt dort und oben.
