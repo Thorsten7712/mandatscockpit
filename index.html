@@ -3,10 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
-    <!-- Safari zeigt kein SVG-Favicon; der Home-Bildschirm auf iPad/iPhone braucht ein PNG. -->
-    <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%favicon-32.png" />
-    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg?v=2" />
+    <!-- ?v=2: Safari hält Favicons unter derselben Adresse hartnäckig im Cache und zeigte nach dem
+         Wechsel weiter das alte „MC". Bei einem neuen Icon die Zahl hochzählen.
+         Der Home-Bildschirm auf iPad/iPhone braucht ein PNG. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%favicon-32.png?v=2" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png?v=2" />
     <meta name="apple-mobile-web-app-title" content="Cockpit" />
     <title>MandatsCockpit</title>
   </head>

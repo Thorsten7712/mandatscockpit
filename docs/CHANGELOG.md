@@ -3534,3 +3534,7 @@ die Aufteilung sollte bleiben. Jetzt:
   Text schon mit einer Überschrift beginnt.
 - Neue Notiz nur auf „+ Notiz" (Speichern/Verwerfen), ein angefangener Entwurf hält das Feld offen.
 - Leiste unten: Knöpfe so breit wie ihr Text, „Ö " vor der Nummer entfällt dort und oben.
+
+Nachtrag 07.11.2026: Safari zeigte nach dem Merge weiter das alte „MC"-Icon – es hält Favicons unter
+derselben Adresse im Cache. Die Icon-Adressen in `index.html` tragen jetzt `?v=2`; bei einem neuen
+Icon die Zahl hochzählen.
