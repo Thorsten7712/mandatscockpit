@@ -8,6 +8,10 @@
   --font-sans:
     'IBM Plex Sans Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  /* Newsreader für Seitentitel und Überschriften (Richtung A „Morgenlage“,
+   * 08.11.2026): die Stimme einer Zeitungsseite, Daten bleiben in Plex. */
+  --font-display: 'Newsreader Variable', Georgia, serif;
+  --font-serif: 'Newsreader Variable', Georgia, serif;
 
   --color-primary: rgb(var(--mc-primary));
   --color-primary-hover: rgb(var(--mc-primary-hover));
@@ -81,7 +85,7 @@
 /* Seitentitel im App-Rahmen (AppLayout): jede Seite beginnt mit genau
  * einem h1 dieser Größe, statt eigener Kopfleisten pro Seite. */
 @utility mc-page-title {
-  @apply text-[28px] leading-tight font-bold tracking-tight text-slate-900;
+  @apply font-display text-[32px] leading-[1.1] font-semibold tracking-[-0.015em] text-slate-900;
 }
 
 /* Reiter mit Unterstrich (Archiv, Zahlen & Fakten): der aktive trägt

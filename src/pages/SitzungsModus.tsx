@@ -9,7 +9,7 @@ import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
 import { vorschau } from '../lib/vorlageMarkdown'
 import { drucksachennummer, titelOhneNummer } from '../lib/vorgaenge'
 import { formatDateTime } from '../lib/format'
-import { logoUrl, themeById } from '../lib/themes'
+import { inStuecken } from '../lib/alleZeilen'
 import { VorlageAnsicht } from '../components/VorlageAnsicht'
 
 /** ALLRIS stellt öffentlichen Punkten ein „Ö " voran – in der engen Leiste unten nur die Zahl. */
@@ -42,7 +42,8 @@ export default function SitzungsModus() {
   const { id } = useParams<{ id: string }>()
   const [params, setParams] = useSearchParams()
   const [userId, setUserId] = useState<string | null>(null)
-  const [partei, setPartei] = useState<string | null>(null)
+  // Anzahl Notizen/Analysen je Dokument – Punkt an der Nummer in der Leiste unten.
+  const [notizenJeDok, setNotizenJeDok] = useState<Map<string, number>>(new Map())
   const [session, setSession] = useState<SessionRow | null>(null)
   const [tops, setTops] = useState<TagesordnungsEintrag[]>([])
   const [dokById, setDokById] = useState<Map<string, DokumentRow>>(new Map())
@@ -68,11 +69,7 @@ export default function SitzungsModus() {
   useEffect(() => {
     async function laden() {
       const { data: auth } = await supabase.auth.getUser()
-      if (auth.user) {
-        setUserId(auth.user.id)
-        const { data: profil } = await supabase.from('profiles').select('partei').eq('id', auth.user.id).single()
-        setPartei(profil?.partei ?? null)
-      }
+      if (auth.user) setUserId(auth.user.id)
       const { data: s, error } = await supabase.from('sessions').select('*').eq('id', id!).single()
       if (error || !s) {
         setFehler('Sitzung nicht gefunden.')
@@ -90,6 +87,11 @@ export default function SitzungsModus() {
       const { data: doks } =
         ids.length > 0 ? await supabase.from('dokumente').select(DOKUMENT_SPALTEN).in('id', ids) : { data: [] as DokumentRow[] }
       const map = new Map((doks ?? []).map((d) => [d.id, d as DokumentRow]))
+      const zaehler = new Map<string, number>()
+      for (const stueck of inStuecken(ids)) {
+        const { data: kinder } = await supabase.from('dokumente').select('parent_id').in('parent_id', stueck)
+        for (const k of kinder ?? []) if (k.parent_id) zaehler.set(k.parent_id, (zaehler.get(k.parent_id) ?? 0) + 1)
+      }
       const sortiert = eintraege
         .map((e) => ({ ...e, titel: (e.dokument_id ? map.get(e.dokument_id)?.titel : '') ?? '' }))
         .sort((a, b) => {
@@ -100,6 +102,7 @@ export default function SitzungsModus() {
         })
       setSession(s)
       setDokById(map)
+      setNotizenJeDok(zaehler)
       setTops(sortiert)
       setGeladen(true)
     }
@@ -216,39 +219,45 @@ export default function SitzungsModus() {
     await ladeNotizen(dok.id, userId)
   }
 
-  const logo = logoUrl(themeById(partei))
   const titel = akt ? akt.top_titel || (dok ? titelOhneNummer(dok.titel) : '') || '(ohne Titel)' : ''
   const nummer = akt?.top_nummer ?? String(index + 1)
   const ds = dok ? drucksachennummer(dok.titel) : null
 
   return (
-    <div className="flex h-dvh flex-col bg-white text-slate-900">
-      <header className="flex min-h-14 shrink-0 items-center gap-3 bg-primary px-4 text-white sm:gap-4 sm:px-6">
-        {logo && (
-          <span className="hidden h-9 shrink-0 items-center rounded-lg bg-white px-2 sm:flex">
-            <img src={logo} alt={themeById(partei).label} className="h-6 w-auto max-w-16 object-contain" />
-          </span>
-        )}
-        <div className="flex min-w-0 flex-col leading-tight">
-          <span className="truncate text-base font-semibold">{session?.gremium ?? session?.titel ?? 'Sitzung'}</span>
+    <div className="flex h-dvh flex-col bg-slate-100 text-slate-900">
+      {/* Kopf wie im App-Rahmen (Richtung A, 08.11.2026): Streifen in der Parteifarbe,
+          weiße Leiste. „Beenden" links statt neben der Uhr – dort traf man es beim
+          Halten des iPads versehentlich. */}
+      <div className="h-1 shrink-0 bg-topbar" aria-hidden="true" />
+      <header className="flex min-h-15 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:gap-4 sm:px-8">
+        <Link
+          to={`/sitzungen/${id}`}
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-slate-300 pl-3 pr-4 text-sm text-slate-700 transition-colors duration-150 hover:bg-slate-100 active:scale-[0.98]"
+        >
+          <X size={16} aria-hidden="true" />
+          Beenden
+        </Link>
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 leading-tight">
+          <span className="truncate font-display text-[21px] font-semibold">{session?.gremium ?? session?.titel ?? 'Sitzung'}</span>
           {session && (
-            <span className="truncate text-[13px] text-white/75">
-              {formatDateTime(session.datum)}
+            <span className="truncate text-sm text-slate-600">
+              <span className="font-mono">{formatDateTime(session.datum)}</span>
               {session.ort ? ` · ${session.ort}` : ''}
             </span>
           )}
         </div>
-        <span className="ml-auto font-mono text-xl tabular-nums" aria-label="Uhrzeit">
+        <span className="ml-auto font-mono text-lg tabular-nums" aria-label="Uhrzeit">
           {jetzt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
         </span>
-        <Link
-          to={`/sitzungen/${id}`}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-[10px] border border-white/40 px-3.5 text-sm font-medium transition-colors hover:bg-white/10"
-        >
-          <X size={16} />
-          Beenden
-        </Link>
       </header>
+      {tops.length > 0 && (
+        <div className="h-[3px] shrink-0 bg-slate-200" aria-hidden="true">
+          <div
+            className="h-full origin-left bg-accent transition-transform duration-300 ease-out motion-reduce:transition-none"
+            style={{ transform: `scaleX(${(index + 1) / tops.length})` }}
+          />
+        </div>
+      )}
 
       {!geladen ? (
         <div className="flex-1" />
@@ -259,24 +268,26 @@ export default function SitzungsModus() {
       ) : (
         <main className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5 sm:px-8 lg:flex-row lg:gap-8 lg:overflow-hidden lg:py-6">
           <div key={index} className="mc-animate-fade flex min-w-0 flex-1 flex-col gap-3 lg:min-h-0">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-slate-500">
-              <span className="font-mono text-2xl leading-none text-primary">{kurzeNummer(nummer)}</span>
-              <span>
-                Punkt {index + 1} von {tops.length}
-                {ds && (
-                  <>
-                    {' · '}
-                    <span className="font-mono">{ds}</span>
-                  </>
-                )}
-                {akt?.ergebnis && ` · ${akt.ergebnis}`}
-              </span>
+            <div className="flex items-start gap-4">
+              <span className="w-14 shrink-0 font-display text-[40px] leading-none font-medium text-[#1E6F77]">{kurzeNummer(nummer)}</span>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <span className="text-[13px] text-slate-600">
+                  Punkt {index + 1} von {tops.length}
+                  {ds && (
+                    <>
+                      {' · '}
+                      <span className="font-mono">{ds}</span>
+                    </>
+                  )}
+                  {akt?.ergebnis && ` · ${akt.ergebnis}`}
+                </span>
+                <h1 className="max-w-[44ch] font-display text-[26px] leading-[1.2] font-semibold tracking-[-0.015em] text-balance">{titel}</h1>
+              </div>
             </div>
-            <h1 className="max-w-[40ch] text-[22px] font-bold leading-snug tracking-tight text-balance">{titel}</h1>
             {/* Die Vorlage steht direkt hier (Rückmeldung 06.11.2026) – mit dem
                 Beschlussvorschlag als Kasten obenauf, statt Vorschau und Extra-Fenster. */}
             {dok && (
-              <div className="h-[70vh] min-h-0 overflow-hidden rounded-xl border border-slate-200 lg:h-auto lg:flex-1">
+              <div className="h-[70vh] min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white lg:h-auto lg:flex-1">
                 <VorlageAnsicht inhalt={dok.inhalt} zentriert />
               </div>
             )}
@@ -308,7 +319,7 @@ export default function SitzungsModus() {
             {notizen.length > 0 ? (
               <ul className="flex flex-col gap-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {notizen.map((n) => (
-                  <li key={n.id} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <li key={n.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                     <span className="mb-1 block text-xs text-slate-500">
                       <b className="font-semibold text-slate-700">
                         {n.user_id === userId ? 'Du' : (autorNamen.get(n.user_id) ?? 'Unbekannt')}
@@ -386,36 +397,42 @@ export default function SitzungsModus() {
       )}
 
       {tops.length > 0 && (
-        <footer className="flex shrink-0 items-center gap-3 border-t border-slate-200 bg-slate-50 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:gap-4 sm:px-6">
+        <footer className="flex shrink-0 items-center gap-3 border-t border-slate-200 bg-white px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:gap-4 sm:px-8">
           <button
             type="button"
             onClick={() => gehe(index - 1)}
             disabled={index === 0}
-            className="inline-flex min-h-13 shrink-0 items-center gap-1 rounded-xl border border-slate-300 bg-white px-4 text-[15px] transition-colors hover:bg-slate-100 disabled:opacity-40"
+            className="inline-flex min-h-12 shrink-0 items-center gap-1 rounded-full border border-primary bg-white px-4.5 text-[15px] text-primary transition-colors duration-150 hover:bg-slate-100 active:scale-[0.98] disabled:opacity-40"
           >
             <ChevronLeft size={18} />
             <span className="hidden sm:inline">Zurück</span>
           </button>
-          <ol ref={leisteRef} aria-label="Tagesordnung" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          <ol ref={leisteRef} aria-label="Tagesordnung" className="flex min-w-0 flex-1 snap-x gap-2 overflow-x-auto p-0.5 [scrollbar-width:none]">
             {tops.map((t, k) => {
               const aktuell = k === index
               return (
-                <li key={`${t.top_nummer ?? ''}|${t.dokument_id ?? k}`} className="shrink-0">
+                <li key={`${t.top_nummer ?? ''}|${t.dokument_id ?? k}`} className="shrink-0 snap-center">
                   <button
                     type="button"
                     onClick={() => gehe(k)}
                     aria-current={aktuell ? 'step' : undefined}
                     aria-label={`Punkt ${t.top_nummer ?? k + 1}: ${t.top_titel || titelOhneNummer(t.titel) || 'ohne Titel'}`}
                     title={t.top_titel || titelOhneNummer(t.titel)}
-                    className={`min-h-11 min-w-11 whitespace-nowrap rounded-lg px-2.5 font-mono text-sm transition-colors ${
+                    className={`relative min-h-11 min-w-11 whitespace-nowrap rounded-full border px-3 font-mono text-sm transition-colors duration-150 ${
                       aktuell
-                        ? 'bg-primary text-white'
+                        ? 'border-primary bg-primary text-white'
                         : k < index
-                          ? 'bg-primary/15 text-slate-700 hover:bg-primary/25'
-                          : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200'
+                          ? 'border-slate-200 bg-slate-200 text-slate-700 hover:bg-slate-300'
+                          : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100'
                     }`}
                   >
                     {kurzeNummer(t.top_nummer) ?? k + 1}
+                    {t.dokument_id && (notizenJeDok.get(t.dokument_id) ?? 0) > 0 && (
+                      <span
+                        aria-hidden="true"
+                        className={`absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full ${aktuell ? 'bg-accent' : 'bg-[#1E6F77]'}`}
+                      />
+                    )}
                   </button>
                 </li>
               )
@@ -425,9 +442,9 @@ export default function SitzungsModus() {
             type="button"
             onClick={() => gehe(index + 1)}
             disabled={index >= tops.length - 1}
-            className="inline-flex min-h-13 shrink-0 items-center gap-1 rounded-xl bg-primary px-5 text-[15px] font-semibold text-white transition-colors hover:bg-primary-hover disabled:opacity-40"
+            className="inline-flex min-h-12 shrink-0 items-center gap-1 rounded-full bg-primary px-5.5 text-[15px] font-semibold text-white transition-colors duration-150 hover:bg-primary-hover active:scale-[0.98] disabled:opacity-40"
           >
-            <span className="hidden sm:inline">Nächster TOP</span>
+            <span className="hidden sm:inline">Nächster Punkt</span>
             <ChevronRight size={18} />
           </button>
         </footer>

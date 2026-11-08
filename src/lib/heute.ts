@@ -23,6 +23,8 @@ export interface MeineAufgabe {
   /** Fällig innerhalb der nächsten 7 Tage (überfällige eingeschlossen). */
   dieseWoche: boolean
   spalte: string
+  /** Spalte, in der die Karte gerade liegt – für „Rückgängig" nach dem Abhaken. */
+  spalteId: string
 }
 
 export interface AufgabenStand {
@@ -78,6 +80,7 @@ export async function ladeMeineAufgaben(userId: string): Promise<AufgabenStand> 
       ueberfaellig: k.faellig_am ? faelligMs(k.faellig_am) < jetzt : false,
       dieseWoche: k.faellig_am ? faelligMs(k.faellig_am) <= jetzt + TAGE_WOCHE * 24 * 60 * 60 * 1000 : false,
       spalte: spalteById.get(spalteId) ?? '',
+      spalteId,
     })
   }
   // Mit Termin zuerst (früheste oben), ohne Termin danach.
@@ -110,4 +113,75 @@ export async function aufgabeErledigen(userId: string, todoId: string, fertigSpa
     .update({ erledigt: true, erledigt_am: new Date().toISOString() })
     .eq('id', todoId)
   return error?.message ?? null
+}
+
+/** „Rückgängig" nach dem Haken: Karte zurück in ihre Spalte, nicht mehr erledigt. */
+export async function aufgabeWiederOeffnen(userId: string, todoId: string, spalteId: string): Promise<string | null> {
+  const { error: platzFehler } = await supabase
+    .from('todo_placements')
+    .update({ column_id: spalteId })
+    .eq('todo_id', todoId)
+    .eq('user_id', userId)
+  if (platzFehler) return platzFehler.message
+  const { error } = await supabase.from('todos').update({ erledigt: false, erledigt_am: null }).eq('id', todoId)
+  return error?.message ?? null
+}
+
+export interface VorbereitungsPunkt {
+  dokumentId: string
+  nummer: string | null
+  titel: string
+  analysen: number
+  gelesen: boolean
+}
+
+export interface Vorbereitung {
+  /** Punkte mit Drucksache. */
+  gesamt: number
+  gelesen: number
+  /** Bis zu drei Punkte, die noch Aufmerksamkeit brauchen: ungelesen, mit Notizen zuerst. */
+  hinweise: VorbereitungsPunkt[]
+}
+
+/**
+ * Lesestand der nächsten Sitzung für die Startseite (Richtung A, 08.11.2026):
+ * wie viele Vorlagen der Tagesordnung schon geöffnet wurden und welche Punkte
+ * offen sind – bevorzugt die mit Analyse oder eigener Notiz. Gelesen heißt hier
+ * schlicht „einmal geöffnet" (dokument_gelesen), ohne die Notiz-Feinheiten aus
+ * src/lib/dokumenteGelesen.ts – für den Fortschrittsbalken genügt das.
+ */
+export async function ladeVorbereitung(userId: string, sessionId: string): Promise<Vorbereitung> {
+  const { data: links } = await supabase
+    .from('sitzung_dokumente')
+    .select('dokument_id, top_nummer, top_titel, reihenfolge')
+    .eq('session_id', sessionId)
+    .not('dokument_id', 'is', null)
+    .order('reihenfolge')
+  const punkte = (links ?? []).filter((l): l is typeof l & { dokument_id: string } => l.dokument_id !== null)
+  const ids = punkte.map((p) => p.dokument_id)
+  const titel = new Map<string, string>()
+  const gelesen = new Set<string>()
+  const analysen = new Map<string, number>()
+  for (const stueck of inStuecken(ids)) {
+    const [doks, lese, kinder] = await Promise.all([
+      supabase.from('dokumente').select('id, titel').in('id', stueck),
+      supabase.from('dokument_gelesen').select('dokument_id').eq('user_id', userId).in('dokument_id', stueck),
+      supabase.from('dokumente').select('parent_id').in('parent_id', stueck),
+    ])
+    for (const d of doks.data ?? []) titel.set(d.id, d.titel)
+    for (const g of lese.data ?? []) gelesen.add(g.dokument_id)
+    for (const k of kinder.data ?? []) if (k.parent_id) analysen.set(k.parent_id, (analysen.get(k.parent_id) ?? 0) + 1)
+  }
+  const alle: VorbereitungsPunkt[] = punkte.map((p) => ({
+    dokumentId: p.dokument_id,
+    nummer: p.top_nummer,
+    titel: p.top_titel || titel.get(p.dokument_id) || '',
+    analysen: analysen.get(p.dokument_id) ?? 0,
+    gelesen: gelesen.has(p.dokument_id),
+  }))
+  const hinweise = alle
+    .filter((p) => !p.gelesen)
+    .sort((a, b) => Number(b.analysen > 0) - Number(a.analysen > 0))
+    .slice(0, 3)
+  return { gesamt: alle.length, gelesen: alle.filter((p) => p.gelesen).length, hinweise }
 }

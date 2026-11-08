@@ -53,13 +53,17 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 
 - **Login/Auth**: Supabase Auth, Redirect-Schutz (`ProtectedRoute`), erzwungener Passwortwechsel beim
   ersten Login bzw. nach Admin-Reset (`ForcedPasswordChange`).
-- **Startseite „Heute"** (`src/pages/Dashboard.tsx`, Daten in `src/lib/heute.ts`, seit dem
-  UI-Umbau 18.10.2026): Begrüßung, drei Kacheln (nächste Sitzung, fällig in 7 Tagen/überfällig,
-  Anzahl „Neu für dich"), optional die Presseschau (nur wenn `profiles.presseschau_aktiv`, strikt
-  privat), darunter drei Karten: **Diese Woche** (Sitzungen meiner Gremien und aus
+- **Startseite „Heute"** (`src/pages/Dashboard.tsx`, Daten in `src/lib/heute.ts`, seit 08.11.2026
+  Richtung A „Morgenlage"): Begrüßung nach Tageszeit in Newsreader, ein Lagesatz (Sitzungen der
+  Woche, ungelesene Vorlagen zur nächsten Sitzung, Überfälliges – als Links) und drei Zahlen,
+  optional die Presseschau als Band (nur wenn `profiles.presseschau_aktiv`, strikt privat),
+  darunter drei Spalten wie eine Zeitungsseite unter einer Linie in der Primärfarbe: **Nächste
+  Sitzung** mit Lesestand (`ladeVorbereitung()`: gelesen = einmal geöffnet, bis zu drei
+  ungelesene Punkte, mit Notizen zuerst) und „Sitzungsmodus öffnen", **Die nächsten sieben Tage** (Sitzungen meiner Gremien und aus
   Terminkalender-Quellen plus eigene Termine, 7 Tage, nach Tagen gruppiert, mit TOP-Zahl),
   **Meine Aufgaben** (offene Karten meines Boards, mit Termin zuerst; Haken = nach „Fertig" wie
-  Ziehen im Board; Zähler je Spalte) und **Neu für dich** (`src/lib/neuigkeiten.ts`,
+  Ziehen im Board, danach sechs Sekunden „Rückgängig" – `aufgabeWiederOeffnen()`; Rot nur für
+  Überfälliges) und **Neu für dich** (`src/lib/neuigkeiten.ts`,
   `0057_neuigkeiten.sql`: Zuweisungen, mit mir geteilte Karten, Notizen anderer an meinen Karten,
   neue Tagesordnungspunkte kommender Sitzungen meiner Gremien, seit dem letzten „Alles gesehen";
   Stand in der eigenen Tabelle `neuigkeiten_stand`, nicht in `profiles` – dort für Kolleg*innen
@@ -198,16 +202,18 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   deshalb nur noch, für welche der eigenen Ebenen der Fakt gilt. RLS spiegelt exakt die vier
   `dokumente`-Policies. MCP-Tools `list_fakten`/`create_fakt`/`update_fakt` (`tools/fakten.ts`) bauen
   diese Sichtbarkeit im Code nach (`darfFaktSehen()`); Löschen nur in der Web-UI.
-- **App-Rahmen** (`src/components/AppLayout.tsx`, UI-Umbau seit 18.10.2026): alle Seiten hinter
-  dem Login hängen als verschachtelte Routen an **einer** Layout-Route in `App.tsx`. Links eine
-  Leiste (oben ein Kopf in der Parteifarbe mit Logo-Kachel, großem Profilbild, Name und
-  Fraktion · Gliederung – Klick führt zu den Einstellungen; darunter Heute, Kalender, Sitzungen,
-  Aufgaben, Dokumente mit Ungelesen-Zähler, Zahlen & Fakten, Archiv; unten Einstellungen,
-  Abmelden, Einklappen 240 ↔ 72 px), auf dem Handy statt
-  dessen eine Tab-Leiste unten (Heute, Sitzungen, Aufgaben, Dokumente, Mehr). Inhalt höchstens
-  1440 px breit, oben ein 4-px-Streifen in der Parteifarbe (`bg-topbar`). Seiten bringen **kein
-  eigenes Chrome** mit, nur ein `h1` mit `mc-page-title` und ihren Inhalt. Schrift IBM Plex Sans,
-  Datum/Uhrzeit/Drucksachennummern in IBM Plex Mono (`font-mono`). Freigegebener Entwurf:
+- **App-Rahmen** (`src/components/AppLayout.tsx`, UI-Umbau seit 18.10.2026, seit 08.11.2026
+  Richtung A „Morgenlage"): alle Seiten hinter dem Login hängen als verschachtelte Routen an
+  **einer** Layout-Route in `App.tsx`. Oben eine **Kopfleiste** (Streifen in der Parteifarbe,
+  darunter weiß: Logo-Kachel, Wortmarke ab `xl`, Navigation als Pillen – unter `lg` nur
+  Symbole –, rechts Name + Fraktion · Gliederung ab `xl` und Profilbild im Ring in der
+  Akzentfarbe, das ein Menü mit Einstellungen und Abmelden öffnet). Höhenangaben in Seiten,
+  die die Bildschirmhöhe füllen, rechnen die Kopfleiste mit ein (`100dvh-19rem`). Auf dem
+  Handy statt dessen eine Tab-Leiste unten (Heute, Sitzungen, Aufgaben, Dokumente, Mehr). Inhalt höchstens
+  1440 px breit. Seiten bringen **kein eigenes Chrome** mit, nur ein `h1` mit `mc-page-title`
+  (Newsreader, `font-display`) und ihren Inhalt. Schrift IBM Plex Sans, Überschriften und
+  Lesetext der Presseschau in Newsreader (`font-display`/`font-serif`), Datum/Uhrzeit/
+  Drucksachennummern in IBM Plex Mono (`font-mono`), Zahlen in Plex mit `tabular-nums`. Freigegebener Entwurf:
   Design-Canvas „MandatsCockpit – UI-Struktur" (A+B kombiniert). Reiter mit Unterstrich über
   `mc-tab` + `aria-selected` (Archiv, Zahlen & Fakten); Filter-Chips aktiv schwarz, sonst weiß
   mit Rahmen (Kalender, Dokumente). Ändern die Einstellungen Name oder Foto, feuern sie

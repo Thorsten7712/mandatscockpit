@@ -3538,3 +3538,26 @@ die Aufteilung sollte bleiben. Jetzt:
 Nachtrag 07.11.2026: Safari zeigte nach dem Merge weiter das alte „MC"-Icon – es hält Favicons unter
 derselben Adresse im Cache. Die Icon-Adressen in `index.html` tragen jetzt `?v=2`; bei einem neuen
 Icon die Zahl hochzählen.
+
+## 08.11.2026 – Richtung A „Morgenlage"
+
+Wunsch: jeden Aspekt mit „Wow-Effekt" überarbeiten, drei Richtungen zur Wahl (Design-Canvas
+„MandatsCockpit – Drei Richtungen": A Morgenlage, B Leitstand dunkel, C Atelier). Gewählt: A,
+mit den Originalfarben (#F4F5F7, Primär #0B3358, Akzent #52B7C1) und mit Presseschau. Vor dem
+Umbau liefen Impeccable (Kritik in zwei getrennten Durchgängen, Detector) und UI UX Pro Max über
+die Entwürfe; deren Funde sind eingearbeitet (Scrollen im Sitzungsmodus, kleinere Schrift, Rot nur
+für Überfälliges, Kontraste ≥ 4,5:1, Touchflächen ≥ 44 px). Begrüßung nach Tageszeit; ein
+„laufender Punkt" im Sitzungsmodus ist bewusst nicht gebaut (mehrere Punkte werden oft gemeinsam
+beraten).
+
+- **Kopfleiste statt Seitenleiste** (`AppLayout.tsx`): Logo, Wortmarke, Navigation, Profilmenü
+  (Einstellungen, Abmelden). Einklappen entfällt, ebenso `mc.leiste.eingeklappt`.
+- **Schrift**: Newsreader (`@fontsource-variable/newsreader`, optische Größen) für Seitentitel und
+  Überschriften; `--font-serif` zeigt ebenfalls darauf, damit die Presseschau mitzieht.
+- **Heute**: Lagesatz, drei Zahlen, Presseschau-Band, drei Spalten unter einer Linie in der
+  Primärfarbe; Lesestand der nächsten Sitzung (`ladeVorbereitung()`), „Rückgängig" nach dem Haken
+  (`aufgabeWiederOeffnen()`).
+- **Presseschau** (`PresseschauSection.tsx`) als Band mit eigenem Knopf statt eines Blocks als
+  Link.
+- **Sitzungsmodus**: weiße Kopfleiste wie im Rahmen, „Beenden" links, TOP-Nummer in Newsreader am
+  Rand, runde Punkte-Leiste mit Markierung für Punkte mit Notizen, Fortschritt per `scaleX`.
