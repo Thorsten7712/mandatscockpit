@@ -238,9 +238,9 @@ export default function Dashboard() {
 
       {presseschauAktiv && <PresseschauSection />}
 
-      <div className="grid grid-cols-1 border-t-2 border-primary lg:grid-cols-[1.25fr_1fr_1fr]">
+      <div className="grid grid-cols-1 border-t-2 border-primary xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]">
         {/* Nächste Sitzung */}
-        <section aria-labelledby="h-sitzung" className="flex flex-col gap-4 border-slate-200 py-6 lg:border-r lg:pr-8">
+        <section aria-labelledby="h-sitzung" className="flex flex-col gap-4 border-slate-200 py-6 xl:border-r xl:pr-8">
           <h2 id="h-sitzung" className={spaltenKopf}>
             Nächste Sitzung
           </h2>
@@ -333,7 +333,7 @@ export default function Dashboard() {
         </section>
 
         {/* Kommende Tage */}
-        <section aria-labelledby="h-woche" className="flex flex-col border-t border-slate-200 py-6 lg:border-t-0 lg:border-r lg:px-8">
+        <section aria-labelledby="h-woche" className="flex flex-col border-t border-slate-200 py-6 xl:border-t-0 xl:border-r xl:px-8">
           <div className="mb-2 flex items-baseline justify-between gap-3">
             <h2 id="h-woche" className={spaltenKopf}>
               Die nächsten sieben Tage
@@ -390,7 +390,7 @@ export default function Dashboard() {
         </section>
 
         {/* Aufgaben und Neues */}
-        <div className="flex flex-col gap-8 border-t border-slate-200 py-6 lg:border-t-0 lg:pl-8">
+        <div className="flex flex-col gap-8 border-t border-slate-200 py-6 xl:border-t-0 xl:pl-8">
           <section aria-labelledby="h-aufgaben" className="flex flex-col">
             <div className="mb-2 flex items-baseline justify-between gap-3">
               <h2 id="h-aufgaben" className={spaltenKopf}>

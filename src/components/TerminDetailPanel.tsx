@@ -786,7 +786,7 @@ export function TerminDetailPanel({
           )}
         </div>
 
-        <div className="flex md:h-[calc(100dvh-19rem)] md:min-h-[560px]">
+        <div className="flex md:h-[calc(100dvh-15rem)] md:min-h-[560px]">
           <nav
             aria-label="Tagesordnung"
             className={`min-w-0 overflow-y-auto border-slate-100 md:block md:w-[320px] md:shrink-0 md:border-r lg:w-[360px] ${
