@@ -202,13 +202,13 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
   deshalb nur noch, für welche der eigenen Ebenen der Fakt gilt. RLS spiegelt exakt die vier
   `dokumente`-Policies. MCP-Tools `list_fakten`/`create_fakt`/`update_fakt` (`tools/fakten.ts`) bauen
   diese Sichtbarkeit im Code nach (`darfFaktSehen()`); Löschen nur in der Web-UI.
-- **App-Rahmen** (`src/components/AppLayout.tsx`, UI-Umbau seit 18.10.2026, seit 08.11.2026
-  Richtung A „Morgenlage"): alle Seiten hinter dem Login hängen als verschachtelte Routen an
-  **einer** Layout-Route in `App.tsx`. Oben eine **Kopfleiste** (Streifen in der Parteifarbe,
-  darunter weiß: Logo-Kachel, Wortmarke ab `xl`, Navigation als Pillen – unter `lg` nur
-  Symbole –, rechts Name + Fraktion · Gliederung ab `xl` und Profilbild im Ring in der
-  Akzentfarbe, das ein Menü mit Einstellungen und Abmelden öffnet). Höhenangaben in Seiten,
-  die die Bildschirmhöhe füllen, rechnen die Kopfleiste mit ein (`100dvh-19rem`). Auf dem
+- **App-Rahmen** (`src/components/AppLayout.tsx`, UI-Umbau seit 18.10.2026): alle Seiten hinter
+  dem Login hängen als verschachtelte Routen an **einer** Layout-Route in `App.tsx`. Links eine
+  Leiste (oben ein Kopf in der Parteifarbe mit Logo-Kachel, großem Profilbild, Name und
+  Fraktion · Gliederung – Klick führt zu den Einstellungen; darunter Heute, Kalender, Sitzungen,
+  Aufgaben, Dokumente mit Ungelesen-Zähler, Zahlen & Fakten, Archiv; unten Einstellungen,
+  Abmelden, Einklappen 240 ↔ 72 px). Die Kopfleiste aus Richtung A (08.11.2026) ist auf Wunsch
+  wieder zurückgenommen, die Leiste bleibt links. Auf dem
   Handy statt dessen eine Tab-Leiste unten (Heute, Sitzungen, Aufgaben, Dokumente, Mehr). Inhalt höchstens
   1440 px breit. Seiten bringen **kein eigenes Chrome** mit, nur ein `h1` mit `mc-page-title`
   (Newsreader, `font-display`) und ihren Inhalt. Schrift IBM Plex Sans, Überschriften und

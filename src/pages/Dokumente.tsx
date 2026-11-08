@@ -639,7 +639,7 @@ export default function Dokumente() {
         <div
           className={
             breit
-              ? `mc-card relative flex overflow-hidden ${schublade ? 'h-[calc(100dvh-10.5rem)] min-h-[480px]' : 'h-[calc(100dvh-19rem)] min-h-[560px]'}`
+              ? `mc-card relative flex overflow-hidden ${schublade ? 'h-[calc(100dvh-6.5rem)] min-h-[480px]' : 'h-[calc(100dvh-15rem)] min-h-[560px]'}`
               : ''
           }
         >

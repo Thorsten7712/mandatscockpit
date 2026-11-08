@@ -3561,3 +3561,8 @@ beraten).
   Link.
 - **Sitzungsmodus**: weiße Kopfleiste wie im Rahmen, „Beenden" links, TOP-Nummer in Newsreader am
   Rand, runde Punkte-Leiste mit Markierung für Punkte mit Notizen, Fortschritt per `scaleX`.
+
+Nachtrag 08.11.2026: Die Kopfleiste ist auf Wunsch zurückgenommen – die Navigation steht wieder als
+Leiste links (Stand vor Richtung A, mit Profilkopf in der Parteifarbe und Einklappen). Startseite,
+Sitzungsmodus und Newsreader aus Richtung A bleiben; die Höhenangaben in Dokumente und
+Sitzungsansicht rechnen wieder ohne Kopfleiste.
