@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useSpeicherHinweisAusblenden } from '../lib/speicherHinweis'
 
 /**
  * Blockiert die gesamte App, solange profiles.muss_passwort_aendern true
@@ -9,6 +10,7 @@ import { supabase } from '../lib/supabaseClient'
  * Ausweg statt eines Dead-Ends.
  */
 export function ForcedPasswordChange({ userId, onDone }: { userId: string; onDone: () => void }) {
+  useSpeicherHinweisAusblenden()
   const [password, setPassword] = useState('')
   const [passwordWiederholen, setPasswordWiederholen] = useState('')
   const [saving, setSaving] = useState(false)

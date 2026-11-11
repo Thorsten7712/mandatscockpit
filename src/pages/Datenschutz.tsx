@@ -48,71 +48,110 @@ export default function Datenschutz() {
                 Supabase Auth.
               </li>
               <li>
-                <strong>Profil:</strong> Name, optional Profilfoto, Partei/Fraktion sowie die von dir selbst
-                gepflegten Mandats-Ebenen (Kommune/Kreis/Land/Bund inkl. konkreter Bezeichnung).
+                <strong>Profil:</strong> Name, optional Profilfoto, Partei/Fraktion, die von dir selbst
+                gepflegten Mandats-Ebenen (Kommune/Kreis/Land/Bund inkl. konkreter Bezeichnung) und deine
+                Gremien sowie Zeitpunkt und Fassung deiner Bestätigung der 
+                <Link to="/nutzungserklaerung" className="text-primary underline">
+                  Nutzungserklärung
+                </Link>
+                .
               </li>
               <li>
-                <strong>Nutzungsdaten:</strong> von dir angelegte ToDos, eigene Termine, Notizen, Kommentare und
-                Anträge. Diese Daten sind standardmäßig privat (nur für dich selbst sichtbar) und werden nur
-                dann mit Kolleg*innen geteilt, wenn du das über die "Teilen"-Funktion aktiv einrichtest.
+                <strong>Nutzungsdaten:</strong> von dir angelegte Aufgaben, eigene Termine und Notizen, dein
+                Lesestand bei Dokumenten, deine Kalenderquellen (eine persönliche Kalender-Adresse sieht nur
+                du) und ein Kennwert deiner persönlichen MCP-Zugangs-URL (nur als Hash). Aufgaben und Notizen
+                sind privat, bis du sie aktiv teilst oder einer Person zuweist.
               </li>
               <li>
-                <strong>Hochgeladene Dokumente:</strong> Dateien, die du an Sitzungen, Terminen, ToDos oder
-                Anträgen hochlädst, liegen in einem privaten Speicherbereich, auf den nur du zugreifen kannst
-                (bzw. Personen, mit denen du den jeweiligen Eintrag geteilt hast).
+                <strong>Gemeinsame Inhalte:</strong> Sitzungsvorlagen und andere Dokumente im Dokumenten-Hub
+                sowie „Zahlen &amp; Fakten“ sind für die Mitglieder derselben Partei und Ebene sichtbar. Sie
+                stammen aus öffentlich zugänglichen Ratsinformationssystemen oder werden von Mitgliedern
+                eingestellt.
               </li>
               <li>
-                <strong>Kalenderdaten:</strong> öffentlich zugängliche Sitzungstermine, die aus von dir
-                abonnierten ICS-Kalenderquellen importiert werden.
+                <strong>Kalenderdaten:</strong> Sitzungstermine, die aus öffentlichen Kalenderquellen
+                (ICS-Feeds) der Ratsinformationssysteme und aus deinen eigenen Kalenderquellen importiert werden.
               </li>
               <li>
                 <strong>Kontaktformular:</strong> Name, E-Mail-Adresse und Nachrichtentext, wenn du das
                 Kontaktformular auf der Impressum-Seite nutzt.
               </li>
             </ul>
+            <p className="mt-2">
+              Dateien laden Nutzer*innen nicht hoch – mit Ausnahme des eigenen Profilfotos.
+            </p>
           </section>
 
           <section>
             <h2 className="mb-1 text-base font-semibold text-slate-900">4. Rechtsgrundlage</h2>
             <p>
-              Die Verarbeitung erfolgt zur Bereitstellung des Dashboards im Rahmen des Nutzungsverhältnisses
-              (Art. 6 Abs. 1 lit. b DSGVO) bzw. auf Grundlage eines berechtigten Interesses am technischen
-              Betrieb (Art. 6 Abs. 1 lit. f DSGVO). Die Nutzung des Kontaktformulars erfolgt auf Grundlage
-              deiner Einwilligung durch das Absenden (Art. 6 Abs. 1 lit. a DSGVO).
+              Die Verarbeitung erfolgt zur Bereitstellung des Cockpits im Rahmen des Nutzungsverhältnisses
+              (Art. 6 Abs. 1 lit. b DSGVO) bzw. auf Grundlage eines berechtigten Interesses am sicheren
+              technischen Betrieb (Art. 6 Abs. 1 lit. f DSGVO), etwa beim Löschprotokoll und bei
+              Sicherungskopien. Anfragen über das Kontaktformular werden auf Grundlage des berechtigten
+              Interesses an ihrer Beantwortung verarbeitet (Art. 6 Abs. 1 lit. f DSGVO).
             </p>
           </section>
 
           <section>
             <h2 className="mb-1 text-base font-semibold text-slate-900">5. Hosting und Auftragsverarbeiter</h2>
             <p>
-              Das Frontend wird statisch über GitHub Pages ausgeliefert (GitHub Inc./GitHub B.V.); dabei
-              können durch GitHub technisch bedingt Zugriffsdaten (u. a. IP-Adresse) verarbeitet werden. Die
-              Datenbank, Authentifizierung und Datei-Speicherung laufen über Supabase, gehostet in einem
-              Rechenzentrum in der EU (Frankfurt). Mit beiden Anbietern bzw. deren Nutzungsbedingungen ist
-              die Auftragsverarbeitung entsprechend geregelt.
+              Das Frontend wird statisch über GitHub Pages ausgeliefert (GitHub Inc., USA); dabei verarbeitet
+              GitHub technisch bedingt Zugriffsdaten wie die IP-Adresse. Die Datenbank, die Anmeldung und die
+              Datei-Speicherung laufen über Supabase (Supabase Inc.) in einem Rechenzentrum in der EU
+              (Frankfurt). Soweit dabei Daten in die USA gelangen können, stützt sich die Übermittlung auf das
+              EU-US Data Privacy Framework bzw. auf die EU-Standardvertragsklauseln der Anbieter. Schriften
+              und alle übrigen Bestandteile der Seite werden vom Cockpit selbst ausgeliefert; es werden keine
+              Dienste Dritter (etwa Google Fonts, Karten oder Videos) eingebunden.
             </p>
           </section>
 
           <section>
-            <h2 className="mb-1 text-base font-semibold text-slate-900">6. Speicherdauer</h2>
+            <h2 className="mb-1 text-base font-semibold text-slate-900">6. Eigene KI über die MCP-Schnittstelle</h2>
+            <p>
+              Das Cockpit selbst nutzt keine KI. Du kannst aber über deine persönliche MCP-Zugangs-URL einen
+              KI-Assistenten deiner Wahl anbinden. Inhalte, die dein Assistent dabei abruft, werden an dessen
+              Anbieter übermittelt. Das geschieht in deiner Verantwortung und nach den Bedingungen deines
+              Anbieters; der Betreiber des Cockpits hat darauf keinen Einfluss. Die URL kannst du in den
+              Einstellungen jederzeit neu erzeugen, die alte wird damit ungültig.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="mb-1 text-base font-semibold text-slate-900">7. Speicherdauer</h2>
             <p>
               Deine Daten werden gespeichert, solange dein Nutzerkonto besteht. Bei Löschung eines Kontos
-              durch den Administrator werden Profil, Nutzungsdaten und hochgeladene Dateien vollständig
-              entfernt.
+              durch den Administrator werden Profil, eigene Inhalte und Profilfoto entfernt. Gelöschte Einträge
+              hält ein nur für den Betreiber einsehbares Löschprotokoll fest, damit sich versehentliche
+              Löschungen nachvollziehen und rückgängig machen lassen. Verschlüsselte Sicherungskopien der
+              Datenbank werden nach 14 Tagen automatisch gelöscht.
             </p>
           </section>
 
           <section>
-            <h2 className="mb-1 text-base font-semibold text-slate-900">7. Cookies und lokale Speicherung</h2>
+            <h2 className="mb-1 text-base font-semibold text-slate-900">8. Cookies und Speicherung im Browser</h2>
             <p>
-              Es werden keine Tracking- oder Analyse-Cookies eingesetzt. Zur Aufrechterhaltung deiner
-              Anmeldung speichert der Browser ein technisch notwendiges Sitzungs-Token (über Supabase Auth,
-              lokal im Browser).
+              Es werden keine Tracking-, Analyse- oder Werbe-Cookies eingesetzt. Im Speicher deines Browsers
+              (localStorage) legt das Cockpit nur ab, was für den Dienst nötig ist oder was du selbst
+              einstellst:
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>das Anmelde-Token, damit du angemeldet bleibst (Supabase Auth),</li>
+              <li>
+                Anzeige-Einstellungen auf diesem Gerät: eingeklappte Seitenleiste, Zahl der Einträge pro
+                Seite im Dokumenten-Hub, gewähltes Leselayout,
+              </li>
+              <li>dass du den Hinweis zur Speicherung im Browser gesehen hast.</li>
+            </ul>
+            <p className="mt-2">
+              Diese Speicherung ist für den von dir gewünschten Dienst unbedingt erforderlich und deshalb
+              ohne Einwilligung zulässig (§ 25 Abs. 2 Nr. 2 TDDDG). Du kannst sie jederzeit über die
+              Einstellungen deines Browsers löschen; danach musst du dich neu anmelden.
             </p>
           </section>
 
           <section>
-            <h2 className="mb-1 text-base font-semibold text-slate-900">8. Deine Rechte</h2>
+            <h2 className="mb-1 text-base font-semibold text-slate-900">9. Deine Rechte</h2>
             <p>
               Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung,
               Datenübertragbarkeit sowie Widerspruch gegen die Verarbeitung deiner Daten. Wende dich dazu an

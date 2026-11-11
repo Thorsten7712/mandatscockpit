@@ -45,7 +45,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
   angelegt mit dem Konto (`handle_new_user`), Constraint `todo_columns_feste_spalten`. Drag & Drop
   via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle 63 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle 64 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 
@@ -230,8 +230,16 @@ Kein reines Scaffold mehr, aber noch nicht produktiv für den vollen Nutzerkreis
 - **iPad-Lesen im Hub**: Bei `(pointer: coarse)` oder unter 1280 px klappt die Vorgangsliste samt
   Suche und Filtern in eine Schublade (Knopf „Vorgänge"), sobald ein Dokument offen ist; die Karte
   nimmt dann fast die ganze Höhe (`100dvh`).
-- **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum, Datenschutzerklärung mit
-  Kontaktformular (anonymer Insert, Honeypot-Feld).
+- **Öffentliche Seiten** (außerhalb `ProtectedRoute`): Impressum (§ 5 DDG, § 18 MStV, Art des
+  Angebots, DSA-Kontaktstelle), Datenschutzerklärung, Nutzungserklärung, Kontaktformular (anonymer
+  Insert, Honeypot-Feld).
+- **Nutzungserklärung** (`src/components/Nutzungserklaerung.tsx`, `0064`): blockierendes Fenster nach
+  dem Passwortwechsel, bis `profiles.nutzungserklaerung_version` ≥ `NUTZUNGSERKLAERUNG_VERSION`
+  (Zusage: nichts aus nichtöffentlichen Sitzungen, auch nicht über die KI). Text geändert → Konstante
+  hochzählen, alle werden neu gefragt. **Speicher-Hinweis** (`SpeicherHinweis.tsx`) statt
+  Einwilligungsbanner: es gibt keine einwilligungspflichtige Speicherung (§ 25 Abs. 2 Nr. 2 TDDDG).
+  Kommt Tracking, eine eingebettete Karte o. Ä. dazu, braucht es ein echtes Opt-in und einen
+  Nachtrag in der Datenschutzerklärung – neue localStorage-Schlüssel dort ebenfalls nachtragen.
 - **Edge Functions** (`supabase/functions/`, Deno): `import-ics-source` (Einzelquellen-Reimport),
   `admin-users` (Benutzerverwaltung), `mcp-server` (MCP-JSON-RPC-Endpunkt für Claude, 32 Tools über
   ToDos/Termine/Sitzungen/Notizen/Presseschau/Dokumenten-Hub/Zahlen & Fakten – volle Liste + Details in
@@ -263,6 +271,14 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 
 ### Technische Fallstricke & Muster (aus der Historie gelernt)
 
+- **`profiles` ist nur spaltenweise beschreibbar** (seit `0064`): `authenticated` darf nur Name,
+  Foto, Ebenen, Gliederung, Presseschau-Schalter, `muss_passwort_aendern` und die
+  Nutzungserklärung ändern. `rolle`, `technisch`, `partei`, `fraktion` setzt nur `admin-users`
+  (Service-Role). Bis dahin konnte sich jedes Konto per REST selbst zum Admin machen, weil die
+  Policy nur die Zeile prüfte. Eine neue, vom Nutzer änderbare Spalte braucht deshalb ein eigenes
+  `grant update (spalte) on public.profiles to authenticated` – sonst schlägt das Speichern mit
+  42501 fehl. Gleiches Muster bei jeder Tabelle, deren Zeile der Nutzer zwar besitzt, aber nicht in
+  jeder Spalte bestimmen darf.
 - **SECURITY-DEFINER-Funktionen brauchen `set search_path = public, pg_temp`** (seit
   `0049_search_path_fixieren.sql`, Befund des Supabase-Linters). Ohne festen Suchpfad lösen sie
   ihre Tabellen über den Pfad des Aufrufers auf – bei Funktionen, die mit erhöhten Rechten laufen

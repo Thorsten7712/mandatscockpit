@@ -119,6 +119,8 @@ export type Database = {
           id: string
           muss_passwort_aendern: boolean
           name: string
+          nutzungserklaerung_am: string | null
+          nutzungserklaerung_version: number | null
           partei: string | null
           presseschau_aktiv: boolean
           rolle: string
