@@ -3,9 +3,11 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Login from './pages/Login'
 import Impressum from './pages/Impressum'
 import Datenschutz from './pages/Datenschutz'
+import NutzungserklaerungSeite from './pages/NutzungserklaerungSeite'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ThemeLoader } from './components/ThemeLoader'
 import { AppLayout } from './components/AppLayout'
+import { SpeicherHinweis } from './components/SpeicherHinweis'
 
 // Seiten hinter dem Login werden erst bei Bedarf nachgeladen: die Login-Seite
 // braucht weder Markdown-Renderer noch Drag & Drop, und als ein einziges
@@ -25,11 +27,13 @@ export default function App() {
   return (
     <BrowserRouter basename="/mandatscockpit">
       <ThemeLoader />
+      <SpeicherHinweis />
       <Suspense fallback={null}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/impressum" element={<Impressum />} />
           <Route path="/datenschutz" element={<Datenschutz />} />
+          <Route path="/nutzungserklaerung" element={<NutzungserklaerungSeite />} />
           {/* Sitzungsmodus: Vollbild ohne Leiste, damit während der Sitzung nichts ablenkt. */}
           <Route
             path="/sitzungen/:id/modus"

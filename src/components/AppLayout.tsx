@@ -339,6 +339,10 @@ export function AppLayout() {
             <Link to="/datenschutz" className="underline hover:text-slate-600">
               Datenschutz
             </Link>
+            {' · '}
+            <Link to="/nutzungserklaerung" className="underline hover:text-slate-600">
+              Nutzungserklärung
+            </Link>
           </footer>
         </div>
       </div>

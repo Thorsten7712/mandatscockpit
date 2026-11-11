@@ -3566,3 +3566,61 @@ Nachtrag 08.11.2026: Die Kopfleiste ist auf Wunsch zurückgenommen – die Navig
 Leiste links (Stand vor Richtung A, mit Profilkopf in der Parteifarbe und Einklappen). Startseite,
 Sitzungsmodus und Newsreader aus Richtung A bleiben; die Höhenangaben in Dokumente und
 Sitzungsansicht rechnen wieder ohne Kopfleiste.
+
+## 11.11.2026 – Öffnung für einen größeren Nutzerkreis: Profilrechte, Nutzungserklärung, Speicher-Hinweis, Impressum
+
+Nutzerwunsch: Bevor mehr Mitglieder Zugang bekommen, sollen ein Cookiebanner und eine
+Nutzungserklärung beim ersten Login her (Zusage: keine nichtöffentlichen Dokumente). Außerdem
+sollte das Impressum mit anderen Impressen verglichen und auf Rechtssicherheit geprüft werden.
+
+**Sicherheitslücke in `profiles` (0064).** Bei der Vorbereitung fiel auf: `profiles_update_own`
+prüft nur, dass jemand die *eigene* Zeile ändert, und `authenticated` (auch `anon`) hatte UPDATE
+auf allen Spalten. Jedes Konto konnte sich also per REST-Aufruf selbst `rolle = 'admin'`,
+`technisch = true` oder eine andere `partei`/`fraktion` geben – Letzteres steuert die ganze
+Sichtbarkeit. Bestand geprüft: ein Admin, ein technisches Konto, vier Mitglieder, nichts
+Auffälliges. Fix über Spaltenrechte statt Trigger: `revoke update` für anon/authenticated, dann
+`grant update (…)` nur auf die Spalten, die die Oberfläche setzt (Name, Foto, Ebenen, Gliederung,
+Presseschau-Schalter, `muss_passwort_aendern`, Nutzungserklärung). `admin-users` und der
+MCP-Server arbeiten mit der Service-Role und sind nicht betroffen. Generalprobe in einer
+abgebrochenen Transaktion: rolle/technisch/partei → 42501, erlaubte Spalten und fremde Zeilen wie
+erwartet. Über den Connector eingespielt.
+
+**Nutzungserklärung.** `src/components/Nutzungserklaerung.tsx`: Text (keine Unterlagen aus
+nichtöffentlichen Sitzungen, auch nicht über die KI/MCP – § 30 i. V. m. § 43 GO NRW; sparsam mit
+Daten Dritter; eigene Verantwortung; Zugänge schützen; Folgen bei Verstößen) und ein blockierendes
+Fenster mit Checkbox, das `ProtectedRoute` nach dem Passwortwechsel zeigt, solange
+`profiles.nutzungserklaerung_version` kleiner als `NUTZUNGSERKLAERUNG_VERSION` ist. In der DB statt
+im Browser, weil die Zusage geräteübergreifend und nachweisbar gelten muss (Zeitpunkt in
+`nutzungserklaerung_am`). Neue Fassung = Konstante hochzählen, alle werden neu gefragt. Öffentlich
+nachlesbar unter `/nutzungserklaerung`, verlinkt neben Impressum/Datenschutz.
+
+**Speicher-Hinweis statt Einwilligungsbanner** (`SpeicherHinweis.tsx`). Das Cockpit setzt keine
+Cookies und speichert im localStorage nur das Anmelde-Token und Anzeige-Vorlieben – nach § 25
+Abs. 2 Nr. 2 TDDDG ohne Einwilligung zulässig. Ein „Ablehnen"-Knopf wäre irreführend, weil es
+nichts abzulehnen gibt; deshalb ein Hinweis mit „Verstanden" und Link zur Datenschutzerklärung.
+Gesehen-Merker im localStorage (`mc.hinweis.speicher`). Ausgeblendet im Sitzungsmodus und solange
+ein Pflichtschritt (Passwort, Erklärung) offen ist (`useSpeicherHinweisAusblenden()` in
+`src/lib/speicherHinweis.ts`) – sonst lag er auf dem Desktop über dem Bestätigen-Knopf. Kommt je
+etwas Einwilligungspflichtiges dazu (Statistik, eingebettete Karten/Videos), braucht es ein echtes
+Opt-in.
+
+**Impressum.** Geprüft gegen § 5 DDG, § 18 MStV und Vergleichsimpressen (u. a. CDU-Fraktion
+Rhein-Sieg, CDU Bad Bentheim, CDU Hannover-Stadt): Pflichtangaben vollständig, der Link zur
+OS-Plattform fehlt zu Recht (seit 20.07.2025 abgeschaltet). Ergänzt: „Art des Angebots" (privat,
+nicht kommerziell, kein Angebot der Stadt, des Rates, einer Partei oder Fraktion – wichtig, weil
+die Oberfläche Parteifarben und -logos zeigt) und Kontaktstelle nach Art. 11/12 DSA für Hinweise
+auf rechtswidrige Nutzerinhalte.
+
+**Datenschutzerklärung** auf den Stand gebracht: Uploads, Kommentare, Anträge und Abos waren
+veraltet; neu sind gemeinsame Hub-Inhalte, MCP-Token-Hash, Nutzungserklärung, Löschprotokoll und
+14-Tage-Backups, die eigene KI über MCP (in Verantwortung der Nutzer*innen), USA-Bezug von
+GitHub/Supabase und die konkreten localStorage-Einträge mit Rechtsgrundlage.
+
+Nachtrag 11.11.2026: **Löschprotokoll mit 90-Tage-Frist** (`0065`, Nutzerentscheidung): pg_cron-Job
+`protokoll-aufraeumen` ruft täglich `private.protokoll_aufraeumen()` auf; die Datenschutzerklärung
+nennt die Frist. In der Datenbank statt als Action, weil es so keine Zugangsdaten außerhalb braucht
+und GitHub Zeitpläne inaktiver Repos nach 60 Tagen anhält. Eingespielt über `migrationen.yml`
+(DELETE im Funktionsrumpf). Dabei fiel auf: Die Prüfung von `migrationen.yml` scheiterte im PR, weil
+`setup-cli` mit `version: latest` jetzt CLI 3.1.0 lädt – `db push` verlangt dort `--remote`, `link`
+ignoriert `--password`. Workflow auf 3.1.0 festgelegt und angepasst. Der Passwortschutz gegen
+geleakte Passwörter (Supabase-Linter) bleibt aus: nur im Pro-Tarif verfügbar.

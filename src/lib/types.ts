@@ -32,6 +32,10 @@ export interface Profile {
    * dailyallris). Wird aus den Teilen-Kandidatenlisten ausgeblendet, behält
    * sonst aber alle Rechte eines Mitglieds - siehe 0041_profiles_technisch.sql. */
   technisch: boolean
+  /** Zuletzt bestätigte Fassung der Nutzungserklärung (null = nie), siehe
+   * src/components/Nutzungserklaerung.tsx und 0064. */
+  nutzungserklaerung_version: number | null
+  nutzungserklaerung_am: string | null
   created_at: string
 }
 
