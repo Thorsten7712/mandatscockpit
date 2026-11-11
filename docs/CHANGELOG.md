@@ -3615,3 +3615,12 @@ auf rechtswidrige Nutzerinhalte.
 veraltet; neu sind gemeinsame Hub-Inhalte, MCP-Token-Hash, Nutzungserklärung, Löschprotokoll und
 14-Tage-Backups, die eigene KI über MCP (in Verantwortung der Nutzer*innen), USA-Bezug von
 GitHub/Supabase und die konkreten localStorage-Einträge mit Rechtsgrundlage.
+
+Nachtrag 11.11.2026: **Löschprotokoll mit 90-Tage-Frist** (`0065`, Nutzerentscheidung): pg_cron-Job
+`protokoll-aufraeumen` ruft täglich `private.protokoll_aufraeumen()` auf; die Datenschutzerklärung
+nennt die Frist. In der Datenbank statt als Action, weil es so keine Zugangsdaten außerhalb braucht
+und GitHub Zeitpläne inaktiver Repos nach 60 Tagen anhält. Eingespielt über `migrationen.yml`
+(DELETE im Funktionsrumpf). Dabei fiel auf: Die Prüfung von `migrationen.yml` scheiterte im PR, weil
+`setup-cli` mit `version: latest` jetzt CLI 3.1.0 lädt – `db push` verlangt dort `--remote`, `link`
+ignoriert `--password`. Workflow auf 3.1.0 festgelegt und angepasst. Der Passwortschutz gegen
+geleakte Passwörter (Supabase-Linter) bleibt aus: nur im Pro-Tarif verfügbar.

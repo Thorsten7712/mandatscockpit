@@ -45,7 +45,7 @@ wenn eine bestehende Design-Entscheidung unklar ist, bevor sie geändert wird.
   angelegt mit dem Konto (`handle_new_user`), Constraint `todo_columns_feste_spalten`. Drag & Drop
   via `@dnd-kit/core`.
 - **Datenmodell & RLS:** vollständig in `supabase/migrations/0001_init.sql`, kommentiert und 1:1 zu
-  KONZEPT.md Abschnitt 7. Aktueller Stand über alle 64 Migrationen: siehe `supabase/migrations/`.
+  KONZEPT.md Abschnitt 7. Aktueller Stand über alle 65 Migrationen: siehe `supabase/migrations/`.
 
 ## Aktueller Stand
 
@@ -323,6 +323,9 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 - **Deploy ist zweistufig**: Eine Migration wirkt sofort auf die Live-DB, das Frontend/die Edge
   Functions gehen aber erst mit `git push` live (separater Workflow-Trigger). Eine fertige
   DB-Migration ohne Push zeigt sich also noch nicht auf der Produktivseite.
+- **Supabase-CLI in den Workflows auf eine feste Version** (seit 11.11.2026): `version: latest`
+  hat `migrationen.yml` mit CLI 3.0 brechen lassen – `link` ignoriert `--password`, `db push`
+  braucht `--remote`. Versionen bewusst anheben und den Trockenlauf im PR ansehen.
 - **Migrationen: zwei Wege, beide ohne Mac** (gearbeitet wird ausschließlich in Claude-Code-Cloud-
   Sitzungen). Der Container darf nach außen nur HTTPS, Postgres kommt dort nicht durch.
   (1) **Supabase-Connector** für alles, was der Code im selben PR braucht: vor dem Merge per
@@ -359,6 +362,8 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   Service-Role der Header `x-mc-user` (MCP-Server, eigener Client je Aufruf in `index.ts`) bzw.
   `x-mc-quelle` (Wartungsskripte). Neue Inhaltstabellen in die Trigger-Liste aufnehmen; neue
   Service-Role-Skripte mit `x-mc-quelle` anlegen.
+  Einträge älter als **90 Tage** löscht der pg_cron-Job `protokoll-aufraeumen` täglich 03:17 UTC
+  (`private.protokoll_aufraeumen()`, `0065`) – die Frist steht so in der Datenschutzerklärung.
 - **`DROP` über den Supabase-Connector hängt**: `execute_sql` hält destruktive Anweisungen für
   eine Bestätigung zurück, die in der Cloud-Sitzung nicht ankommt – der Aufruf läuft nach 60 s
   in einen Timeout, ohne dass etwas passiert (Statement-/Lock-Timeouts greifen nicht, es wartet

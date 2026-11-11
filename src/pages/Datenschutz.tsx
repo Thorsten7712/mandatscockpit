@@ -122,8 +122,9 @@ export default function Datenschutz() {
             <p>
               Deine Daten werden gespeichert, solange dein Nutzerkonto besteht. Bei Löschung eines Kontos
               durch den Administrator werden Profil, eigene Inhalte und Profilfoto entfernt. Gelöschte Einträge
-              hält ein nur für den Betreiber einsehbares Löschprotokoll fest, damit sich versehentliche
-              Löschungen nachvollziehen und rückgängig machen lassen. Verschlüsselte Sicherungskopien der
+              hält ein nur für den Betreiber einsehbares Löschprotokoll 90 Tage lang fest, damit sich
+              versehentliche Löschungen nachvollziehen und rückgängig machen lassen; danach werden sie
+              automatisch endgültig entfernt. Verschlüsselte Sicherungskopien der
               Datenbank werden nach 14 Tagen automatisch gelöscht.
             </p>
           </section>
