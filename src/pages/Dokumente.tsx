@@ -691,18 +691,11 @@ export default function Dokumente() {
                 }
                 return (
                   <li key={v.schluessel} className="border-b border-slate-100 last:border-b-0">
+                    {/* Die Zeile selbst ist nur Mausfläche. Bedienbar sind zwei
+                        Geschwister: der Gelesen-Punkt und der Inhalt als Knopf –
+                        ein Knopf im Knopf ist für Screenreader nicht verlässlich. */}
                     <div
-                      role="button"
-                      tabIndex={0}
-                      aria-pressed={breit ? aktiv : undefined}
-                      aria-expanded={mehrteilig ? aufgeklappt : undefined}
                       onClick={oeffneVorgang}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          oeffneVorgang()
-                        }
-                      }}
                       className={`group flex cursor-pointer gap-2 px-3 py-3 ${aktiv ? 'bg-primary/10' : 'hover:bg-slate-50'}`}
                     >
                       {/* Im Archiv gilt alles als gelesen – dort gibt es nichts umzuschalten. */}
@@ -719,7 +712,7 @@ export default function Dokumente() {
                           }}
                           aria-label={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
                           title={ungelesen ? 'Als gelesen markieren' : 'Als ungelesen markieren'}
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-slate-200/60"
+                          className="-m-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-slate-200/60"
                         >
                           <span
                             className={`h-2 w-2 rounded-full transition-opacity ${
@@ -728,7 +721,19 @@ export default function Dokumente() {
                           />
                         </button>
                       )}
-                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={breit ? aktiv : undefined}
+                        aria-expanded={mehrteilig ? aufgeklappt : undefined}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            oeffneVorgang()
+                          }
+                        }}
+                        className="flex min-w-0 flex-1 flex-col gap-1 rounded-sm"
+                      >
                         <div className="flex items-center gap-2 text-xs text-slate-500">
                           <span className="truncate font-mono">
                             {nummer ?? (kopf.user_id !== userId ? (authorNames.get(kopf.user_id) ?? 'Unbekannt') : 'Eigenes Dokument')}

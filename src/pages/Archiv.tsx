@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, CheckSquare, FileText, History, Plus } from 'lucide-react'
+import { Archive, CheckSquare, FileText, History, Paperclip, Plus, StickyNote, UserRound } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { ladeTermineMitNotizen } from '../lib/notizFlags'
 import type { CalendarSource, DokumentListenZeile, DokumentRow, Ebene, SessionRow, TodoRow } from '../lib/types'
@@ -13,6 +13,7 @@ import { formatDate, formatDateTime, formatDayMonth, formatTime, startOfTodayIso
 import { EBENE_COLOR, EBENE_LABEL, sourceColorById, tagColor } from '../lib/sourceColors'
 import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { alleZeilen } from '../lib/alleZeilen'
+import { tabTasten } from '../lib/tabs'
 
 type Tab = 'sitzungen' | 'aufgaben' | 'dokumente'
 
@@ -216,11 +217,12 @@ export default function Archiv() {
     <div>
       <h1 className="mc-page-title mb-5">Archiv</h1>
       <div>
-        <div role="tablist" aria-label="Bereich" className="mb-6 flex flex-wrap gap-1 border-b border-slate-200">
+        <div role="tablist" aria-label="Bereich" onKeyDown={tabTasten} className="mb-6 flex flex-wrap gap-1 border-b border-slate-200">
           <button
             type="button"
             role="tab"
             aria-selected={tab === 'sitzungen'}
+            tabIndex={tab === 'sitzungen' ? 0 : -1}
             onClick={() => setTab('sitzungen')}
             className="mc-tab"
           >
@@ -230,6 +232,7 @@ export default function Archiv() {
             type="button"
             role="tab"
             aria-selected={tab === 'aufgaben'}
+            tabIndex={tab === 'aufgaben' ? 0 : -1}
             onClick={() => setTab('aufgaben')}
             className="mc-tab"
           >
@@ -239,6 +242,7 @@ export default function Archiv() {
             type="button"
             role="tab"
             aria-selected={tab === 'dokumente'}
+            tabIndex={tab === 'dokumente' ? 0 : -1}
             onClick={() => setTab('dokumente')}
             className="mc-tab"
           >
@@ -247,12 +251,12 @@ export default function Archiv() {
         </div>
 
         {tab === 'sitzungen' && (
-          <section className="mc-animate-fade max-w-2xl">
+          <section role="tabpanel" className="mc-animate-fade max-w-4xl">
             <div className="mb-3 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShowNewSession((v) => !v)}
-                className="mc-btn-ghost text-xs!"
+                className="mc-btn-ghost border border-slate-300 text-sm!"
               >
                 <Plus size={14} /> Sitzung nachtragen
               </button>
@@ -358,7 +362,7 @@ export default function Archiv() {
                         className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg ${abgesagt ? 'bg-red-50 text-red-400' : farbe.chip}`}
                       >
                         <span className="text-base font-bold leading-none">{day}</span>
-                        <span className="text-[10px] font-semibold uppercase leading-tight">{month}</span>
+                        <span className="text-[11px] font-semibold uppercase leading-tight">{month}</span>
                       </span>
                       <span className="min-w-0 flex-1">
                         <span
@@ -367,16 +371,17 @@ export default function Archiv() {
                           <span className="truncate">{s.titel}</span>
                           {notizenIds.has(s.id) && (
                             <span className="shrink-0" title="Aufgaben mit Notizen">
-                              📝
+                              <StickyNote size={14} aria-hidden="true" className="text-slate-500" />
+                              <span className="sr-only">Aufgaben mit Notizen</span>
                             </span>
                           )}
                           <span
-                            className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
+                            className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide no-underline ${farbe.chip}`}
                           >
                             {EBENE_LABEL[source?.ebene ?? s.ebene ?? ''] ?? 'Sitzung'}
                           </span>
                           {abgesagt && (
-                            <span className="shrink-0 rounded-sm bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-500 no-underline">
+                            <span className="shrink-0 rounded-sm bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-500 no-underline">
                               Abgesagt
                             </span>
                           )}
@@ -413,7 +418,7 @@ export default function Archiv() {
         )}
 
         {tab === 'aufgaben' && (
-          <section className="mc-animate-fade max-w-2xl">
+          <section role="tabpanel" className="mc-animate-fade max-w-4xl">
             <ul className="space-y-2">
               {completedTodos.map((t) => (
                 <li key={t.id}>
@@ -428,7 +433,7 @@ export default function Archiv() {
                       </span>
                       <span className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-slate-500">
                         {t.zustaendig_profil && (
-                          <span className="rounded-sm bg-slate-100 px-1.5 py-0.5">👤 {t.zustaendig_profil.name}</span>
+                          <span className="rounded-sm bg-slate-100 px-1.5 py-0.5"><UserRound size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" />{t.zustaendig_profil.name}</span>
                         )}
                         {t.erledigt_am && <span>Erledigt am {formatDate(t.erledigt_am)}</span>}
                         <span>Erstellt am {formatDate(t.created_at)}</span>
@@ -448,7 +453,7 @@ export default function Archiv() {
         )}
 
         {tab === 'dokumente' && (
-          <section className="mc-animate-fade max-w-2xl">
+          <section role="tabpanel" className="mc-animate-fade max-w-4xl">
             <ul className="space-y-2">
               {archivDokumente.map((eintrag) => (
                   <li key={`hub-${eintrag.id}`}>
@@ -466,7 +471,7 @@ export default function Archiv() {
                           <span className="truncate text-sm font-medium text-slate-900">{eintrag.row.titel}</span>
                           {eintrag.row.ebene && (
                             <span
-                              className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[eintrag.row.ebene].chip}`}
+                              className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${EBENE_COLOR[eintrag.row.ebene].chip}`}
                             >
                               {EBENE_LABEL[eintrag.row.ebene]}
                             </span>
@@ -474,7 +479,7 @@ export default function Archiv() {
                           {eintrag.row.tags.map((t) => (
                             <span
                               key={t}
-                              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${tagColor(t).chip}`}
                             >
                               {t}
                             </span>
@@ -490,7 +495,7 @@ export default function Archiv() {
                               : 'Von Hand archiviert'}
                           </span>
                           {eintrag.row.datei_url && (
-                            <span className="truncate">📎 {fileNameFromPath(eintrag.row.datei_url)}</span>
+                            <span className="truncate"><Paperclip size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" />{fileNameFromPath(eintrag.row.datei_url)}</span>
                           )}
                           <span className="shrink-0">{formatDateTime(eintrag.row.erstellt_am)}</span>
                         </span>

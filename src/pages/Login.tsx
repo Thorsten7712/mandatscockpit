@@ -59,15 +59,15 @@ export default function Login() {
         </p>
       </form>
       <p className="text-xs text-slate-500">
-        <Link to="/impressum" className="underline hover:text-slate-600">
+        <Link to="/impressum" className="inline-block py-2 underline hover:text-slate-900">
           Impressum
         </Link>
         {' · '}
-        <Link to="/datenschutz" className="underline hover:text-slate-600">
+        <Link to="/datenschutz" className="inline-block py-2 underline hover:text-slate-900">
           Datenschutz
         </Link>
         {' · '}
-        <Link to="/nutzungserklaerung" className="underline hover:text-slate-600">
+        <Link to="/nutzungserklaerung" className="inline-block py-2 underline hover:text-slate-900">
           Nutzungserklärung
         </Link>
       </p>

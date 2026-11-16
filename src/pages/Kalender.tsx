@@ -7,6 +7,7 @@ import { formatTime, startOfTodayIso } from '../lib/format'
 import { EBENE_LABEL } from '../lib/sourceColors'
 import type { Ebene } from '../lib/types'
 import { TerminDetailModal } from '../components/TerminDetailModal'
+import { tabTasten } from '../lib/tabs'
 
 /**
  * Kalender (UI-Umbau 18.10.2026): Woche als sieben Spalten oder Liste der
@@ -187,13 +188,14 @@ export default function Kalender() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div role="tablist" aria-label="Ansicht" className="grid grid-cols-2 rounded-[10px] bg-slate-200/70 p-[3px]">
+          <div role="tablist" aria-label="Ansicht" onKeyDown={tabTasten} className="grid grid-cols-2 rounded-[10px] bg-slate-200/70 p-[3px]">
             {(['woche', 'liste'] as const).map((a) => (
               <button
                 key={a}
                 type="button"
                 role="tab"
                 aria-selected={ansicht === a}
+                tabIndex={ansicht === a ? 0 : -1}
                 onClick={() => setAnsicht(a)}
                 className={`min-h-9 rounded-lg px-3.5 text-sm font-semibold ${ansicht === a ? 'bg-white shadow-xs' : 'text-slate-600'}`}
               >
@@ -281,7 +283,7 @@ export default function Kalender() {
                         <span className={`font-mono text-xs ${e.kind === 'session' && !e.abgesagt ? 'text-primary' : 'text-slate-500'}`}>
                           {formatTime(e.start)}
                         </span>
-                        <span className={`text-sm font-semibold leading-snug [overflow-wrap:anywhere] ${e.abgesagt ? 'line-through' : ''}`}>
+                        <span className={`text-sm font-semibold leading-snug hyphens-auto break-words ${e.abgesagt ? 'line-through' : ''}`}>
                           {e.titel}
                         </span>
                         <span className="text-xs text-slate-500">{infoText(e)}</span>
