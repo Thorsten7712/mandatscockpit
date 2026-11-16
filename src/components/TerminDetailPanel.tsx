@@ -12,6 +12,7 @@ import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
 import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
 import { archivGrund, ladeSitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { useDialog } from '../lib/useDialog'
+import { SkelettDokument } from './Skelett'
 
 // Gleiche Liste wie in Settings.tsx/Archiv.tsx (Kalenderquellen- bzw.
 // Sitzung-nachtragen-Formular) - bewusst dupliziert, siehe CLAUDE.md.
@@ -656,7 +657,11 @@ export function TerminDetailPanel({
   function eingebetteteAnsicht() {
     if (loadError) return <p role="alert" className="text-red-600">{loadError}</p>
     if (!session || !dokumenteGeladen) {
-      return <div className="mc-card p-6 text-sm text-slate-500">Lade Sitzung …</div>
+      return (
+        <div className="mc-card p-6">
+          <SkelettDokument className="max-w-xl" />
+        </div>
+      )
     }
     const notizenJeDokument = new Map<string, IndirekteNotiz[]>()
     for (const n of notizen) {

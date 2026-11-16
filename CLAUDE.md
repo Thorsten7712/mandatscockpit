@@ -462,7 +462,11 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   bedienbar sind Geschwister – die Aktion als `button`, der Inhalt als `role="button"`. Reiter
   (`role="tablist"`) bekommen `onKeyDown={tabTasten}` aus `src/lib/tabs.ts` und am Reiter
   `tabIndex={gewählt ? 0 : -1}`. Tippflächen mindestens 36 px (Label mit Padding um kleine
-  Checkboxen), Text nie unter 11 px. Ladezustände als `mc-skelett` in der Form des Inhalts.
+  Checkboxen), Text nie unter 11 px. Ladezustände über `src/components/Skelett.tsx` (`Skelett`,
+  `SkelettListe`, `SkelettKarten`, `SkelettBoard`, `SkelettDokument`) in der Form des Inhalts –
+  kein „Lade …"-Text. Dazu gehört ein eigener Geladen-Zustand: Leermeldungen („Noch keine …")
+  und Hinweise, die von geladenen Daten abhängen, erst danach zeigen, sonst blitzen sie bei
+  jedem Aufruf kurz auf.
   `AppLayout` setzt `document.title` je Bereich und bietet „Zum Inhalt springen".
 - **Detail-Modals**: gemeinsame Hülle `src/components/DetailModalShell.tsx` (2-Spalten-Layout,
   `headerActions`-Slot) – für neue Entity-Detail-Modals wiederverwenden statt eigenes Chrome zu bauen.

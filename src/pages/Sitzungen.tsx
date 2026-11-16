@@ -5,6 +5,7 @@ import type { SessionRow } from '../lib/types'
 import { TerminDetailPanel } from '../components/TerminDetailPanel'
 import { formatTime, startOfTodayIso } from '../lib/format'
 import { inStuecken } from '../lib/alleZeilen'
+import { SkelettDokument } from '../components/Skelett'
 
 type SitzungZeile = Pick<SessionRow, 'id' | 'titel' | 'gremium' | 'datum' | 'status'>
 
@@ -131,6 +132,13 @@ export default function Sitzungen() {
             )
           })}
         </nav>
+      )}
+
+      {/* Solange weder die Leiste noch eine gewählte Sitzung da ist. */}
+      {kommende === null && !gewaehlt && !fehler && (
+        <div className="mc-card p-6">
+          <SkelettDokument className="max-w-xl" />
+        </div>
       )}
 
       {kommende !== null && !gewaehlt && !ohneGremien && (

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { ForcedPasswordChange } from './ForcedPasswordChange'
 import { NUTZUNGSERKLAERUNG_VERSION, NutzungserklaerungBestaetigen } from './Nutzungserklaerung'
 import type { Session } from '@supabase/supabase-js'
+import { SkelettDokument } from './Skelett'
 
 interface Pflichten {
   mussPasswortAendern: boolean
@@ -46,7 +47,13 @@ export function ProtectedRoute({ children }: { children: JSX.Element }) {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  if (loading) return <p className="p-8">Lade...</p>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-100 p-8">
+        <SkelettDokument className="mx-auto max-w-xl" />
+      </div>
+    )
+  }
   if (!session) return <Navigate to="/login" replace />
   // Admin-vergebenes Passwort darf nie dauerhaft behalten werden - blockt
   // jede geschützte Route, bis der Nutzer selbst ein neues gesetzt hat.

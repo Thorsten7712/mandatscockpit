@@ -11,6 +11,7 @@ import { drucksachennummer, titelOhneNummer } from '../lib/vorgaenge'
 import { formatDateTime } from '../lib/format'
 import { inStuecken } from '../lib/alleZeilen'
 import { VorlageAnsicht } from '../components/VorlageAnsicht'
+import { SkelettDokument } from '../components/Skelett'
 
 /** ALLRIS stellt öffentlichen Punkten ein „Ö " voran – in der engen Leiste unten nur die Zahl. */
 function kurzeNummer(nummer: string | null): string | null {
@@ -261,7 +262,10 @@ export default function SitzungsModus() {
       )}
 
       {!geladen ? (
-        <div className="flex-1" />
+        <main className="flex-1 px-5 py-6 sm:px-8">
+          <h1 className="sr-only">Sitzungsmodus</h1>
+          <SkelettDokument className="max-w-2xl" />
+        </main>
       ) : fehler ? (
         <p className="p-8 text-center text-slate-500">{fehler}</p>
       ) : tops.length === 0 ? (

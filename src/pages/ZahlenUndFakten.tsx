@@ -8,6 +8,7 @@ import { formatDate } from '../lib/format'
 import { TagEditor } from '../components/TagEditor'
 import { LoeschDialog } from '../components/LoeschDialog'
 import { tabTasten } from '../lib/tabs'
+import { SkelettKarten } from '../components/Skelett'
 
 /**
  * "Zahlen und Fakten": das Material, das man in Debatte, Interview und
@@ -127,6 +128,9 @@ export default function ZahlenUndFakten() {
   }, [fakten, userId])
 
   const eigeneEbenen = profile?.ebenen ?? []
+  // Erst mit geladenem Profil steht fest, dass wirklich keine Ebene eingetragen ist –
+  // vorher erschien der Hinweis bei jedem Seitenaufruf kurz zu Unrecht.
+  const ohneEbene = profile !== null && eigeneEbenen.length === 0
 
   function oeffneNeu() {
     setEditId(null)
@@ -361,9 +365,9 @@ export default function ZahlenUndFakten() {
           <button
             type="button"
             onClick={() => (showForm ? schliesseForm() : oeffneNeu())}
-            disabled={!showForm && eigeneEbenen.length === 0}
+            disabled={!showForm && (profile === null || ohneEbene)}
             title={
-              eigeneEbenen.length === 0
+              ohneEbene
                 ? 'Trage zuerst unter Einstellungen → Meine Gremien deine Ebene(n) ein.'
                 : undefined
             }
@@ -373,7 +377,7 @@ export default function ZahlenUndFakten() {
           </button>
         </div>
 
-        {eigeneEbenen.length === 0 && (
+        {ohneEbene && (
           <p className="mb-4 text-sm text-amber-800">
             Trage zuerst unter{' '}
             <Link to="/settings" className="underline">
@@ -526,6 +530,7 @@ export default function ZahlenUndFakten() {
                 <div className="mt-auto">{fusszeile(f)}</div>
               </div>
             ))}
+            {loading && <SkelettKarten anzahl={3} className="contents" />}
             {!loading && gefiltert.length === 0 && (
               <div className="mc-card p-6 text-center text-sm text-slate-500 sm:col-span-2 lg:col-span-3">
                 {inKategorie.length === 0 ? 'Noch keine Kennzahlen hinterlegt.' : 'Keine Treffer für diese Auswahl.'}
@@ -548,6 +553,11 @@ export default function ZahlenUndFakten() {
                 {fusszeile(f)}
               </li>
             ))}
+            {loading && (
+              <li>
+                <SkelettKarten anzahl={3} />
+              </li>
+            )}
             {!loading && gefiltert.length === 0 && (
               <li className="mc-card p-6 text-center text-sm text-slate-500">
                 {inKategorie.length === 0

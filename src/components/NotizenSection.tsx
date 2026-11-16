@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import type { SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
 import { formatDate } from '../lib/format'
+import { SkelettKarten } from './Skelett'
 
 interface KartenItem {
   todoId: string
@@ -20,6 +21,7 @@ interface KartenItem {
 // 0055 nicht mehr, Datei-Uploads seit 0052 nicht.
 export function NotizenSection() {
   const [notizen, setNotizen] = useState<SummaryRow[]>([])
+  const [geladen, setGeladen] = useState(false)
   const [todoById, setTodoById] = useState<Map<string, TodoRow>>(new Map())
   const [sessionById, setSessionById] = useState<Map<string, SessionRow>>(new Map())
   const [gremiumFilter, setGremiumFilter] = useState<string | null>(null)
@@ -28,6 +30,7 @@ export function NotizenSection() {
   async function loadNotizen() {
     const { data } = await supabase.from('summaries').select('*').order('erstellt_am', { ascending: false })
     setNotizen(data ?? [])
+    setGeladen(true)
   }
 
   useEffect(() => {
@@ -156,7 +159,12 @@ export function NotizenSection() {
             </li>
           )
         })}
-        {sichtbar.length === 0 && (
+        {!geladen && (
+          <li>
+            <SkelettKarten anzahl={2} />
+          </li>
+        )}
+        {geladen && sichtbar.length === 0 && (
           <li className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
             {items.length === 0
               ? 'Noch keine Notizen. Notizen schreibst du an einer ToDo-Karte.'
