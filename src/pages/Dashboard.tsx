@@ -54,6 +54,21 @@ function wochentag(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { weekday: 'long' })
 }
 
+/** Platzhalter in der Form des späteren Inhalts, damit beim Laden nichts springt. */
+function Skelett({ zeilen }: { zeilen: number }) {
+  return (
+    <div role="status" className="flex flex-col gap-4 py-1">
+      <span className="sr-only">Lädt …</span>
+      {Array.from({ length: zeilen }, (_, i) => (
+        <div key={i} aria-hidden="true" className="flex flex-col gap-2">
+          <div className="mc-skelett h-4" style={{ width: `${[78, 62, 70, 54][i % 4]}%` }} />
+          <div className="mc-skelett h-3 w-1/3" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [userId, setUserId] = useState<string | null>(null)
   const [vorname, setVorname] = useState('')
@@ -244,7 +259,7 @@ export default function Dashboard() {
           <h2 id="h-sitzung" className={spaltenKopf}>
             Nächste Sitzung
           </h2>
-          {woche === null && <p className="text-sm text-slate-500">Lade …</p>}
+          {woche === null && <Skelett zeilen={3} />}
           {woche && !naechsteSitzung && <p className="text-[15px] text-slate-600">Keine Sitzung in den nächsten sieben Tagen.</p>}
           {naechsteSitzung && (
             <>
@@ -338,11 +353,11 @@ export default function Dashboard() {
             <h2 id="h-woche" className={spaltenKopf}>
               Die nächsten sieben Tage
             </h2>
-            <Link to="/kalender" className="text-[13px] font-medium text-primary hover:underline">
+            <Link to="/kalender" className="-mx-2 -my-2 px-2 py-2 text-[13px] font-medium text-primary hover:underline">
               Kalender
             </Link>
           </div>
-          {woche === null && <p className="text-sm text-slate-500">Lade …</p>}
+          {woche === null && <Skelett zeilen={3} />}
           {woche?.length === 0 && <p className="text-sm text-slate-600">Es steht nichts an.</p>}
           {tage.map((tag) => {
             const d = new Date(tag.datum)
@@ -396,21 +411,24 @@ export default function Dashboard() {
               <h2 id="h-aufgaben" className={spaltenKopf}>
                 Meine Aufgaben
               </h2>
-              <Link to="/aufgaben" className="text-[13px] font-medium text-primary hover:underline">
+              <Link to="/aufgaben" className="-mx-2 -my-2 px-2 py-2 text-[13px] font-medium text-primary hover:underline">
                 Board
               </Link>
             </div>
-            {aufgaben === null && <p className="text-sm text-slate-500">Lade …</p>}
+            {aufgaben === null && <Skelett zeilen={4} />}
             {aufgaben?.offen.length === 0 && <p className="text-sm text-slate-600">Keine offenen Aufgaben.</p>}
             <ul className="flex flex-col">
               {aufgaben?.offen.slice(0, AUFGABEN_ANZAHL).map((a) => (
                 <li key={a.id} className="flex items-start gap-3 border-b border-slate-200 py-2.5 last:border-b-0">
-                  <input
-                    type="checkbox"
-                    aria-label={`„${a.titel}" erledigt`}
-                    onChange={() => erledigen(a)}
-                    className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
-                  />
+                  {/* Das Label vergrößert nur die Tippfläche (36 px statt 20). */}
+                  <label className="-m-2 shrink-0 cursor-pointer p-2">
+                    <input
+                      type="checkbox"
+                      aria-label={`„${a.titel}" erledigt`}
+                      onChange={() => erledigen(a)}
+                      className="mt-0.5 block h-5 w-5 accent-primary"
+                    />
+                  </label>
                   <button type="button" onClick={() => setOffen({ art: 'todo', id: a.id })} className="flex min-w-0 flex-col gap-0.5 text-left">
                     <span className="text-[15px] hover:underline">{a.titel}</span>
                     <span className={`text-[13px] ${a.ueberfaellig ? 'font-semibold text-[#B4471B]' : 'text-slate-600'}`}>
@@ -434,12 +452,12 @@ export default function Dashboard() {
                 Neu für dich
               </h2>
               {neuigkeiten && neuigkeiten.neu.length > 0 && (
-                <button type="button" onClick={allesGesehen} className="text-[13px] font-medium text-primary hover:underline">
+                <button type="button" onClick={allesGesehen} className="-mx-2 -my-2 px-2 py-2 text-[13px] font-medium text-primary hover:underline">
                   Alles gesehen
                 </button>
               )}
             </div>
-            {neuigkeiten === null && <p className="text-sm text-slate-500">Lade …</p>}
+            {neuigkeiten === null && <Skelett zeilen={2} />}
             {neuigkeiten?.neu.length === 0 && (
               <p className="text-sm text-slate-600">
                 {neuigkeiten.seit ? `Nichts Neues seit ${formatDateTime(neuigkeiten.seit)}.` : 'Ab jetzt erscheint hier, was neu dazukommt.'}

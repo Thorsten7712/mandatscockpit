@@ -389,25 +389,25 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
                 <span className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate text-sm font-medium text-slate-900">{u.name}</span>
                   <span
-                    className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${rolleBadgeClass(u.rolle)}`}
+                    className={`rounded-sm px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${rolleBadgeClass(u.rolle)}`}
                   >
                     {rolleLabel(u.rolle)}
                   </span>
                   {u.partei && (
-                    <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                    <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                       {themeById(u.partei).label}
                     </span>
                   )}
                   {u.technisch && (
                     <span
                       title="Automatik-Konto - erscheint nicht in den Teilen-Listen"
-                      className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                      className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700"
                     >
                       Technisch
                     </span>
                   )}
                   {isSelf && (
-                    <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       Du
                     </span>
                   )}

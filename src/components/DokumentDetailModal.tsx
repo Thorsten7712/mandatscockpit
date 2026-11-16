@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, ArchiveRestore, Columns2, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
+import { Archive, ArchiveRestore, CalendarDays, Check, Columns2, FileText, Link2, PanelLeft, Paperclip, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
 import type { DokumentRow, DokumentSichtbarkeit, Profile, SessionRow, TodoRow } from '../lib/types'
@@ -708,16 +708,16 @@ export function DokumentDetailModal({
                     <button
                       type="button"
                       onClick={() => (editingChildId === c.id ? setEditingChildId(null) : startEditSharing(c))}
-                      className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-200"
+                      className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-200"
                     >
                       {sichtbarkeitLabel(c)}
                     </button>
                   ) : (
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{sichtbarkeitLabel(c)}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{sichtbarkeitLabel(c)}</span>
                   )}
                   {c.user_id !== userId &&
                     c.tags.map((t) => (
-                      <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
+                      <span key={t} className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${tagColor(t).chip}`}>
                         {t}
                       </span>
                     ))}
@@ -758,7 +758,8 @@ export function DokumentDetailModal({
                     onClick={() => setPreviewDoc({ path: c.datei_url!, name: fileNameFromPath(c.datei_url!) })}
                     className="mc-btn-ghost mt-1! px-2! py-1! text-xs!"
                   >
-                    📎 {fileNameFromPath(c.datei_url)}
+                    <Paperclip size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" />
+{fileNameFromPath(c.datei_url)}
                   </button>
                 )}
                 <div className="mt-1 flex items-center justify-between">
@@ -855,14 +856,14 @@ export function DokumentDetailModal({
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {document.ebene && (
             <span
-              className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[document.ebene].chip}`}
+              className={`rounded-sm px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${EBENE_COLOR[document.ebene].chip}`}
             >
               {EBENE_LABEL[document.ebene]}
               {document.gliederung ? ` · ${document.gliederung}` : ''}
             </span>
           )}
           {docTags.map((t) => (
-            <span key={t} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
+            <span key={t} className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${tagColor(t).chip}`}>
               {t}
             </span>
           ))}
@@ -870,24 +871,25 @@ export function DokumentDetailModal({
             <Link
               key={si.id}
               to={`/sitzungen/${si.id}`}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:border-primary/40 hover:text-slate-900"
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:border-primary/40 hover:text-slate-900"
             >
-              📅 {si.titel} ({formatDate(si.datum)})
+              <CalendarDays size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" />
+{si.titel} ({formatDate(si.datum)})
             </Link>
           ))}
           {linkedTodos.map((t) => (
             <span
               key={t.id}
-              className="inline-flex max-w-[16rem] items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600"
+              className="inline-flex max-w-[16rem] items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600"
             >
-              ✓ <span className="truncate">{t.titel}</span>
+              <Check size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" /><span className="truncate">{t.titel}</span>
             </span>
           ))}
           <button
             type="button"
             onClick={() => setVerknuepfungenOffen((v) => !v)}
             aria-expanded={verknuepfungenOffen}
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
               verknuepfungenOffen
                 ? 'border-primary bg-primary text-white'
                 : 'border-dashed border-slate-300 text-slate-500 hover:border-primary/50 hover:text-slate-700'
@@ -905,7 +907,7 @@ export function DokumentDetailModal({
           {document.datei_url && (
             <>
               <span className="text-slate-300">·</span>
-              <span className="truncate">📎 {fileNameFromPath(document.datei_url)}</span>
+              <span className="truncate"><Paperclip size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" />{fileNameFromPath(document.datei_url)}</span>
             </>
           )}
           {(durchSitzungArchiviert || archiviertAm) && (

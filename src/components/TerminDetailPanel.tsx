@@ -764,7 +764,7 @@ export function TerminDetailPanel({
       <section ref={karteRef} aria-labelledby="sitzung-titel" className="mc-card scroll-mt-2 overflow-hidden">
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-5 py-4">
           <div className="flex min-w-0 flex-col gap-0.5">
-            <h1 id="sitzung-titel" className="text-[22px] font-bold tracking-tight">
+            <h1 id="sitzung-titel" className="font-display text-[26px] font-semibold leading-tight tracking-[-0.01em]">
               {session.gremium ?? session.titel}
             </h1>
             <span className="text-sm text-slate-500">

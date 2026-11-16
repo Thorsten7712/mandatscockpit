@@ -7,6 +7,7 @@ import { EBENE_COLOR, EBENE_LABEL, tagColor } from '../lib/sourceColors'
 import { formatDate } from '../lib/format'
 import { TagEditor } from '../components/TagEditor'
 import { LoeschDialog } from '../components/LoeschDialog'
+import { tabTasten } from '../lib/tabs'
 
 /**
  * "Zahlen und Fakten": das Material, das man in Debatte, Interview und
@@ -42,7 +43,7 @@ const KATEGORIEN: { value: FaktKategorie; label: string; icon: typeof Scale; hin
   },
   {
     value: 'zahl',
-    label: 'Zahlen & Fakten',
+    label: 'Kennzahlen',
     icon: BarChart3,
     hinweis: 'Belegte Kennzahlen. Ohne Quelle und Stand ist eine Zahl in der Debatte wertlos.',
   },
@@ -293,13 +294,13 @@ export default function ZahlenUndFakten() {
     return (
       <>
         <span
-          className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${EBENE_COLOR[f.ebene].chip}`}
+          className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${EBENE_COLOR[f.ebene].chip}`}
         >
           {EBENE_LABEL[f.ebene]}
           {f.gliederung ? ` · ${f.gliederung}` : ''}
         </span>
         {f.tags.map((t) => (
-          <span key={t} className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tagColor(t).chip}`}>
+          <span key={t} className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${tagColor(t).chip}`}>
             {t}
           </span>
         ))}
@@ -311,7 +312,7 @@ export default function ZahlenUndFakten() {
     <div>
       <h1 className="mc-page-title mb-5">Zahlen &amp; Fakten</h1>
       <div>
-        <div role="tablist" aria-label="Kategorie" className="mb-3 flex flex-wrap gap-1 border-b border-slate-200">
+        <div role="tablist" aria-label="Kategorie" onKeyDown={tabTasten} className="mb-3 flex flex-wrap gap-1 border-b border-slate-200">
           {KATEGORIEN.map((k) => {
             const Icon = k.icon
             const anzahl = fakten.filter((f) => f.kategorie === k.value).length
@@ -321,6 +322,7 @@ export default function ZahlenUndFakten() {
                 type="button"
                 role="tab"
                 aria-selected={kategorie === k.value}
+                tabIndex={kategorie === k.value ? 0 : -1}
                 onClick={() => {
                   setKategorie(k.value)
                   setTagFilter(null)
@@ -526,7 +528,7 @@ export default function ZahlenUndFakten() {
             ))}
             {!loading && gefiltert.length === 0 && (
               <div className="mc-card p-6 text-center text-sm text-slate-500 sm:col-span-2 lg:col-span-3">
-                {inKategorie.length === 0 ? 'Noch keine Zahlen hinterlegt.' : 'Keine Treffer für diese Auswahl.'}
+                {inKategorie.length === 0 ? 'Noch keine Kennzahlen hinterlegt.' : 'Keine Treffer für diese Auswahl.'}
               </div>
             )}
           </div>
@@ -549,7 +551,7 @@ export default function ZahlenUndFakten() {
             {!loading && gefiltert.length === 0 && (
               <li className="mc-card p-6 text-center text-sm text-slate-500">
                 {inKategorie.length === 0
-                  ? `Noch keine ${aktiveKategorie.label.toLowerCase()} hinterlegt.`
+                  ? `Noch keine ${aktiveKategorie.label} hinterlegt.`
                   : 'Keine Treffer für diese Auswahl.'}
               </li>
             )}

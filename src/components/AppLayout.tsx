@@ -163,6 +163,18 @@ export function AppLayout() {
 
   // „Mehr" schließt bei jedem Seitenwechsel und per Escape.
   useEffect(() => setMehrOffen(false), [pathname])
+
+  // Eigener Titel je Bereich: sonst heißen alle offenen Tabs gleich, und ein
+  // Screenreader sagt beim Seitenwechsel nichts Neues an.
+  useEffect(() => {
+    const ziel = pathname.startsWith('/settings')
+      ? 'Einstellungen'
+      : ZIELE.find((z) => istAktiv(z, pathname))?.label
+    document.title = ziel ? `${ziel} – MandatsCockpit` : 'MandatsCockpit'
+    return () => {
+      document.title = 'MandatsCockpit'
+    }
+  }, [pathname])
   useEffect(() => {
     if (!mehrOffen) return
     function beiEscape(e: KeyboardEvent) {
@@ -207,7 +219,7 @@ export function AppLayout() {
       <span
         className={
           klein
-            ? 'absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white'
+            ? 'absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-white'
             : 'ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-bold leading-none text-white'
         }
         aria-label={`${zahl} ungelesen`}
@@ -221,10 +233,17 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
+      <a
+        href="#inhalt"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary focus:shadow-lg"
+      >
+        Zum Inhalt springen
+      </a>
       <div className="sticky top-0 z-40 h-1 bg-topbar" aria-hidden="true" />
       <div className="flex">
         {/* Leiste ab Tablet-Breite */}
         <aside
+          aria-label="Leiste"
           className={`sticky top-1 hidden h-[calc(100vh-0.25rem)] shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-200 md:flex ${
             eingeklappt ? 'w-[72px]' : 'w-60'
           }`}
@@ -328,19 +347,19 @@ export function AppLayout() {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 pb-8 pt-6 sm:px-6 md:pb-12 md:pt-7 lg:px-10">
+          <main id="inhalt" tabIndex={-1} className="mx-auto w-full max-w-[1440px] flex-1 outline-hidden px-4 pb-8 pt-6 sm:px-6 md:pb-12 md:pt-7 lg:px-10">
             <Outlet />
           </main>
           <footer className="mx-auto w-full max-w-[1440px] px-4 pb-24 text-xs text-slate-500 sm:px-6 md:pb-8 lg:px-10">
-            <Link to="/impressum" className="underline hover:text-slate-600">
+            <Link to="/impressum" className="inline-block py-2 underline hover:text-slate-900">
               Impressum
             </Link>
             {' · '}
-            <Link to="/datenschutz" className="underline hover:text-slate-600">
+            <Link to="/datenschutz" className="inline-block py-2 underline hover:text-slate-900">
               Datenschutz
             </Link>
             {' · '}
-            <Link to="/nutzungserklaerung" className="underline hover:text-slate-600">
+            <Link to="/nutzungserklaerung" className="inline-block py-2 underline hover:text-slate-900">
               Nutzungserklärung
             </Link>
           </footer>

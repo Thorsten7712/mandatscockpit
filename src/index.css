@@ -104,6 +104,11 @@
   }
 }
 
+/* Ladeplatzhalter: ruhiges Pulsieren, bei „weniger Bewegung" eine feste Fläche. */
+@utility mc-skelett {
+  @apply animate-pulse rounded-sm bg-slate-200 motion-reduce:animate-none;
+}
+
 @utility mc-btn-danger {
   @apply mc-btn px-2.5 py-1.5 text-sm text-red-600 hover:bg-red-50;
 }
@@ -279,7 +284,8 @@
   }
 
   button:focus-visible,
-  a:focus-visible {
+  a:focus-visible,
+  [role='button']:focus-visible {
     outline: 2px solid rgb(var(--mc-primary) / 0.55);
     outline-offset: 2px;
     border-radius: 0.375rem;

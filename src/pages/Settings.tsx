@@ -475,14 +475,24 @@ export default function Settings() {
     await supabase.from('profiles').update({ presseschau_aktiv: neu }).eq('id', userId)
   }
 
-  async function handleGenerateMcpToken() {
+  function handleGenerateMcpToken() {
     if (!userId) return
-    if (mcpTokenCreatedAt) {
-      const ok = window.confirm(
-        'Neues Token erzeugen? Das bisherige Token funktioniert danach nicht mehr und muss in Claude ersetzt werden.',
-      )
-      if (!ok) return
+    if (!mcpTokenCreatedAt) {
+      void erzeugeMcpToken()
+      return
     }
+    // Ein neues Token macht das bisherige ungültig - Rückfrage wie bei jedem Löschen.
+    loeschRueckfrage({
+      titel: 'MCP-Token',
+      was: 'Das bisherige Token',
+      hinweis: 'Es funktioniert danach nicht mehr und muss in deiner KI durch das neue ersetzt werden.',
+      aktionLabel: 'Neues Token erzeugen',
+      ausfuehren: erzeugeMcpToken,
+    })
+  }
+
+  async function erzeugeMcpToken() {
+    if (!userId) return
     setMcpGenerating(true)
     setMcpError(null)
     setMcpCopied(false)
@@ -511,7 +521,7 @@ export default function Settings() {
       <h1 className="mc-page-title mb-6">Einstellungen</h1>
       <div>
       <div className="flex flex-col gap-8 lg:flex-row">
-      <aside className="shrink-0 lg:w-56">
+      <div className="shrink-0 lg:w-56">
         <nav aria-label="Bereiche der Einstellungen" className="flex gap-1 overflow-x-auto pb-1 lg:sticky lg:top-6 lg:flex-col lg:pb-0">
           {SECTIONS.filter((s) => !s.adminOnly || isAdmin).map((s) => {
             const Icon = s.icon
@@ -533,7 +543,7 @@ export default function Settings() {
             )
           })}
         </nav>
-      </aside>
+      </div>
       <div className="min-w-0 max-w-2xl flex-1">
 
       {activeSection === 'profil' && (
@@ -733,16 +743,16 @@ export default function Settings() {
                 <span className="flex min-w-0 items-center gap-2">
                   <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${farbe.dot}`} aria-hidden="true" />
                   <span className="truncate text-sm font-medium text-slate-900">{s.name}</span>
-                  <span className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${farbe.chip}`}>
+                  <span className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${farbe.chip}`}>
                     {EBENE_LABEL[s.ebene] ?? s.ebene}
                   </span>
                   {s.art === 'termin' && (
-                    <span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       Terminkalender
                     </span>
                   )}
                   {s.nur_ergaenzend && (
-                    <span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       Persönlich, ergänzend
                     </span>
                   )}
@@ -887,7 +897,7 @@ export default function Settings() {
                 <h3 className="text-sm font-semibold text-slate-900">{source?.name ?? 'Ohne Quelle'}</h3>
                 {source && (
                   <span
-                    className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${farbe.chip}`}
+                    className={`rounded-sm px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${farbe.chip}`}
                   >
                     {EBENE_LABEL[source.ebene] ?? source.ebene}
                   </span>
@@ -1036,7 +1046,7 @@ export default function Settings() {
             checked={boardSettings?.zeige_termin ?? true}
             onChange={() => toggleBoardSetting('zeige_termin')}
           />
-          Termin-Symbol (📅)
+          Termin auf der Karte zeigen
         </label>
         <label className="flex items-center gap-2">
           <input
@@ -1044,7 +1054,7 @@ export default function Settings() {
             checked={boardSettings?.zeige_zustaendig ?? true}
             onChange={() => toggleBoardSetting('zeige_zustaendig')}
           />
-          Zuständigkeit (👤)
+          Zuständige Person auf der Karte zeigen
         </label>
       </div>
       </section>
@@ -1107,7 +1117,7 @@ export default function Settings() {
               {mcpConnectorUrl(mcpGeneratedToken)}
             </code>
             <button type="button" onClick={handleCopyMcpToken} className="mc-btn-ghost px-2! py-1! text-xs!">
-              {mcpCopied ? 'Kopiert ✓' : 'In Zwischenablage kopieren'}
+              {mcpCopied ? 'Kopiert' : 'In Zwischenablage kopieren'}
             </button>
           </div>
         )}

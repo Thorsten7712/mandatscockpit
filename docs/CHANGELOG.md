@@ -3655,3 +3655,29 @@ Impeccable-Detektor (Taste-Skill war in der Sitzung nicht installiert).
 
 Offen für Teil 2: Emojis als Icons, verschachtelte Knöpfe im Hub, Reiter-Tastatur, Tippziele,
 Überschriften, Ladezustände, Textfehler.
+
+## 16.11.2026 – Review, Teil 2 von 2: Feinschliff
+
+Die übrigen Befunde aus dem Review; axe-core meldet danach auf zehn Ansichten keinen Verstoß mehr.
+
+- **Emojis durch Lucide-Icons ersetzt** (📅 👤 📎 📝 🔗 🗳 ✓ an 15 Stellen: Board-Karten,
+  Dokument-Fenster, Archiv, Notizen, Einstellungen).
+- **Hub-Zeilen**: Die Zeile war ein Knopf mit einem Knopf darin (Gelesen-Punkt). Jetzt ist sie nur
+  noch Mausfläche; Punkt und Inhalt sind Geschwister. Tippfläche des Punkts 36 statt 24 px.
+- **Reiter** (Archiv, Zahlen & Fakten, Kalender-Umschalter): Pfeiltasten, Pos1/Ende und
+  wandernder Tab-Stopp über `tabTasten()`.
+- **Tippflächen**: Aufgaben-Haken auf „Heute" 36 statt 20 px, Links „Kalender"/„Board" und
+  Fußzeilen-Links mit Polster.
+- **Überschriften**: Sitzungsname in der Sitzungsansicht in Newsreader wie auf „Heute" und im
+  Sitzungsmodus; Board-Spalten als `h2`; die zweite `aside` in den Einstellungen ist ein `div`.
+- **Kalender-Woche** trennt lange Namen nach Silben („Verkehrs-ausschuss") statt mitten im Wort.
+- **Zahlen & Fakten**: Leerzustand war durch `toLowerCase()` kleingeschrieben; der dritte Reiter
+  heißt „Kennzahlen" statt wie die Seite.
+- **Ladezustände** auf „Heute" als Platzhalter in Zeilenform (`mc-skelett`) statt „Lade …".
+- **Archiv** nutzt 896 statt 672 px; „Sitzung nachtragen" ist als Knopf erkennbar.
+- **Sitzungsmodus**: auf dem Handy steht im Kopf nur Datum und Zeit (der Ort wurde
+  abgeschnitten); die Punktleiste blendet am rechten Rand aus und zeigt so, dass sie weiterläuft.
+- **Token neu erzeugen** fragt über den `LoeschDialog` statt über `window.confirm`.
+- **Browser-Tab** trägt den Bereich im Titel; Sprunglink „Zum Inhalt springen"; nichts unter 11 px.
+
+Nicht umgesetzt: Platzhalter-Ladezustände außerhalb von „Heute" (dort stehen weiter kurze Texte).

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { CalendarDays, Link2, StickyNote, UserRound } from 'lucide-react'
 import {
   DndContext,
   MouseSensor,
@@ -66,15 +67,16 @@ function Card({
       className={`cursor-grab select-none rounded-lg border bg-white px-3 py-2.5 shadow-xs transition-shadow duration-150 hover:shadow-md active:cursor-grabbing ${ausgewaehlt ? 'border-primary ring-1 ring-primary' : 'border-slate-200'} ${isDragging ? 'z-10 shadow-lg ring-2 ring-primary/40' : ''}`}
     >
       <p className={`text-sm font-medium ${todo.erledigt ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
-        {todo.ebene && <span title="Für Kolleg*innen freigebbar/geteilt">🔗 </span>}
-        {hatDokument && <span title="Enthält Notizen">📝 </span>}
+        {todo.ebene && <span title="Für Kolleg*innen freigebbar/geteilt"><Link2 size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0 text-slate-500" /><span className="sr-only">Geteilt: </span></span>}
+        {hatDokument && <span title="Enthält Notizen"><StickyNote size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0 text-slate-500" /><span className="sr-only">Mit Notizen: </span></span>}
         {todo.titel}
       </p>
       {(zeigeTermin || zeigeZustaendig) && (
         <p className="mt-1.5 flex flex-wrap gap-1.5 text-xs text-slate-500">
           {zeigeTermin && (
             <span className="max-w-56 truncate rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-              📅 {terminLabel}
+              <CalendarDays size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" />
+{terminLabel}
             </span>
           )}
           {zeigeZustaendig && (
@@ -82,7 +84,8 @@ function Card({
               className={`rounded-sm px-1.5 py-0.5 ${mirZugewiesen ? 'bg-amber-100 font-medium text-amber-800' : 'bg-slate-100'}`}
               title={mirZugewiesen ? 'Dir zugewiesen' : 'Zuständig'}
             >
-              👤 {zustaendigName}
+              <UserRound size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" />
+{zustaendigName}
             </span>
           )}
         </p>
@@ -129,7 +132,7 @@ function Column({
   return (
     <div ref={setNodeRef} className="rounded-xl bg-slate-200/50 p-3">
       <div className="mb-2.5 flex items-center justify-between px-1">
-        <h3 className="text-sm font-semibold text-slate-700">{column.titel}</h3>
+        <h2 className="text-sm font-semibold text-slate-700">{column.titel}</h2>
         {entries.length > 0 && (
           <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-xs">
             {entries.length}

@@ -455,6 +455,15 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
 - **Alles, was sich ziehen lässt, braucht einen zweiten Weg**: Karten im Board lassen sich auch
   über „Spalte" im Karten-Fenster verschieben (`handleSpalte()` in `TodoDetailModal.tsx`, gleiche
   Wirkung wie `handleDragEnd`).
+- **Icons sind Linien-Icons aus `lucide-react`, keine Emojis** (seit 16.11.2026): Emojis sehen je
+  Gerät anders aus und werden vorgelesen. Muster für ein Icon im Fließtext einer Marke:
+  `<Icon size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" />`.
+- **Kein Knopf im Knopf**: Eine Zeile mit eigener Aktion (Hub: Gelesen-Punkt) ist nur Mausfläche;
+  bedienbar sind Geschwister – die Aktion als `button`, der Inhalt als `role="button"`. Reiter
+  (`role="tablist"`) bekommen `onKeyDown={tabTasten}` aus `src/lib/tabs.ts` und am Reiter
+  `tabIndex={gewählt ? 0 : -1}`. Tippflächen mindestens 36 px (Label mit Padding um kleine
+  Checkboxen), Text nie unter 11 px. Ladezustände als `mc-skelett` in der Form des Inhalts.
+  `AppLayout` setzt `document.title` je Bereich und bietet „Zum Inhalt springen".
 - **Detail-Modals**: gemeinsame Hülle `src/components/DetailModalShell.tsx` (2-Spalten-Layout,
   `headerActions`-Slot) – für neue Entity-Detail-Modals wiederverwenden statt eigenes Chrome zu bauen.
 - **Formularblöcke vs. Blocksatz unterscheiden sich an der Lückenbreite**: Beim PDF-Auszug der

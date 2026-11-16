@@ -242,7 +242,8 @@ export default function SitzungsModus() {
           {session && (
             <span className="truncate text-sm text-slate-600">
               <span className="font-mono">{formatDateTime(session.datum)}</span>
-              {session.ort ? ` · ${session.ort}` : ''}
+              {/* Auf dem Handy reicht die Zeile nur für Datum und Zeit. */}
+              {session.ort && <span className="hidden sm:inline"> · {session.ort}</span>}
             </span>
           )}
         </div>
@@ -408,7 +409,7 @@ export default function SitzungsModus() {
             <ChevronLeft size={18} />
             <span className="hidden sm:inline">Zurück</span>
           </button>
-          <ol ref={leisteRef} aria-label="Tagesordnung" className="flex min-w-0 flex-1 snap-x gap-2 overflow-x-auto p-0.5 [scrollbar-width:none]">
+          <ol ref={leisteRef} aria-label="Tagesordnung" className="flex min-w-0 flex-1 snap-x gap-2 overflow-x-auto p-0.5 pr-8 [mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] [scrollbar-width:none]">
             {tops.map((t, k) => {
               const aktuell = k === index
               return (

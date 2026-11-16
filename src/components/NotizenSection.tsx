@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Landmark } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import type { SessionRow, SummaryRow, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
@@ -130,7 +131,7 @@ export function NotizenSection() {
                 className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
               >
                 <span
-                  className={`shrink-0 rounded-sm px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${todo?.erledigt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}
+                  className={`shrink-0 rounded-sm px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${todo?.erledigt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}
                 >
                   {todo?.erledigt ? 'Erledigt' : 'ToDo'}
                 </span>
@@ -145,7 +146,7 @@ export function NotizenSection() {
                       {item.notizAnzahl} {item.notizAnzahl === 1 ? 'Notiz' : 'Notizen'}
                     </span>
                     {session ? (
-                      <span className="truncate">🗳️ {session.titel} · {formatDate(session.datum)}</span>
+                      <span className="truncate"><Landmark size={12} aria-hidden="true" className="-mt-0.5 mr-1 inline shrink-0" />{session.titel} · {formatDate(session.datum)}</span>
                     ) : (
                       <span className="italic text-slate-500">Ohne Sitzungsbezug</span>
                     )}
