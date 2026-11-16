@@ -14,6 +14,7 @@ import { istDokumentUngelesen, markiereGelesen, markiereUngelesen } from '../lib
 import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { vorschau } from '../lib/vorlageMarkdown'
 import { alleZeilen } from '../lib/alleZeilen'
+import { SkelettListe } from '../components/Skelett'
 
 // Vorschläge, keine feste Liste - Nutzer können jederzeit eigene Tags
 // eintragen (siehe Eingabefeld im Formular unten).
@@ -533,7 +534,7 @@ export default function Dokumente() {
           </button>
           <h1 className="text-lg font-bold tracking-tight">Dokumente</h1>
           <span className="truncate text-sm text-slate-500">
-            {offenGesamt.toLocaleString('de-DE')} offen
+            {loading ? 'Lädt …' : `${offenGesamt.toLocaleString('de-DE')} offen`}
             {unreadCount > 0 ? ` · ${unreadCount.toLocaleString('de-DE')} ungelesen` : ''}
           </span>
         </header>
@@ -542,7 +543,7 @@ export default function Dokumente() {
         <div className="flex flex-col gap-0.5">
           <h1 className="mc-page-title">Dokumente</h1>
           <span className="text-sm text-slate-500">
-            {offenGesamt.toLocaleString('de-DE')} offen
+            {loading ? 'Lädt …' : `${offenGesamt.toLocaleString('de-DE')} offen`}
             {unreadCount > 0 ? ` · ${unreadCount.toLocaleString('de-DE')} ungelesen` : ''}
             {archivGesamt > 0 ? ` · ${archivGesamt.toLocaleString('de-DE')} im Archiv` : ''}
           </span>
@@ -806,6 +807,11 @@ export default function Dokumente() {
                   </li>
                 )
               })}
+              {loading && (
+                <li>
+                  <SkelettListe zeilen={6} />
+                </li>
+              )}
               {!loading && filtered.length === 0 && (
                 <li className="p-6 text-center text-sm text-slate-500">
                   {documents.length === 0 ? 'Noch keine Dokumente.' : 'Keine Dokumente für diese Auswahl.'}

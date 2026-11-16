@@ -17,6 +17,7 @@ import {
   type WochenEintrag,
 } from '../lib/heute'
 import { formatDateTime, formatTime } from '../lib/format'
+import { Skelett } from '../components/Skelett'
 
 /**
  * Startseite „Heute" (Richtung A „Morgenlage", 08.11.2026): das Cockpit als
@@ -52,21 +53,6 @@ function faelligText(faellig: string, ueberfaellig: boolean): string {
 
 function wochentag(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { weekday: 'long' })
-}
-
-/** Platzhalter in der Form des späteren Inhalts, damit beim Laden nichts springt. */
-function Skelett({ zeilen }: { zeilen: number }) {
-  return (
-    <div role="status" className="flex flex-col gap-4 py-1">
-      <span className="sr-only">Lädt …</span>
-      {Array.from({ length: zeilen }, (_, i) => (
-        <div key={i} aria-hidden="true" className="flex flex-col gap-2">
-          <div className="mc-skelett h-4" style={{ width: `${[78, 62, 70, 54][i % 4]}%` }} />
-          <div className="mc-skelett h-3 w-1/3" />
-        </div>
-      ))}
-    </div>
-  )
 }
 
 export default function Dashboard() {

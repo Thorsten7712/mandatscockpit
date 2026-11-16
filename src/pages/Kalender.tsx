@@ -8,6 +8,7 @@ import { EBENE_LABEL } from '../lib/sourceColors'
 import type { Ebene } from '../lib/types'
 import { TerminDetailModal } from '../components/TerminDetailModal'
 import { tabTasten } from '../lib/tabs'
+import { SkelettListe } from '../components/Skelett'
 
 /**
  * Kalender (UI-Umbau 18.10.2026): Woche als sieben Spalten oder Liste der
@@ -248,6 +249,11 @@ export default function Kalender() {
       )}
 
       {fehler && <p role="alert" className="text-sm text-red-600">Termine konnten nicht geladen werden: {fehler}</p>}
+      {eintraege === null && (
+        <p role="status" className="sr-only">
+          Lädt …
+        </p>
+      )}
       {ohneGremien && (
         <p className="text-sm text-slate-600">
           Für Sitzungstermine unter{' '}
@@ -273,6 +279,10 @@ export default function Kalender() {
                     <span className={`text-xl font-bold ${istHeute ? 'text-primary' : ''}`}>{tag.getDate()}</span>
                   </div>
                   <div className="flex flex-col gap-1.5 p-2">
+                    {/* Beim Laden ein blasser Block je Werktag statt leerer Spalten. */}
+                    {eintraege === null && tag.getDay() >= 1 && tag.getDay() <= 5 && (
+                      <div aria-hidden="true" className="mc-skelett h-16 rounded-lg" />
+                    )}
                     {anTag.map((e) => (
                       <button
                         key={`${e.kind}-${e.id}`}
@@ -297,7 +307,11 @@ export default function Kalender() {
         </div>
       ) : (
         <div className="mc-card overflow-hidden">
-          {eintraege === null && <p className="px-5 py-4 text-sm text-slate-500">Lade …</p>}
+          {eintraege === null && (
+            <div aria-hidden="true">
+              <SkelettListe zeilen={5} />
+            </div>
+          )}
           {eintraege !== null && gefiltert.length === 0 && (
             <p className="px-5 py-4 text-sm text-slate-500">Keine Termine in den nächsten {LISTE_TAGE} Tagen.</p>
           )}

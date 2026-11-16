@@ -14,6 +14,7 @@ import { EBENE_COLOR, EBENE_LABEL, sourceColorById, tagColor } from '../lib/sour
 import { archivGrund, ladeSitzungenJeDokument, type SitzungenJeDokument } from '../lib/dokumenteArchiv'
 import { alleZeilen } from '../lib/alleZeilen'
 import { tabTasten } from '../lib/tabs'
+import { SkelettKarten } from '../components/Skelett'
 
 type Tab = 'sitzungen' | 'aufgaben' | 'dokumente'
 
@@ -34,6 +35,10 @@ export default function Archiv() {
 
   const [userId, setUserId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<SessionRow[]>([])
+  // Je Reiter: erst nach dem Laden darf „noch nichts da“ erscheinen.
+  const [sitzungenGeladen, setSitzungenGeladen] = useState(false)
+  const [aufgabenGeladen, setAufgabenGeladen] = useState(false)
+  const [dokumenteGeladen, setDokumenteGeladen] = useState(false)
   const [sources, setSources] = useState<CalendarSource[]>([])
   const [notizenIds, setNotizenIds] = useState<Set<string>>(new Set())
   const [meineGremien, setMeineGremien] = useState<string[] | null>(null)
@@ -97,6 +102,7 @@ export default function Archiv() {
     const byId = new Map<string, SessionRow>()
     ;[...byGremium.zeilen, ...byTerminSource.zeilen].forEach((s) => byId.set(s.id, s))
     setSessions(Array.from(byId.values()).sort((a, b) => b.datum.localeCompare(a.datum)))
+    setSitzungenGeladen(true)
   }
 
   // Manuell nachgetragene Sitzung (supabase/migrations/0028, source_id-Wahl
@@ -161,6 +167,7 @@ export default function Archiv() {
       .eq('erledigt', true)
       .order('erledigt_am', { ascending: false })
     setCompletedTodos((data ?? []) as ErledigteKarte[])
+    setAufgabenGeladen(true)
   }
 
   // Top-Level-Dokumente des Dokumenten-Hubs samt Datum der verknüpften
@@ -184,6 +191,7 @@ export default function Archiv() {
     const { sitzungen } = await ladeSitzungenJeDokument(supabase, rows.map((r) => r.id))
     setHubSitzungen(sitzungen)
     setHubDokumente(rows)
+    setDokumenteGeladen(true)
   }
 
   useEffect(() => {
@@ -395,7 +403,12 @@ export default function Archiv() {
                   </li>
                 )
               })}
-              {sessions.length === 0 && meineGremien?.length === 0 && (
+              {!sitzungenGeladen && (
+                <li>
+                  <SkelettKarten anzahl={3} />
+                </li>
+              )}
+              {sitzungenGeladen && sessions.length === 0 && meineGremien?.length === 0 && (
                 <li className="mc-card p-6 text-center text-sm text-slate-500">
                   Keine Gremien ausgewählt. Unter{' '}
                   <Link to="/settings" className="font-medium text-primary underline">
@@ -404,7 +417,7 @@ export default function Archiv() {
                   die Gremien anhaken, in denen du ein Mandat hast.
                 </li>
               )}
-              {sessions.length === 0 && meineGremien !== null && meineGremien.length > 0 && (
+              {sitzungenGeladen && sessions.length === 0 && meineGremien !== null && meineGremien.length > 0 && (
                 <li className="mc-card p-6 text-center text-sm text-slate-500">
                   Keine vergangenen Sitzungen.
                 </li>
@@ -442,7 +455,12 @@ export default function Archiv() {
                   </button>
                 </li>
               ))}
-              {completedTodos.length === 0 && (
+              {!aufgabenGeladen && (
+                <li>
+                  <SkelettKarten anzahl={3} />
+                </li>
+              )}
+              {aufgabenGeladen && completedTodos.length === 0 && (
                 <li className="mc-card p-6 text-center text-sm text-slate-500">
                   Noch keine erledigten Aufgaben. Karten landen hier, sobald du sie als „Erledigt" markierst
                   oder auf eine Spalte namens „Fertig" ziehst.
@@ -503,7 +521,12 @@ export default function Archiv() {
                     </button>
                   </li>
               ))}
-              {archivDokumente.length === 0 && (
+              {!dokumenteGeladen && (
+                <li>
+                  <SkelettKarten anzahl={3} />
+                </li>
+              )}
+              {dokumenteGeladen && archivDokumente.length === 0 && (
                 <li className="mc-card p-6 text-center text-sm text-slate-500">
                   Noch keine archivierten Dokumente. Dokumente aus dem Dokumenten-Hub landen hier, sobald ihre
                   verknüpfte Sitzung vorbei ist oder sie von Hand archiviert werden.

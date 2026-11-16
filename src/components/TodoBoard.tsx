@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabaseClient'
 import type { TodoBoardSettings, TodoColumn, TodoPlacement, TodoRow } from '../lib/types'
 import { TodoDetailModal } from './TodoDetailModal'
 import { formatDate } from '../lib/format'
+import { SkelettBoard } from './Skelett'
 
 const FUENF_TAGE_MS = 5 * 24 * 60 * 60 * 1000
 
@@ -366,7 +367,7 @@ export function TodoBoard({
   }
 
   if (columns.length === 0) {
-    return <p className="text-slate-500 text-sm">Spalten werden geladen...</p>
+    return <SkelettBoard />
   }
 
   // Neue Karten entstehen nur in der Spalte "Neu" (Titel-Matching,

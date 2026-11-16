@@ -3681,3 +3681,20 @@ Die übrigen Befunde aus dem Review; axe-core meldet danach auf zehn Ansichten k
 - **Browser-Tab** trägt den Bereich im Titel; Sprunglink „Zum Inhalt springen"; nichts unter 11 px.
 
 Nicht umgesetzt: Platzhalter-Ladezustände außerhalb von „Heute" (dort stehen weiter kurze Texte).
+
+## 16.11.2026 – Ladeplatzhalter auf allen Seiten
+
+Nutzerwunsch nach dem Review: die Platzhalter von „Heute" auch überall sonst. Gemeinsame
+Komponente `Skelett.tsx` mit fünf festen Formen (Zeilen, Listenzeilen, Karten, Board, Dokument)
+statt eines Baukastens. Eingebaut in Dokumenten-Hub, Zahlen & Fakten, Archiv (alle drei Reiter),
+Kalender (Liste und Woche), Sitzungsansicht, Sitzungsmodus, Board, „Meine Notizen",
+Dokumentvorschau und dem Start hinter dem Login.
+
+Beim Prüfen mit künstlich verzögerten Antworten fielen drei falsche Zwischenzustände auf, die es
+schon vorher gab und die bei schneller Verbindung nur aufblitzten: Im Archiv und bei „Meine
+Notizen" stand während des Ladens „Noch keine …", der Hub zählte „0 offen", und Zahlen & Fakten
+zeigte den Hinweis „Trage zuerst deine Ebene ein" samt gesperrtem Knopf, bevor das Profil da war.
+Alle drei warten jetzt auf einen eigenen Geladen-Zustand.
+
+Geprüft im Harness mit 8 s Verzögerung, 1440 und 390 px: jede Seite zeigt Platzhalter, axe-core
+ohne Befund, kein Überlauf; ohne Verzögerung bleibt kein Platzhalter stehen.

@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { fileExtension, IMAGE_EXTENSIONS } from '../lib/dateien'
 import { useDialog } from '../lib/useDialog'
+import { SkelettDokument } from './Skelett'
 
 // Vorschau für hochgeladene Dokumente (Bucket "zusammenfassungen", privat -
 // daher signierte URL statt öffentlichem Link). Bilder werden inline
@@ -74,7 +75,7 @@ export function DocumentPreviewModal({
         </header>
         <div className="flex-1 overflow-auto bg-slate-100">
           {error && <p role="alert" className="p-6 text-center text-sm text-red-600">{error}</p>}
-          {!error && !url && <p className="p-6 text-center text-sm text-slate-500">Lädt...</p>}
+          {!error && !url && <SkelettDokument className="p-6" />}
           {url && isImage && (
             <div className="flex h-full items-center justify-center p-4">
               <img src={url} alt={fileName} className="max-h-full max-w-full object-contain" />
