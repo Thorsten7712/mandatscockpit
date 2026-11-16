@@ -63,7 +63,7 @@ export function KontaktAnfragenListe() {
                   </a>
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{a.nachricht}</p>
-                <p className="mt-1 text-xs text-slate-400">{formatDateTime(a.erstellt_am)}</p>
+                <p className="mt-1 text-xs text-slate-500">{formatDateTime(a.erstellt_am)}</p>
               </div>
               <div className="flex shrink-0 gap-1.5">
                 <button
@@ -91,7 +91,7 @@ export function KontaktAnfragenListe() {
           </li>
         ))}
         {anfragen.length === 0 && (
-          <li className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+          <li className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
             Noch keine Kontaktanfragen.
           </li>
         )}

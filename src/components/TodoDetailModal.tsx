@@ -443,6 +443,44 @@ export function TodoDetailModal({
 
   // Zur Auswahl: wer die Karte schon hat (Ersteller und Platzierte) und - nur
   // für den Ersteller - die Kandidat*innen, denen sie dabei geteilt würde.
+  // Verschieben ohne Ziehen: dieselbe Wirkung wie Drag & Drop im Board
+  // (handleDragEnd in TodoBoard.tsx), aber mit Tastatur und Screenreader
+  // bedienbar. „Fertig" setzt wie dort erledigt, jede andere Spalte hebt es auf.
+  const meinePlatzierung = placements.find((p) => p.user_id === userId)
+  const fertigSpalte = columns.find((c) => c.titel.trim().toLowerCase() === 'fertig')
+  const aktuelleSpalteId = todo?.erledigt && fertigSpalte ? fertigSpalte.id : (meinePlatzierung?.column_id ?? '')
+  async function handleSpalte(spalteId: string) {
+    if (!todo || !userId || !spalteId || spalteId === aktuelleSpalteId) return
+    const wirdErledigt = spalteId === fertigSpalte?.id
+    const erledigtAm = wirdErledigt ? new Date().toISOString() : null
+    setPlacements((prev) => prev.map((p) => (p.user_id === userId ? { ...p, column_id: spalteId } : p)))
+    setTodo({ ...todo, erledigt: wirdErledigt, erledigt_am: erledigtAm })
+    await supabase.from('todo_placements').update({ column_id: spalteId }).eq('todo_id', todo.id).eq('user_id', userId)
+    await supabase.from('todos').update({ erledigt: wirdErledigt, erledigt_am: erledigtAm }).eq('id', todo.id)
+    onChanged()
+  }
+  const spalteBlock = todo && meinePlatzierung && columns.length > 0 && (
+    <div>
+      <label htmlFor="todo-spalte" className="mb-1 block text-sm text-slate-600">
+        Spalte
+      </label>
+      <select
+        id="todo-spalte"
+        value={aktuelleSpalteId}
+        onChange={(e) => handleSpalte(e.target.value)}
+        className="mc-input w-full"
+      >
+        {[...columns]
+          .sort((a, b) => a.reihenfolge - b.reihenfolge)
+          .map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.titel}
+            </option>
+          ))}
+      </select>
+    </div>
+  )
+
   const zustaendigOptionen = todo
     ? [
         ...new Map(
@@ -470,14 +508,14 @@ export function TodoDetailModal({
           </option>
         ))}
       </select>
-      <p className="mt-1 text-xs text-slate-400">
+      <p className="mt-1 text-xs text-slate-500">
         {istErsteller
           ? todo.ebene
             ? 'Wer zuständig ist, bekommt die Karte auf das eigene Board und kann sie bearbeiten.'
             : 'Für Kolleg*innen unten unter „Teilen" eine Ebene wählen – zuweisen lässt sich, wer die Karte teilen kann.'
           : 'Zuweisen lässt sich, wer die Karte schon auf dem Board hat.'}
       </p>
-      {zustaendigFehler && <p className="text-red-600 text-sm">{zustaendigFehler}</p>}
+      {zustaendigFehler && <p role="alert" className="text-red-600 text-sm">{zustaendigFehler}</p>}
     </>
   )
 
@@ -500,7 +538,7 @@ export function TodoDetailModal({
               ))}
             </select>
             {(myProfile?.ebenen ?? []).length === 0 && (
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-slate-500">
                 Trage zuerst in den Einstellungen unter „Profil" deine eigenen Ebenen ein, um Karten
                 teilen zu können.
               </p>
@@ -529,7 +567,7 @@ export function TodoDetailModal({
                   </span>
                 ))}
                 {geteiltePlatzierungen.length === 0 && (
-                  <span className="text-xs text-slate-400">Noch mit niemandem geteilt.</span>
+                  <span className="text-xs text-slate-500">Noch mit niemandem geteilt.</span>
                 )}
               </div>
               {todo.ebene && (
@@ -560,7 +598,7 @@ export function TodoDetailModal({
                       </li>
                     ))}
                     {ungeteilteKandidatenGefiltert.length === 0 && (
-                      <li className="px-3 py-1.5 text-sm text-slate-400">
+                      <li className="px-3 py-1.5 text-sm text-slate-500">
                         {candidates.length === 0
                           ? 'Keine Kolleg*innen mit gleicher Partei und Ebene gefunden.'
                           : 'Keine Treffer.'}
@@ -572,7 +610,7 @@ export function TodoDetailModal({
               )}
             </div>
           )}
-          {shareError && <p className="text-red-600 text-sm">{shareError}</p>}
+          {shareError && <p role="alert" className="text-red-600 text-sm">{shareError}</p>}
         </>
       ) : (
         placements.length > 1 && (
@@ -587,7 +625,7 @@ export function TodoDetailModal({
 
   const leftColumn = (
     <>
-      {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
+      {loadError && <p role="alert" className="text-red-600 mb-4">{loadError}</p>}
 
       {todo && (
           <form
@@ -706,7 +744,7 @@ export function TodoDetailModal({
               )}
             </div>
 
-            {editError && <p className="text-red-600 text-sm">{editError}</p>}
+            {editError && <p role="alert" className="text-red-600 text-sm">{editError}</p>}
           </form>
         )}
 
@@ -722,7 +760,7 @@ export function TodoDetailModal({
             </Link>
           </li>
         )}
-        {!linkedSession && <li className="text-slate-400 text-sm">Keine verknüpfte Sitzung.</li>}
+        {!linkedSession && <li className="text-slate-500 text-sm">Keine verknüpfte Sitzung.</li>}
       </ul>
 
       <h2 className="font-semibold mb-2">Verknüpfte Dokumente</h2>
@@ -742,7 +780,7 @@ export function TodoDetailModal({
             </button>
           </li>
         ))}
-        {linkedDokumente.length === 0 && <li className="text-slate-400 text-sm">Keine verknüpften Dokumente.</li>}
+        {linkedDokumente.length === 0 && <li className="text-slate-500 text-sm">Keine verknüpften Dokumente.</li>}
       </ul>
       <div className="relative mb-6">
         <input
@@ -768,15 +806,18 @@ export function TodoDetailModal({
               </li>
             ))}
             {dokumentSearchResults.length === 0 && (
-              <li className="px-3 py-1.5 text-sm text-slate-400">Keine Treffer.</li>
+              <li className="px-3 py-1.5 text-sm text-slate-500">Keine Treffer.</li>
             )}
           </ul>
         )}
       </div>
-      {linkDokumentError && <p className="mb-4 text-sm text-red-600">{linkDokumentError}</p>}
+      {linkDokumentError && <p role="alert" className="mb-4 text-sm text-red-600">{linkDokumentError}</p>}
 
       <h2 className="font-semibold mb-2">Zuständig</h2>
-      <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">{zustaendigBlock}</div>
+      <div className="mb-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        {spalteBlock}
+        <div>{zustaendigBlock}</div>
+      </div>
 
       <h2 className="font-semibold mb-2">Teilen</h2>
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{teilenTab}</div>
@@ -841,7 +882,7 @@ export function TodoDetailModal({
           <li key={n.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xs">
             <p className="text-sm whitespace-pre-wrap">{n.inhalt}</p>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-500">
                 {n.user_id === userId ? 'Du' : autorNamen.get(n.user_id) ?? 'Unbekannt'} ·{' '}
                 {formatDateTime(n.erstellt_am)}
               </span>
@@ -865,7 +906,7 @@ export function TodoDetailModal({
             </div>
           </li>
         ))}
-        {notizen.length === 0 && <li className="text-slate-400 text-sm">Noch keine Notizen.</li>}
+        {notizen.length === 0 && <li className="text-slate-500 text-sm">Noch keine Notizen.</li>}
       </ul>
       <form onSubmit={handleAddNotiz} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <textarea
@@ -875,7 +916,7 @@ export function TodoDetailModal({
           className="mc-input w-full"
           rows={3}
         />
-        {notizFehler && <p className="text-red-600 text-sm">{notizFehler}</p>}
+        {notizFehler && <p role="alert" className="text-red-600 text-sm">{notizFehler}</p>}
         <button type="submit" disabled={notizSpeichert || !neueNotiz.trim()} className="mc-btn-primary">
           {notizSpeichert ? 'Speichern...' : 'Hinzufügen'}
         </button>

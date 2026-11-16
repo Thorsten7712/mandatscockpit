@@ -136,7 +136,7 @@ export function NotizenSection() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span
-                    className={`block truncate text-sm font-medium ${todo?.erledigt ? 'text-slate-400 line-through' : 'text-slate-900'}`}
+                    className={`block truncate text-sm font-medium ${todo?.erledigt ? 'text-slate-500 line-through' : 'text-slate-900'}`}
                   >
                     {todo?.titel ?? 'ToDo-Karte'}
                   </span>
@@ -147,7 +147,7 @@ export function NotizenSection() {
                     {session ? (
                       <span className="truncate">🗳️ {session.titel} · {formatDate(session.datum)}</span>
                     ) : (
-                      <span className="italic text-slate-400">Ohne Sitzungsbezug</span>
+                      <span className="italic text-slate-500">Ohne Sitzungsbezug</span>
                     )}
                   </span>
                 </span>
@@ -156,7 +156,7 @@ export function NotizenSection() {
           )
         })}
         {sichtbar.length === 0 && (
-          <li className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+          <li className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
             {items.length === 0
               ? 'Noch keine Notizen. Notizen schreibst du an einer ToDo-Karte.'
               : 'Keine Notizen für diese Auswahl.'}

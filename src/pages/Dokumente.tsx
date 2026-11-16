@@ -403,7 +403,7 @@ export default function Dokumente() {
   }, [schublade, listeOffen])
   const suchfeld = (
     <div className="relative w-full sm:w-[380px]">
-      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
       <input
         type="search"
         placeholder="Titel, Text, Drucksachennummer …"
@@ -416,7 +416,7 @@ export default function Dokumente() {
           type="button"
           onClick={() => mitSeitenreset(setSearchQuery)('')}
           aria-label="Suche leeren"
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600"
         >
           <X className="h-4 w-4" />
         </button>
@@ -588,7 +588,7 @@ export default function Dokumente() {
               required
             />
             {eigeneEbenen.length === 0 ? (
-              <p className="text-sm text-amber-600">
+              <p className="text-sm text-amber-800">
                 Trage zuerst unter{' '}
                 <Link to="/settings" className="underline">
                   Einstellungen → Meine Gremien
@@ -629,7 +629,7 @@ export default function Dokumente() {
               className="mc-input w-full"
               rows={3}
             />
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p role="alert" className="text-sm text-red-600">{formError}</p>}
             <button type="submit" disabled={saving} className="mc-btn-primary">
               {saving ? 'Speichern...' : 'Dokument speichern'}
             </button>
@@ -802,7 +802,7 @@ export default function Dokumente() {
                 )
               })}
               {!loading && filtered.length === 0 && (
-                <li className="p-6 text-center text-sm text-slate-400">
+                <li className="p-6 text-center text-sm text-slate-500">
                   {documents.length === 0 ? 'Noch keine Dokumente.' : 'Keine Dokumente für diese Auswahl.'}
                 </li>
               )}
@@ -879,7 +879,7 @@ export default function Dokumente() {
                   }}
                 />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center text-sm text-slate-400">
+                <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center text-sm text-slate-500">
                   <FileText className="h-8 w-8" />
                   Ein Dokument aus der Liste wählen.
                 </div>

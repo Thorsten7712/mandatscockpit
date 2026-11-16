@@ -330,7 +330,7 @@ export default function Archiv() {
                     className="mc-input flex-1"
                   />
                 </div>
-                {newError && <p className="text-red-600 text-sm">{newError}</p>}
+                {newError && <p role="alert" className="text-red-600 text-sm">{newError}</p>}
                 <div className="flex gap-2">
                   <button type="submit" disabled={newSaving} className="mc-btn-primary">
                     {newSaving ? 'Speichern...' : 'Anlegen'}
@@ -391,7 +391,7 @@ export default function Archiv() {
                 )
               })}
               {sessions.length === 0 && meineGremien?.length === 0 && (
-                <li className="mc-card p-6 text-center text-sm text-slate-400">
+                <li className="mc-card p-6 text-center text-sm text-slate-500">
                   Keine Gremien ausgewählt. Unter{' '}
                   <Link to="/settings" className="font-medium text-primary underline">
                     Einstellungen
@@ -400,7 +400,7 @@ export default function Archiv() {
                 </li>
               )}
               {sessions.length === 0 && meineGremien !== null && meineGremien.length > 0 && (
-                <li className="mc-card p-6 text-center text-sm text-slate-400">
+                <li className="mc-card p-6 text-center text-sm text-slate-500">
                   Keine vergangenen Sitzungen.
                 </li>
               )}
@@ -423,7 +423,7 @@ export default function Archiv() {
                     className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-shadow duration-150 hover:shadow-md"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-slate-400 line-through">
+                      <span className="block truncate text-sm font-medium text-slate-500 line-through">
                         {t.titel}
                       </span>
                       <span className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-slate-500">
@@ -438,7 +438,7 @@ export default function Archiv() {
                 </li>
               ))}
               {completedTodos.length === 0 && (
-                <li className="mc-card p-6 text-center text-sm text-slate-400">
+                <li className="mc-card p-6 text-center text-sm text-slate-500">
                   Noch keine erledigten Aufgaben. Karten landen hier, sobald du sie als „Erledigt" markierst
                   oder auf eine Spalte namens „Fertig" ziehst.
                 </li>
@@ -499,7 +499,7 @@ export default function Archiv() {
                   </li>
               ))}
               {archivDokumente.length === 0 && (
-                <li className="mc-card p-6 text-center text-sm text-slate-400">
+                <li className="mc-card p-6 text-center text-sm text-slate-500">
                   Noch keine archivierten Dokumente. Dokumente aus dem Dokumenten-Hub landen hier, sobald ihre
                   verknüpfte Sitzung vorbei ist oder sie von Hand archiviert werden.
                 </li>

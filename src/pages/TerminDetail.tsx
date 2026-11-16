@@ -9,7 +9,7 @@ export default function TerminDetail() {
   if (!isValidKind || !id) {
     return (
       <div>
-        <p className="text-red-600">Ungültiger Termin-Link.</p>
+        <p role="alert" className="text-red-600">Ungültiger Termin-Link.</p>
         <Link to="/" className="text-sm text-slate-600 underline">
           Zur Startseite
         </Link>

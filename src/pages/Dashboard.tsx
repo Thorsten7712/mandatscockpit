@@ -234,7 +234,7 @@ export default function Dashboard() {
         )}
       </header>
 
-      {fehler && <p className="text-sm text-red-600">Etwas konnte nicht geladen werden: {fehler}</p>}
+      {fehler && <p role="alert" className="text-sm text-red-600">Etwas konnte nicht geladen werden: {fehler}</p>}
 
       {presseschauAktiv && <PresseschauSection />}
 

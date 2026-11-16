@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { useDialog } from '../lib/useDialog'
 
 /**
  * Gemeinsamer Bestätigungsdialog für alle Löschaktionen (Nutzerwunsch: eine
@@ -53,6 +54,7 @@ export function LoeschDialog({
   onLoeschen: () => void
 }) {
   const geteilt = (folgen?.length ?? 0) > 0
+  const dialogRef = useDialog(onAbbrechen)
 
   return (
     <div
@@ -60,9 +62,12 @@ export function LoeschDialog({
       onClick={onAbbrechen}
     >
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
-        className="mc-animate-pop w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
+        aria-label={`${titel} löschen`}
+        tabIndex={-1}
+        className="mc-animate-pop w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl outline-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start gap-3">
@@ -99,7 +104,7 @@ export function LoeschDialog({
           </p>
         )}
 
-        {fehler && <p className="mb-3 text-sm text-red-600">{fehler}</p>}
+        {fehler && <p role="alert" className="mb-3 text-sm text-red-600">{fehler}</p>}
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onAbbrechen} className="mc-btn-ghost">

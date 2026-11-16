@@ -384,7 +384,7 @@ export default function SitzungsModus() {
                   </button>
                   <span className="ml-auto text-xs text-slate-500">Nur für dich sichtbar.</span>
                 </div>
-                {speicherFehler && <p className="text-sm text-red-600">{speicherFehler}</p>}
+                {speicherFehler && <p role="alert" className="text-sm text-red-600">{speicherFehler}</p>}
               </div>
             )}
             {gespeichert && !schreibfeldOffen && (
@@ -402,6 +402,7 @@ export default function SitzungsModus() {
             type="button"
             onClick={() => gehe(index - 1)}
             disabled={index === 0}
+            aria-label="Vorheriger Punkt"
             className="inline-flex min-h-12 shrink-0 items-center gap-1 rounded-full border border-primary bg-white px-4.5 text-[15px] text-primary transition-colors duration-150 hover:bg-slate-100 active:scale-[0.98] disabled:opacity-40"
           >
             <ChevronLeft size={18} />
@@ -442,6 +443,7 @@ export default function SitzungsModus() {
             type="button"
             onClick={() => gehe(index + 1)}
             disabled={index >= tops.length - 1}
+            aria-label="Nächster Punkt"
             className="inline-flex min-h-12 shrink-0 items-center gap-1 rounded-full bg-primary px-5.5 text-[15px] font-semibold text-white transition-colors duration-150 hover:bg-primary-hover active:scale-[0.98] disabled:opacity-40"
           >
             <span className="hidden sm:inline">Nächster Punkt</span>

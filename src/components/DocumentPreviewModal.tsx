@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { fileExtension, IMAGE_EXTENSIONS } from '../lib/dateien'
+import { useDialog } from '../lib/useDialog'
 
 // Vorschau für hochgeladene Dokumente (Bucket "zusammenfassungen", privat -
 // daher signierte URL statt öffentlichem Link). Bilder werden inline
@@ -24,6 +25,7 @@ export function DocumentPreviewModal({
    *  Dokumenten-Hub (Dokumente.tsx). */
   bucket?: 'zusammenfassungen' | 'dokumente'
 }) {
+  const dialogRef = useDialog(onClose)
   const [url, setUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -52,7 +54,9 @@ export function DocumentPreviewModal({
       onClick={onClose}
     >
       <div
-        className="mc-animate-pop flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
+        aria-label={`Vorschau: ${fileName}`}
+        className="mc-animate-pop flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl outline-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-3">
@@ -69,8 +73,8 @@ export function DocumentPreviewModal({
           </div>
         </header>
         <div className="flex-1 overflow-auto bg-slate-100">
-          {error && <p className="p-6 text-center text-sm text-red-600">{error}</p>}
-          {!error && !url && <p className="p-6 text-center text-sm text-slate-400">Lädt...</p>}
+          {error && <p role="alert" className="p-6 text-center text-sm text-red-600">{error}</p>}
+          {!error && !url && <p className="p-6 text-center text-sm text-slate-500">Lädt...</p>}
           {url && isImage && (
             <div className="flex h-full items-center justify-center p-4">
               <img src={url} alt={fileName} className="max-h-full max-w-full object-contain" />

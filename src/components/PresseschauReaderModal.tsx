@@ -2,6 +2,7 @@ import ReactMarkdown from 'react-markdown'
 import { ChevronLeft, ChevronRight, Newspaper, X } from 'lucide-react'
 import type { PresseschauRow } from '../lib/types'
 import { formatDate } from '../lib/format'
+import { useDialog } from '../lib/useDialog'
 
 /**
  * Vollansicht einer Presseschau-Ausgabe als fokussierter "Reader" (analog
@@ -27,13 +28,16 @@ export function PresseschauReaderModal({
   onNext: () => void
   onClose: () => void
 }) {
+  const dialogRef = useDialog(onClose)
   return (
     <div
       className="mc-animate-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <div
-        className="mc-animate-pop flex h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-[#fbf9f4] shadow-2xl"
+        ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
+        aria-label="Presseschau"
+        className="mc-animate-pop flex h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-[#fbf9f4] shadow-2xl outline-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b-4 border-double border-slate-800 bg-[#fbf9f4]/95 px-5 pb-3 pt-4 backdrop-blur-sm sm:px-8">

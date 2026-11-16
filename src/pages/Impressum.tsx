@@ -19,7 +19,7 @@ export default function Impressum() {
         <h1 className="mb-6 text-2xl font-bold text-slate-900">Impressum</h1>
 
         <section className="mc-card mb-4 space-y-1 p-5 text-sm text-slate-700">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Angaben gemäß § 5 DDG
           </p>
           <p className="font-medium text-slate-900">Thorsten Kois</p>
@@ -35,14 +35,14 @@ export default function Impressum() {
         </section>
 
         <section className="mc-card mb-4 space-y-1 p-5 text-sm text-slate-700">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV
           </p>
           <p>Thorsten Kois, Anschrift wie oben</p>
         </section>
 
         <section className="mc-card mb-4 space-y-1 p-5 text-sm leading-relaxed text-slate-700">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Art des Angebots</p>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Art des Angebots</p>
           <p>
             Das MandatsCockpit ist ein privat und nicht kommerziell betriebenes Arbeitswerkzeug für
             Mandatsträger*innen. Es ist kein Angebot der Stadt Iserlohn, ihres Rates, einer Partei oder einer
@@ -51,7 +51,7 @@ export default function Impressum() {
         </section>
 
         <section className="mc-card mb-8 space-y-1 p-5 text-sm leading-relaxed text-slate-700">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Inhalte der Nutzer*innen und Kontaktstelle nach Art. 11 und 12 DSA
           </p>
           <p>
@@ -70,7 +70,7 @@ export default function Impressum() {
         <h2 className="mb-3 text-lg font-semibold text-slate-900">Kontakt aufnehmen</h2>
         <KontaktFormular />
 
-        <p className="mt-8 text-xs text-slate-400">
+        <p className="mt-8 text-xs text-slate-500">
           Siehe auch: <Link to="/datenschutz" className="text-primary underline">Datenschutzerklärung</Link>
           {' · '}
           <Link to="/nutzungserklaerung" className="text-primary underline">Nutzungserklärung</Link>

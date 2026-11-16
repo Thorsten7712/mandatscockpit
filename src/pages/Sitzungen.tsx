@@ -92,7 +92,7 @@ export default function Sitzungen() {
   return (
     <div className="flex flex-col gap-5">
       <h1 className="sr-only">Sitzungen</h1>
-      {fehler && <p className="text-sm text-red-600">Sitzungen konnten nicht geladen werden: {fehler}</p>}
+      {fehler && <p role="alert" className="text-sm text-red-600">Sitzungen konnten nicht geladen werden: {fehler}</p>}
       {ohneGremien && !id && (
         <p className="text-sm text-slate-600">
           Du hast noch keine Gremien ausgewählt.{' '}

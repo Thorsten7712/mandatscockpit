@@ -13,6 +13,7 @@ import { VorlageAnsicht } from './VorlageAnsicht'
 import { TagEditor } from './TagEditor'
 import { SichtbarkeitEditor } from './SichtbarkeitEditor'
 import { istNotizUngelesen, markiereGelesen, markiereUngelesen } from '../lib/dokumenteGelesen'
+import { useDialog } from '../lib/useDialog'
 
 const TAG_VORSCHLAEGE = ['Einschätzung', 'Analyse', 'Redebeitrag']
 
@@ -80,6 +81,7 @@ export function DokumentDetailModal({
   // über dem Text statt in einer eigenen Spalte – sonst blieb dem Text neben
   // Liste und Notizen kaum Breite (Umgestaltung 23.10.2026, Entwurf A).
   const [schubladeOffen, setSchubladeOffen] = useState(false)
+  const dialogRef = useDialog(onClose, !eingebettet)
   useEffect(() => {
     if (!schubladeOffen) return
     function beiTaste(e: KeyboardEvent) {
@@ -730,7 +732,7 @@ export function DokumentDetailModal({
                       onTeilenMitChange={setEditTeilenMit}
                       candidates={candidates}
                     />
-                    {editShareError && <p className="mt-1.5 text-xs text-red-600">{editShareError}</p>}
+                    {editShareError && <p role="alert" className="mt-1.5 text-xs text-red-600">{editShareError}</p>}
                     <div className="mt-2 flex gap-1.5">
                       <button type="button" onClick={() => saveEditSharing(c)} disabled={editSaving} className="mc-btn-primary px-2.5! py-1! text-xs!">
                         {editSaving ? 'Speichern...' : 'Speichern'}
@@ -760,7 +762,7 @@ export function DokumentDetailModal({
                   </button>
                 )}
                 <div className="mt-1 flex items-center justify-between">
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-500">
                     {c.user_id !== userId && `${authorNames.get(c.user_id) ?? 'Unbekannt'} · `}
                     {formatDateTime(c.erstellt_am)}
                   </span>
@@ -784,7 +786,7 @@ export function DokumentDetailModal({
                 </div>
               </li>
             ))}
-            {children.length === 0 && <li className="text-sm text-slate-400">Noch keine eigenen Notizen/Dokumente.</li>}
+            {children.length === 0 && <li className="text-sm text-slate-500">Noch keine eigenen Notizen/Dokumente.</li>}
           </ul>
 
           <form onSubmit={handleAddChild} className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -818,7 +820,7 @@ export function DokumentDetailModal({
               />
             </div>
 
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p role="alert" className="text-sm text-red-600">{formError}</p>}
             <button type="submit" disabled={saving} className="mc-btn-primary">
               {saving ? 'Speichern...' : 'Anhängen'}
             </button>
@@ -955,7 +957,7 @@ export function DokumentDetailModal({
                     )}
                   </li>
                 ))}
-                {linkedSessions.length === 0 && <li className="text-xs text-slate-400">Keine verknüpfte Sitzung.</li>}
+                {linkedSessions.length === 0 && <li className="text-xs text-slate-500">Keine verknüpfte Sitzung.</li>}
               </ul>
               {document.user_id === userId && (
                 <select
@@ -994,7 +996,7 @@ export function DokumentDetailModal({
                     </button>
                   </li>
                 ))}
-                {linkedTodos.length === 0 && <li className="text-xs text-slate-400">Keine verknüpften ToDos.</li>}
+                {linkedTodos.length === 0 && <li className="text-xs text-slate-500">Keine verknüpften ToDos.</li>}
               </ul>
               <div className="relative">
                 <input
@@ -1020,12 +1022,12 @@ export function DokumentDetailModal({
                       </li>
                     ))}
                     {todoSearchResults.length === 0 && (
-                      <li className="px-3 py-1.5 text-sm text-slate-400">Keine Treffer.</li>
+                      <li className="px-3 py-1.5 text-sm text-slate-500">Keine Treffer.</li>
                     )}
                   </ul>
                 )}
               </div>
-              {linkTodoError && <p className="mt-1 text-xs text-red-600">{linkTodoError}</p>}
+              {linkTodoError && <p role="alert" className="mt-1 text-xs text-red-600">{linkTodoError}</p>}
             </div>
           </div>
         </div>
@@ -1077,7 +1079,9 @@ export function DokumentDetailModal({
           onClick={onClose}
         >
           <div
-            className="mc-animate-pop flex h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
+            aria-label={document.titel}
+            className="mc-animate-pop flex h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl outline-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {inhalt}

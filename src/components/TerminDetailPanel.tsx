@@ -11,6 +11,7 @@ import { inStuecken } from '../lib/alleZeilen'
 import { DOKUMENT_SPALTEN } from '../lib/dokumentSpalten'
 import { istDokumentUngelesen } from '../lib/dokumenteGelesen'
 import { archivGrund, ladeSitzungenJeDokument } from '../lib/dokumenteArchiv'
+import { useDialog } from '../lib/useDialog'
 
 // Gleiche Liste wie in Settings.tsx/Archiv.tsx (Kalenderquellen- bzw.
 // Sitzung-nachtragen-Formular) - bewusst dupliziert, siehe CLAUDE.md.
@@ -60,6 +61,7 @@ export function TerminDetailPanel({
    *  Tagesordnungspunkt – ohne Fenster darüber. Nur für Sitzungen. */
   layout?: 'stacked' | 'modal' | 'eingebettet'
 }) {
+  const dialogRef = useDialog(() => onCloseAll?.(), layout === 'modal')
   const [userId, setUserId] = useState<string | null>(null)
   const [event, setEvent] = useState<EventRow | null>(null)
   const [session, setSession] = useState<SessionRow | null>(null)
@@ -433,7 +435,7 @@ export function TerminDetailPanel({
     <>
       <h2 className="mb-3 text-lg font-bold text-slate-900">{titel ?? 'Termin'}</h2>
 
-      {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
+      {loadError && <p role="alert" className="text-red-600 mb-4">{loadError}</p>}
 
       {(event || session) && (
         <div className="mb-6 space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -491,7 +493,7 @@ export function TerminDetailPanel({
                   </button>
                 </div>
               )}
-              {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
+              {deleteError && <p role="alert" className="text-red-600 text-sm">{deleteError}</p>}
             </>
           )}
           {editing && (
@@ -571,7 +573,7 @@ export function TerminDetailPanel({
                   </div>
                 </>
               )}
-              {editError && <p className="text-red-600 text-sm">{editError}</p>}
+              {editError && <p role="alert" className="text-red-600 text-sm">{editError}</p>}
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -611,7 +613,7 @@ export function TerminDetailPanel({
           </li>
         ))}
         {linkedTodos.length === 0 && (
-          <li className="text-slate-400 text-sm">Keine verknüpften Aufgaben.</li>
+          <li className="text-slate-500 text-sm">Keine verknüpften Aufgaben.</li>
         )}
       </ul>
 
@@ -636,14 +638,14 @@ export function TerminDetailPanel({
                 {n.quelle === 'todo' ? 'Aufgabe' : 'Dokument'}: {n.bezugTitel}
               </span>
               <span className="mt-0.5 line-clamp-3 text-sm whitespace-pre-wrap text-slate-800">{n.inhalt}</span>
-              <span className="mt-1 block text-xs text-slate-400">
+              <span className="mt-1 block text-xs text-slate-500">
                 {n.user_id === userId ? 'Du' : autorNamen.get(n.user_id) ?? 'Unbekannt'} · {formatDateTime(n.erstellt_am)}
               </span>
             </button>
           </li>
         ))}
         {notizen.length === 0 && (
-          <li className="text-slate-400 text-sm">Noch keine Notizen an verknüpften Aufgaben oder Dokumenten.</li>
+          <li className="text-slate-500 text-sm">Noch keine Notizen an verknüpften Aufgaben oder Dokumenten.</li>
         )}
       </ul>
     </>
@@ -652,9 +654,9 @@ export function TerminDetailPanel({
   /** Sitzungsansicht für /sitzungen: Kopf, links die Tagesordnung, rechts
    *  Übersicht oder gewählter Punkt – alles in einer Karte. */
   function eingebetteteAnsicht() {
-    if (loadError) return <p className="text-red-600">{loadError}</p>
+    if (loadError) return <p role="alert" className="text-red-600">{loadError}</p>
     if (!session || !dokumenteGeladen) {
-      return <div className="mc-card p-6 text-sm text-slate-400">Lade Sitzung …</div>
+      return <div className="mc-card p-6 text-sm text-slate-500">Lade Sitzung …</div>
     }
     const notizenJeDokument = new Map<string, IndirekteNotiz[]>()
     for (const n of notizen) {
@@ -731,7 +733,7 @@ export function TerminDetailPanel({
                   className="flex w-full items-start gap-2.5 py-1.5 text-left text-[15px] hover:underline"
                 >
                   <ListChecks size={18} className={`mt-0.5 shrink-0 ${t.erledigt ? 'text-slate-300' : 'text-primary'}`} />
-                  <span className={t.erledigt ? 'text-slate-400 line-through' : ''}>{t.titel}</span>
+                  <span className={t.erledigt ? 'text-slate-500 line-through' : ''}>{t.titel}</span>
                 </button>
               </li>
             ))}
@@ -749,7 +751,7 @@ export function TerminDetailPanel({
               Anlegen
             </button>
           </form>
-          {karteFehler && <p className="text-sm text-red-600">{karteFehler}</p>}
+          {karteFehler && <p role="alert" className="text-sm text-red-600">{karteFehler}</p>}
         </section>
         <section className="flex min-w-0 flex-[1_1_280px] flex-col rounded-xl border border-slate-100 p-4">
           {detailsBlock}
@@ -808,7 +810,7 @@ export function TerminDetailPanel({
               <p className="px-5 py-4 text-sm text-slate-500">Noch keine Tagesordnung veröffentlicht.</p>
             )}
             {tagesordnung.length > 0 && !hatTagesordnung && (
-              <p className="px-5 pb-1 pt-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <p className="px-5 pb-1 pt-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Verknüpfte Dokumente
               </p>
             )}
@@ -816,7 +818,7 @@ export function TerminDetailPanel({
               {sichtbar.map((t) => {
                 const beschriftung = t.top_titel || t.titel || '(ohne Titel)'
                 const nummer = (
-                  <span className="w-9 shrink-0 pt-0.5 font-mono text-[13px] text-slate-400">{t.top_nummer ?? ''}</span>
+                  <span className="w-9 shrink-0 pt-0.5 font-mono text-[13px] text-slate-500">{t.top_nummer ?? ''}</span>
                 )
                 if (!t.dokument_id) {
                   return (
@@ -955,7 +957,9 @@ export function TerminDetailPanel({
         onClick={onCloseAll}
       >
         <div
-          className="mc-animate-pop flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+          ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
+          aria-label={kind === 'session' ? 'Sitzung' : 'Termin'}
+          className="mc-animate-pop flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl outline-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">

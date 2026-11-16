@@ -50,15 +50,15 @@ export default function Login() {
           className="mc-input w-full"
           required
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         <button type="submit" disabled={loading} className="mc-btn-primary w-full py-2.5!">
           {loading ? 'Anmelden...' : 'Anmelden'}
         </button>
-        <p className="text-center text-xs text-slate-400">
+        <p className="text-center text-xs text-slate-500">
           Zugangsdaten bekommst du von einem Admin (Benutzerverwaltung in den Einstellungen).
         </p>
       </form>
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-500">
         <Link to="/impressum" className="underline hover:text-slate-600">
           Impressum
         </Link>
