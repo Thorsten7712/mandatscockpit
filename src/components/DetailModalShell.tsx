@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { useDialog } from '../lib/useDialog'
 
 /**
  * Gemeinsame Hülle für breite 2-Spalten-Detail-Modals (ToDo).
@@ -25,9 +26,10 @@ export function DetailModalShell({
    *  untereinander, gemeinsam scrollend, höchstens so hoch wie der Bildschirm. */
   eingebettet?: boolean
 }) {
+  const dialogRef = useDialog(onClose, !eingebettet)
   const kopf = (
     <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
-      <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-slate-900">{title}</h1>
+      <h1 id="detail-titel" className="min-w-0 flex-1 truncate text-lg font-bold text-slate-900">{title}</h1>
       <div className="flex shrink-0 items-center gap-2">
         {headerActions && <div className="flex items-center gap-1.5 border-r border-slate-200 pr-2">{headerActions}</div>}
         <button type="button" onClick={onClose} aria-label="Schließen" title="Schließen" className="mc-btn-ghost p-2!">
@@ -55,7 +57,9 @@ export function DetailModalShell({
       onClick={onClose}
     >
       <div
-        className="mc-animate-pop flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
+        aria-labelledby="detail-titel"
+        className="mc-animate-pop flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl outline-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {kopf}

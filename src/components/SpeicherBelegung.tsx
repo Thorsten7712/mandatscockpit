@@ -86,7 +86,7 @@ export function SpeicherBelegung() {
           type="button"
           onClick={load}
           disabled={laedt}
-          className="rounded-sm p-1 text-slate-400 hover:text-slate-700 disabled:opacity-50"
+          className="rounded-sm p-1 text-slate-500 hover:text-slate-700 disabled:opacity-50"
           title="Neu laden"
         >
           <RefreshCw className={`h-4 w-4 ${laedt ? 'animate-spin' : ''}`} />
@@ -96,7 +96,7 @@ export function SpeicherBelegung() {
         Belegung gegen die Grenzen des kostenlosen Supabase-Tarifs. Mitglieder laden keine Dateien mehr hoch –
         Platz brauchen nur noch die Drucksachen des ALLRIS-Imports und Profilbilder.
       </p>
-      {fehler && <p className="mb-3 text-sm text-red-600">Konnte die Belegung nicht laden: {fehler}</p>}
+      {fehler && <p role="alert" className="mb-3 text-sm text-red-600">Konnte die Belegung nicht laden: {fehler}</p>}
       {belegung && (
         <div className="space-y-3">
           <Balken titel="Dateien" bytes={dateienGesamt} grenze={GRENZE_DATEIEN} />

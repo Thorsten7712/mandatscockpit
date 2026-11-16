@@ -440,6 +440,21 @@ selbst bzw., wo die Begründung nicht aus dem Code hervorgeht, in [`docs/CHANGEL
   Beispieldaten ersetzt, damit sich Layouts im Browser per Playwright ansehen lassen, ohne
   Passwort-Eingabe. Gibt es in einer neuen Sitzung nicht – bei Bedarf nach dem Muster neu anlegen
   (Proxy-Builder, der je Tabelle Fixtures liefert und Filter ignoriert).
+- **Fenster über der Seite nutzen `useDialog()`** (`src/lib/useDialog.ts`, seit 16.11.2026): Escape
+  schließt, Tab bleibt im Fenster, der Fokus kehrt beim Schließen zurück; das ref gehört ans
+  Fenster zusammen mit `role="dialog"`, `aria-modal="true"`, `tabIndex={-1}`. Ein Stapel sorgt
+  dafür, dass nur das oberste Fenster reagiert (Löschdialog über Detail-Fenster). Zweites Argument
+  `false` für die eingebettete Variante. Neue Fenster nie ohne.
+- **Kontrast**: Text nie heller als `text-slate-500`. Das Token ist in `index.css` auf `#55657d`
+  gesetzt (Tailwinds Wert kam auf dem grauen Seitenhintergrund nur auf 4,3:1), `text-slate-400`
+  und `text-amber-600` gibt es für Text nicht mehr (2,6:1 bzw. 2,9:1). Fehlermeldungen tragen
+  `role="alert"`, Bestätigungen `role="status"`. Geprüft wird mit axe-core im Harness.
+- **Die Grundschrift hängt an `--font-sans`**: `html` setzt `font-family: var(--font-sans)`. Bis
+  16.11.2026 stand dort noch fest `'Inter Variable'`, das seit dem Umbau nicht mehr geladen wird –
+  IBM Plex kam nie an, alle sahen die Systemschrift, und im Screenshot fiel es nicht auf.
+- **Alles, was sich ziehen lässt, braucht einen zweiten Weg**: Karten im Board lassen sich auch
+  über „Spalte" im Karten-Fenster verschieben (`handleSpalte()` in `TodoDetailModal.tsx`, gleiche
+  Wirkung wie `handleDragEnd`).
 - **Detail-Modals**: gemeinsame Hülle `src/components/DetailModalShell.tsx` (2-Spalten-Layout,
   `headerActions`-Slot) – für neue Entity-Detail-Modals wiederverwenden statt eigenes Chrome zu bauen.
 - **Formularblöcke vs. Blocksatz unterscheiden sich an der Lückenbreite**: Beim PDF-Auszug der

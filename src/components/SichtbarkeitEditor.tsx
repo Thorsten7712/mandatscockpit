@@ -88,7 +88,7 @@ export function SichtbarkeitEditor({
                   </li>
                 ))}
                 {gefiltert.length === 0 && (
-                  <li className="px-3 py-1.5 text-sm text-slate-400">
+                  <li className="px-3 py-1.5 text-sm text-slate-500">
                     {candidates.length === 0 ? 'Keine Kolleg*innen mit gleicher Partei/Ebene gefunden.' : 'Keine Treffer.'}
                   </li>
                 )}

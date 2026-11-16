@@ -13,6 +13,12 @@
   --font-display: 'Newsreader Variable', Georgia, serif;
   --font-serif: 'Newsreader Variable', Georgia, serif;
 
+  /* Sekundärtext (Meta-Zeilen, Hilfetexte, Platzhalter): Tailwinds slate-500
+   * (#62748e) kommt auf dem grauen Seitenhintergrund nur auf 4,3:1 und auf
+   * slate-200 auf 3,9:1. Dieser Wert hält überall mindestens 4,8:1 (WCAG AA
+   * verlangt 4,5:1). Helleres Grau (slate-400) nicht für Text verwenden. */
+  --color-slate-500: #55657d;
+
   --color-primary: rgb(var(--mc-primary));
   --color-primary-hover: rgb(var(--mc-primary-hover));
   --color-accent: rgb(var(--mc-accent));
@@ -34,7 +40,7 @@
 
   input::placeholder,
   textarea::placeholder {
-    color: var(--color-gray-400);
+    color: var(--color-slate-500);
   }
 
   button:not(:disabled),
@@ -53,7 +59,7 @@
 }
 
 @utility mc-input {
-  @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-xs placeholder:text-slate-400;
+  @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-xs placeholder:text-slate-500;
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease;
@@ -257,7 +263,10 @@
   }
 
   html {
-    font-family: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    /* Über das Token, nicht als feste Liste: hier stand noch 'Inter Variable'
+     * aus der Zeit vor dem Umbau, die Schrift wurde aber nicht mehr geladen -
+     * IBM Plex kam dadurch nie an, alle sahen die Systemschrift. */
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }

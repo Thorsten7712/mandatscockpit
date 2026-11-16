@@ -27,7 +27,7 @@ export function VorlageAnsicht({ inhalt, zentriert = false }: { inhalt: string |
 
   if (!inhalt || !inhalt.trim()) {
     return (
-      <p className="px-5 py-8 text-center text-sm text-slate-400">
+      <p className="px-5 py-8 text-center text-sm text-slate-500">
         Für dieses Dokument liegt noch kein Text vor. Das Original-PDF lässt sich über die Kopfleiste öffnen.
       </p>
     )

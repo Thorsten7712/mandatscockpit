@@ -65,7 +65,7 @@ function Card({
       onClick={onOpen}
       className={`cursor-grab select-none rounded-lg border bg-white px-3 py-2.5 shadow-xs transition-shadow duration-150 hover:shadow-md active:cursor-grabbing ${ausgewaehlt ? 'border-primary ring-1 ring-primary' : 'border-slate-200'} ${isDragging ? 'z-10 shadow-lg ring-2 ring-primary/40' : ''}`}
     >
-      <p className={`text-sm font-medium ${todo.erledigt ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+      <p className={`text-sm font-medium ${todo.erledigt ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
         {todo.ebene && <span title="Für Kolleg*innen freigebbar/geteilt">🔗 </span>}
         {hatDokument && <span title="Enthält Notizen">📝 </span>}
         {todo.titel}
@@ -158,7 +158,7 @@ function Column({
             placeholder="+ Karte hinzufügen"
             value={newCardTitel}
             onChange={(e) => setNewCardTitel(e.target.value)}
-            className="w-full rounded-lg border border-dashed border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 transition-colors hover:border-slate-400 focus:border-solid focus:bg-white"
+            className="w-full rounded-lg border border-dashed border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-500 transition-colors hover:border-slate-400 focus:border-solid focus:bg-white"
           />
         </form>
       )}

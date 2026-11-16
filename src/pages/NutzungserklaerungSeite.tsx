@@ -17,7 +17,7 @@ export default function NutzungserklaerungSeite() {
         <h1 className="mb-6 text-2xl font-bold text-slate-900">Nutzungserklärung</h1>
         <div className="mc-card p-6">
           <NutzungserklaerungText />
-          <p className="mt-6 text-xs text-slate-400">Fassung {NUTZUNGSERKLAERUNG_VERSION}</p>
+          <p className="mt-6 text-xs text-slate-500">Fassung {NUTZUNGSERKLAERUNG_VERSION}</p>
         </div>
       </div>
     </div>

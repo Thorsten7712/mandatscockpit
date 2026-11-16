@@ -156,7 +156,7 @@ function UserForm({
         />
         <span>
           Technisches Konto (z. B. automatischer Import)
-          <span className="block text-xs text-slate-400">
+          <span className="block text-xs text-slate-500">
             Taucht nicht in den Teilen-Listen auf und lässt sich nicht löschen (seine Dokumente sind für alle da). Rechte bleiben die eines normalen Mitglieds.
           </span>
         </span>
@@ -328,7 +328,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
       </div>
 
       {actionError && (
-        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {actionError}
         </p>
       )}
@@ -345,7 +345,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
             submitLabel="Benutzer anlegen"
             isCreate
           />
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-slate-500">
             Der Benutzer kann sich sofort mit E-Mail und Start-Passwort anmelden (keine
             Bestätigungsmail). Passwort bitte sicher übermitteln - der Benutzer muss es beim ersten
             Login zwingend selbst ändern.
@@ -354,7 +354,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
       )}
 
       {listError && (
-        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {listError}
         </p>
       )}
@@ -448,7 +448,7 @@ export function UserManagement({ currentUserId }: { currentUserId: string | null
           )
         })}
         {!loading && !listError && users.length === 0 && (
-          <li className="mc-card p-6 text-center text-sm text-slate-400">Keine Benutzer gefunden.</li>
+          <li className="mc-card p-6 text-center text-sm text-slate-500">Keine Benutzer gefunden.</li>
         )}
       </ul>
       {loeschDialog}

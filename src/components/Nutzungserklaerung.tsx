@@ -120,7 +120,7 @@ export function NutzungserklaerungBestaetigen({ userId, erneut, onDone }: { user
               nichtöffentlichen Unterlagen ein.
             </span>
           </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button type="button" onClick={() => supabase.auth.signOut()} className="mc-btn-ghost text-sm">
               Abmelden

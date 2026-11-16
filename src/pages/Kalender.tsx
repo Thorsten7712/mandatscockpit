@@ -146,7 +146,7 @@ export default function Kalender() {
   })
 
   const kachelFarbe = (e: KalenderEintrag) =>
-    e.abgesagt ? 'bg-slate-100 text-slate-400' : e.kind === 'session' ? 'bg-primary/10' : 'bg-slate-100'
+    e.abgesagt ? 'bg-slate-100 text-slate-500' : e.kind === 'session' ? 'bg-primary/10' : 'bg-slate-100'
 
   const tage = Array.from({ length: 7 }, (_, i) => new Date(woche.getTime() + i * TAG_MS))
 
@@ -223,7 +223,7 @@ export default function Kalender() {
           <button type="submit" disabled={speichert || !userId} className="mc-btn-primary">
             {speichert ? 'Speichern …' : 'Eintragen'}
           </button>
-          {formFehler && <p className="text-sm text-red-600 md:col-span-5">{formFehler}</p>}
+          {formFehler && <p role="alert" className="text-sm text-red-600 md:col-span-5">{formFehler}</p>}
         </form>
       )}
 
@@ -245,7 +245,7 @@ export default function Kalender() {
         </div>
       )}
 
-      {fehler && <p className="text-sm text-red-600">Termine konnten nicht geladen werden: {fehler}</p>}
+      {fehler && <p role="alert" className="text-sm text-red-600">Termine konnten nicht geladen werden: {fehler}</p>}
       {ohneGremien && (
         <p className="text-sm text-slate-600">
           Für Sitzungstermine unter{' '}
@@ -295,7 +295,7 @@ export default function Kalender() {
         </div>
       ) : (
         <div className="mc-card overflow-hidden">
-          {eintraege === null && <p className="px-5 py-4 text-sm text-slate-400">Lade …</p>}
+          {eintraege === null && <p className="px-5 py-4 text-sm text-slate-500">Lade …</p>}
           {eintraege !== null && gefiltert.length === 0 && (
             <p className="px-5 py-4 text-sm text-slate-500">Keine Termine in den nächsten {LISTE_TAGE} Tagen.</p>
           )}
@@ -311,7 +311,7 @@ export default function Kalender() {
                 {formatTime(e.start)}
               </span>
               <span className="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5">
-                <span className={`text-[15px] font-semibold ${e.abgesagt ? 'text-slate-400 line-through' : ''}`}>{e.titel}</span>
+                <span className={`text-[15px] font-semibold ${e.abgesagt ? 'text-slate-500 line-through' : ''}`}>{e.titel}</span>
                 <span className="text-[13px] text-slate-500">{infoText(e)}</span>
               </span>
               <span

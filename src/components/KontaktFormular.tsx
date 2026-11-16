@@ -43,7 +43,7 @@ export function KontaktFormular() {
 
   if (sent) {
     return (
-      <div className="mc-card p-4 text-sm text-slate-700">
+      <div role="status" className="mc-card p-4 text-sm text-slate-700">
         Danke, deine Nachricht ist angekommen! Ich melde mich so schnell wie möglich.
       </div>
     )
@@ -85,7 +85,7 @@ export function KontaktFormular() {
         aria-hidden="true"
         className="absolute left-[-9999px] h-0 w-0 opacity-0"
       />
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={sending} className="mc-btn-primary">
         {sending ? 'Senden...' : 'Nachricht senden'}
       </button>

@@ -3624,3 +3624,34 @@ und GitHub Zeitpläne inaktiver Repos nach 60 Tagen anhält. Eingespielt über `
 `setup-cli` mit `version: latest` jetzt CLI 3.1.0 lädt – `db push` verlangt dort `--remote`, `link`
 ignoriert `--password`. Workflow auf 3.1.0 festgelegt und angepasst. Der Passwortschutz gegen
 geleakte Passwörter (Supabase-Linter) bleibt aus: nur im Pro-Tarif verfügbar.
+
+## 16.11.2026 – Review und Zugänglichkeit (Teil 1 von 2)
+
+Nutzerwunsch: Review des ganzen Cockpits vor der Öffnung für mehr Mitglieder, danach die Befunde
+in zwei PRs abarbeiten. Geprüft mit Screenshots in vier Breiten, axe-core im Harness und dem
+Impeccable-Detektor (Taste-Skill war in der Sitzung nicht installiert).
+
+- **Schrift**: `html` trug noch `font-family: 'Inter Variable'` aus der Zeit vor dem Umbau. Inter
+  wird seit dem 18.10. nicht mehr geladen, die Regel überschrieb aber das Token `--font-sans` –
+  IBM Plex Sans war deshalb nie zu sehen, alle bekamen die Systemschrift. Gefunden hat es der
+  Impeccable-Detektor (Regel „overused-font"), nicht der Blick auf die Screenshots. Jetzt
+  `var(--font-sans)`.
+- **Fenster**: neuer Hook `useDialog()` – Escape, Fokus-Käfig, Fokus zurück, Stapel für
+  übereinanderliegende Fenster. Eingebaut in `DetailModalShell` (Aufgabenkarte), Dokument,
+  Termin, Presseschau, Dokumentvorschau und `LoeschDialog`, jeweils mit `role="dialog"` und
+  `aria-modal`. Vorher schloss Escape nur das Filterfenster und die Schubladen.
+- **Board ohne Ziehen**: Auswahl „Spalte" im Karten-Fenster, gleiche Wirkung wie Drag & Drop
+  (Fertig setzt erledigt). Ein Tastatur-Sensor für dnd-kit wäre ohne sortierbare Listen nur
+  pixelweises Schieben gewesen.
+- **Kontrast**: `text-slate-400` (2,6:1) an 73 Stellen auf `text-slate-500`, dessen Token auf
+  `#55657d` (mindestens 4,8:1 auf allen verwendeten Flächen); Platzhalter ebenso; `text-amber-600`
+  auf `text-amber-800`. axe meldet danach keinen Kontrastbefund mehr (vorher 6–16 je Seite).
+- **Einstellungen bei 768 px**: die Bereichsliste steht erst ab 1024 px neben dem Inhalt; das
+  Browser-Dateifeld („Choose File") ist durch einen eigenen Knopf ersetzt, das Namensfeld darf
+  schrumpfen.
+- **Sitzungsmodus**: Zurück/Weiter haben auf dem Handy, wo nur der Pfeil bleibt, einen Namen.
+- **Ansagen**: 38 Fehlermeldungen mit `role="alert"`, Bestätigung im Kontaktformular mit
+  `role="status"`.
+
+Offen für Teil 2: Emojis als Icons, verschachtelte Knöpfe im Hub, Reiter-Tastatur, Tippziele,
+Überschriften, Ladezustände, Textfehler.

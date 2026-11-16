@@ -243,7 +243,7 @@ export default function ZahlenUndFakten() {
   /** Quelle + Stand stehen unter jedem Eintrag - ohne sie ist ein Fakt nicht zitierfähig. */
   function beleg(f: FaktRow) {
     if (!f.quelle && !f.stand) {
-      return <span className="italic text-amber-600">Keine Quelle hinterlegt</span>
+      return <span className="italic text-amber-800">Keine Quelle hinterlegt</span>
     }
     // Bewusst umbrechend statt abgeschnitten: eine halbe Drucksachennummer
     // nützt beim Zitieren nichts.
@@ -337,7 +337,7 @@ export default function ZahlenUndFakten() {
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="relative w-full max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               placeholder="Durchsuchen (Titel, Text, Quelle, Tags)..."
@@ -350,7 +350,7 @@ export default function ZahlenUndFakten() {
                 type="button"
                 onClick={() => setSearchQuery('')}
                 aria-label="Suche leeren"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -372,7 +372,7 @@ export default function ZahlenUndFakten() {
         </div>
 
         {eigeneEbenen.length === 0 && (
-          <p className="mb-4 text-sm text-amber-600">
+          <p className="mb-4 text-sm text-amber-800">
             Trage zuerst unter{' '}
             <Link to="/settings" className="underline">
               Einstellungen → Meine Gremien
@@ -491,7 +491,7 @@ export default function ZahlenUndFakten() {
                 Fakten stehen immer allen Mitgliedern deiner Partei auf dieser Ebene zur Verfügung.
               </p>
             </div>
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p role="alert" className="text-sm text-red-600">{formError}</p>}
             <div className="flex gap-2">
               <button type="submit" disabled={saving} className="mc-btn-primary">
                 {saving ? 'Speichern...' : editId ? 'Änderungen speichern' : 'Speichern'}
@@ -525,7 +525,7 @@ export default function ZahlenUndFakten() {
               </div>
             ))}
             {!loading && gefiltert.length === 0 && (
-              <div className="mc-card p-6 text-center text-sm text-slate-400 sm:col-span-2 lg:col-span-3">
+              <div className="mc-card p-6 text-center text-sm text-slate-500 sm:col-span-2 lg:col-span-3">
                 {inKategorie.length === 0 ? 'Noch keine Zahlen hinterlegt.' : 'Keine Treffer für diese Auswahl.'}
               </div>
             )}
@@ -547,7 +547,7 @@ export default function ZahlenUndFakten() {
               </li>
             ))}
             {!loading && gefiltert.length === 0 && (
-              <li className="mc-card p-6 text-center text-sm text-slate-400">
+              <li className="mc-card p-6 text-center text-sm text-slate-500">
                 {inKategorie.length === 0
                   ? `Noch keine ${aktiveKategorie.label.toLowerCase()} hinterlegt.`
                   : 'Keine Treffer für diese Auswahl.'}

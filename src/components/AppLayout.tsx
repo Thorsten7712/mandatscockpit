@@ -331,7 +331,7 @@ export function AppLayout() {
           <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 pb-8 pt-6 sm:px-6 md:pb-12 md:pt-7 lg:px-10">
             <Outlet />
           </main>
-          <footer className="mx-auto w-full max-w-[1440px] px-4 pb-24 text-xs text-slate-400 sm:px-6 md:pb-8 lg:px-10">
+          <footer className="mx-auto w-full max-w-[1440px] px-4 pb-24 text-xs text-slate-500 sm:px-6 md:pb-8 lg:px-10">
             <Link to="/impressum" className="underline hover:text-slate-600">
               Impressum
             </Link>

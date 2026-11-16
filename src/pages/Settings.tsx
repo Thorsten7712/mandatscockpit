@@ -92,7 +92,7 @@ function NurErgaenzendFeld({ checked, onChange }: { checked: boolean; onChange: 
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5" />
       <span>
         Persönliches ALLRIS-Abo
-        <span className="block text-xs text-slate-400">
+        <span className="block text-xs text-slate-500">
           Übernimmt nur Termine, die nicht schon im gemeinsamen Kalender dieser Ebene stehen – also die
           nichtöffentlichen Gremien, Vertretungen und die Fraktion. Gemeint ist der Abo-Link aus ALLRIS mit
           „/personal/ics/“ darin. Nur du siehst diese Quelle und ihre Termine.
@@ -510,9 +510,9 @@ export default function Settings() {
     <div>
       <h1 className="mc-page-title mb-6">Einstellungen</h1>
       <div>
-      <div className="flex flex-col gap-8 md:flex-row">
-      <aside className="shrink-0 md:w-56">
-        <nav className="flex gap-1 overflow-x-auto pb-1 md:sticky md:top-6 md:flex-col md:pb-0">
+      <div className="flex flex-col gap-8 lg:flex-row">
+      <aside className="shrink-0 lg:w-56">
+        <nav aria-label="Bereiche der Einstellungen" className="flex gap-1 overflow-x-auto pb-1 lg:sticky lg:top-6 lg:flex-col lg:pb-0">
           {SECTIONS.filter((s) => !s.adminOnly || isAdmin).map((s) => {
             const Icon = s.icon
             const active = activeSection === s.id
@@ -548,45 +548,56 @@ export default function Settings() {
               {profileName.charAt(0).toUpperCase() || '?'}
             </div>
           )}
-          <div className="flex-1 space-y-1">
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              onChange={(e) => setNewFoto(e.target.files?.[0] ?? null)}
-              className="w-full text-sm"
-            />
-            <button
-              type="button"
-              onClick={handleUploadFoto}
-              disabled={!newFoto || savingFoto}
-              className="mc-btn-ghost px-2! py-1! text-xs!"
-            >
-              {savingFoto ? 'Hochladen...' : 'Foto hochladen'}
-            </button>
+          <div className="min-w-0 flex-1 space-y-2">
+            {/* Eigener Knopf statt des Browser-Felds: das zeigte je nach
+                Systemsprache „Choose File" und lief auf schmalen Geräten über. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="mc-btn-ghost cursor-pointer border border-slate-300 px-3! py-1.5! text-sm! focus-within:ring-2 focus-within:ring-primary">
+                Foto auswählen
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={(e) => setNewFoto(e.target.files?.[0] ?? null)}
+                  className="sr-only"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleUploadFoto}
+                disabled={!newFoto || savingFoto}
+                className="mc-btn-primary px-3! py-1.5! text-sm! disabled:opacity-50"
+              >
+                {savingFoto ? 'Hochladen...' : 'Hochladen'}
+              </button>
+            </div>
+            <p className="truncate text-xs text-slate-500">
+              {newFoto ? newFoto.name : 'JPG, PNG, WebP oder GIF, höchstens 2 MB.'}
+            </p>
           </div>
         </div>
-        {fotoError && <p className="text-red-600 text-sm">{fotoError}</p>}
+        {fotoError && <p role="alert" className="text-red-600 text-sm">{fotoError}</p>}
 
         <form onSubmit={handleSaveName} className="flex gap-2">
           <input
             type="text"
             value={profileName}
             onChange={(e) => setProfileName(e.target.value)}
-            className="mc-input flex-1"
+            aria-label="Name"
+            className="mc-input min-w-0 flex-1"
             required
           />
           <button type="submit" disabled={savingName} className="mc-btn-primary">
             {savingName ? 'Speichern...' : 'Speichern'}
           </button>
         </form>
-        {nameError && <p className="text-red-600 text-sm">{nameError}</p>}
+        {nameError && <p role="alert" className="text-red-600 text-sm">{nameError}</p>}
 
         <div>
           <p className="mb-1 block text-sm text-slate-600">Partei (bestimmt das Farbschema)</p>
           <p className="mc-input flex w-full items-center bg-slate-50 text-slate-700">
             {themeById(partei).label}
           </p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             Wird von einem Admin in der Benutzerverwaltung festgelegt.
           </p>
         </div>
@@ -605,7 +616,7 @@ export default function Settings() {
               </label>
             ))}
           </div>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             Wird von dir selbst gepflegt (anders als die Partei) - mehrere Ebenen gleichzeitig möglich,
             z. B. Stadtrat und Kreistag. Bestimmt, mit wem du ToDo-Karten teilen kannst.
           </p>
@@ -629,7 +640,7 @@ export default function Settings() {
                   )
                 },
               )}
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 Nötig, damit Teilen nur mit Kolleg*innen derselben Kommune/desselben Kreises/Landes
                 funktioniert - ohne diese Angabe erscheinst du für diese Ebene bei niemandem als
                 Teilen-Kandidat*in.
@@ -646,7 +657,7 @@ export default function Settings() {
       <section className="mc-animate-fade">
       <h2 className="mb-2 text-base font-semibold text-slate-900">Kalenderquellen abonnieren</h2>
       {staleGremien.length > 0 && (
-        <p className="text-amber-600 text-sm mb-2 max-w-md">
+        <p className="text-amber-800 text-sm mb-2 max-w-md">
           Diese angehakten Gremien haben aktuell keine Sitzungen mehr: {staleGremien.join(', ')}. Häkchen
           bleibt bestehen, falls das Gremium später wieder importiert wird.
         </p>
@@ -697,7 +708,7 @@ export default function Settings() {
                     className="mc-input w-full"
                     required
                   />
-                  {editError && <p className="text-red-600 text-sm">{editError}</p>}
+                  {editError && <p role="alert" className="text-red-600 text-sm">{editError}</p>}
                   <div className="flex gap-2">
                     <button type="submit" disabled={editSaving} className="mc-btn-primary">
                       {editSaving ? 'Speichern...' : 'Speichern'}
@@ -738,14 +749,14 @@ export default function Settings() {
                 </span>
                 {/* Sichtbarkeit statt Abo-Haken (bis 0063): Der Kalender zeigt alles
                     aus gemeinsamen und eigenen Quellen, gefiltert über "Meine Gremien". */}
-                <span className="shrink-0 text-xs text-slate-400">
+                <span className="shrink-0 text-xs text-slate-500">
                   {s.verwaltet_von === null ? 'Für alle' : 'Nur für dich'}
                 </span>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 {canManage ? (
                   <div className="flex items-center gap-1.5">
-                    <span className="mr-1 text-xs text-slate-400">Farbe:</span>
+                    <span className="mr-1 text-xs text-slate-500">Farbe:</span>
                     <button
                       type="button"
                       onClick={() => handleSetFarbe(s.id, null)}
@@ -815,17 +826,17 @@ export default function Settings() {
                 </div>
               </div>
               {sourceRefreshResult?.sourceId === s.id && (
-                <p className="text-xs text-green-600 mt-1">
+                <p role="status" className="text-xs text-green-600 mt-1">
                   {sourceRefreshResult.imported} Termine importiert/aktualisiert.
                 </p>
               )}
               {sourceRefreshError?.sourceId === s.id && (
-                <p className="text-xs text-red-600 mt-1">{sourceRefreshError.message}</p>
+                <p role="alert" className="text-xs text-red-600 mt-1">{sourceRefreshError.message}</p>
               )}
             </li>
           )
         })}
-        {sources.length === 0 && <li className="text-slate-400 text-sm">Noch keine Kalenderquellen angelegt.</li>}
+        {sources.length === 0 && <li className="text-slate-500 text-sm">Noch keine Kalenderquellen angelegt.</li>}
       </ul>
 
       </section>
@@ -834,7 +845,7 @@ export default function Settings() {
       {activeSection === 'gremien' && (
       <section className="mc-animate-fade">
       <h2 className="mb-2 text-base font-semibold text-slate-900">Meine Gremien</h2>
-      <p className="text-xs text-slate-400 mb-2 max-w-md">
+      <p className="text-xs text-slate-500 mb-2 max-w-md">
         Häkchen bei den Gremien, in denen du ein Mandat hast. Das Dashboard zeigt dann nur noch
         Sitzungstermine dieser Gremien an.
       </p>
@@ -903,7 +914,7 @@ export default function Settings() {
       </div>
       <ul className="max-w-md">
         {gremien.length === 0 && (
-          <li className="text-slate-400 text-sm">
+          <li className="text-slate-500 text-sm">
             Noch keine Gremien vorhanden – erst importiert der ICS-Import-Job Sitzungen (siehe oben).
           </li>
         )}
@@ -966,7 +977,7 @@ export default function Settings() {
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-400">{ARTEN.find((o) => o.value === art)?.hint}</p>
+          <p className="mt-1 text-xs text-slate-500">{ARTEN.find((o) => o.value === art)?.hint}</p>
         </div>
         {art === 'sitzung' && <NurErgaenzendFeld checked={nurErgaenzend} onChange={setNurErgaenzend} />}
         <div>
@@ -983,7 +994,7 @@ export default function Settings() {
             required
           />
         </div>
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
         <button
           type="submit"
           disabled={saving || !userId}
@@ -991,7 +1002,7 @@ export default function Settings() {
         >
           {saving ? 'Speichern...' : 'Quelle hinzufügen'}
         </button>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-500">
           Die Termine der neuen Quelle erscheinen nach dem nächsten Lauf des ICS-Import-Jobs (täglich
           04:00 UTC, siehe README.md Abschnitt 7).
         </p>
@@ -1004,7 +1015,7 @@ export default function Settings() {
       <section className="mc-animate-fade">
       <h2 className="mb-2 text-base font-semibold text-slate-900">ToDo-Board</h2>
       {/* Feste Spalten seit 0060 - frei konfigurierbar waren sie vorher. */}
-      <p className="mb-2 max-w-md text-xs text-slate-400">
+      <p className="mb-2 max-w-md text-xs text-slate-500">
         Die Spalten sind für alle gleich und fest vorgegeben.
       </p>
       <ol className="flex max-w-md flex-wrap gap-2">
@@ -1064,7 +1075,7 @@ export default function Settings() {
       {activeSection === 'mcp' && (
       <section className="mc-animate-fade">
       <h2 className="mb-2 text-base font-semibold text-slate-900">MCP Connection</h2>
-      <p className="text-xs text-slate-400 mb-2 max-w-md">
+      <p className="text-xs text-slate-500 mb-2 max-w-md">
         Mit einer persönlichen Zugangs-URL kannst du MandatsCockpit direkt aus Claude heraus per Chat
         steuern (z. B. „Leg mir ein ToDo an: XY im nächsten Verkehrsausschuss fragen"). Richte dazu in
         Claude unter Connectors einen Custom Connector ein und trage dort diese URL **komplett** in das
@@ -1085,7 +1096,7 @@ export default function Settings() {
         >
           {mcpGenerating ? 'Erzeuge...' : mcpTokenCreatedAt ? 'Neue Zugangs-URL erzeugen' : 'Zugangs-URL erzeugen'}
         </button>
-        {mcpError && <p className="text-red-600 text-sm">{mcpError}</p>}
+        {mcpError && <p role="alert" className="text-red-600 text-sm">{mcpError}</p>}
         {mcpGeneratedToken && (
           <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
             <p className="text-xs text-amber-800">
